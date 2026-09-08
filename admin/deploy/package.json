@@ -1,0 +1,14 @@
+{
+  "name": "vivi-admin",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "serve -s . -l tcp://0.0.0.0:${PORT:-8080}"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
+  }
+}

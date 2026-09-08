@@ -1,0 +1,152 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { listCourses, deleteCourse, publishCourse, unpublishCourse } from '../api/courses';
+import { ApiClientError } from '../api/client';
+import { RowActionsMenu } from '../components/RowActionsMenu';
+import type { Course } from '../types';
+import { COURSE_TYPE_LABELS, formatDate, formatInr } from '../utils/format';
+
+export function CoursesPage() {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionId, setActionId] = useState<string | null>(null);
+
+  async function loadCourses() {
+    setLoading(true);
+    setError(null);
+    try {
+      setCourses(await listCourses());
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to load courses.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadCourses();
+  }, []);
+
+  async function handleDelete(course: Course) {
+    if (!window.confirm(`Delete "${course.name}" and all its videos? This cannot be undone.`)) return;
+    setActionId(course.id);
+    try {
+      await deleteCourse(course.id);
+      await loadCourses();
+    } catch (err) {
+      alert(err instanceof ApiClientError ? err.message : 'Delete failed.');
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handlePublishToggle(course: Course) {
+    setActionId(course.id);
+    try {
+      if (course.status === 'Published') {
+        await unpublishCourse(course.id);
+      } else {
+        await publishCourse(course.id);
+      }
+      await loadCourses();
+    } catch (err) {
+      alert(err instanceof ApiClientError ? err.message : 'Status change failed.');
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  return (
+    <>
+      <header className="page-header">
+        <div>
+          <h1 className="page-header__title">Courses & videos</h1>
+          <p className="page-header__subtitle">Manage Learn & Loop courses and lesson uploads</p>
+        </div>
+        <div className="page-header__actions">
+          <Link to="/courses/new" className="btn btn--primary">New course</Link>
+        </div>
+      </header>
+
+      {loading && (
+        <div className="loading-state">
+          <p>Loading courses…</p>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="error-state">
+          <h3>Could not load courses</h3>
+          <p>{error}</p>
+          <button type="button" className="btn" onClick={loadCourses}>Retry</button>
+        </div>
+      )}
+
+      {!loading && !error && courses.length === 0 && (
+        <div className="empty-state">
+          <h3>No courses yet</h3>
+          <p>Create your first course to start uploading lessons.</p>
+          <Link to="/courses/new" className="btn btn--primary">Create your first course</Link>
+        </div>
+      )}
+
+      {!loading && !error && courses.length > 0 && (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Price</th>
+                <th>Videos</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {courses.map((course) => (
+                <tr key={course.id}>
+                  <td style={{ fontWeight: 600 }}>{course.name}</td>
+                  <td>{COURSE_TYPE_LABELS[course.type] ?? course.type}</td>
+                  <td>{formatInr(course.price)}</td>
+                  <td>{course.videoCount}</td>
+                  <td>
+                    <span className={`badge badge--${course.status.toLowerCase()}`}>
+                      {course.status}
+                    </span>
+                  </td>
+                  <td>{formatDate(course.updatedAt)}</td>
+                  <td>
+                    <div className="data-table__actions">
+                      <RowActionsMenu
+                        label={`Actions for ${course.name}`}
+                        disabled={actionId === course.id}
+                        items={[
+                          { id: 'edit', label: 'Edit', to: `/courses/${course.id}/edit` },
+                          { id: 'videos', label: 'Videos', to: `/courses/${course.id}` },
+                          {
+                            id: 'publish',
+                            label: course.status === 'Published' ? 'Unpublish' : 'Publish',
+                            onClick: () => void handlePublishToggle(course),
+                          },
+                          {
+                            id: 'delete',
+                            label: 'Delete',
+                            danger: true,
+                            onClick: () => void handleDelete(course),
+                          },
+                        ]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}

@@ -1,0 +1,58 @@
+# Dependencies and caches
+node_modules/
+.nuget-packages/
+.expo/
+.turbo/
+
+# Build output
+bin/
+obj/
+dist/
+dist-ssr/
+publish/
+web-build/
+*.zip
+
+# Logs
+*.log
+logs/
+
+# Environment and secrets (keep *.example and admin/.env.production)
+.env
+.env.local
+.env.*.local
+appsettings.Local.json
+secrets.json
+
+# Local session notes with credentials
+HANDOFF.md
+
+# Nested git backup (mobile had its own .git)
+**/.git.bak/
+
+# Temporary export used only to stage mobile/ without its nested .git
+.export-mobile/
+
+# Tooling / editor
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.user
+*.suo
+*.ntvs*
+*.njsproj
+*.sw?
+.DS_Store
+.claude/
+
+# Test / coverage
+TestResults/
+coverage/
+*.DotSettings.user
+
+# Local blob / upload scratch
+backend/VIVI.Api/App_Data/
+
+# macOS zip leftovers
+__MACOSX/

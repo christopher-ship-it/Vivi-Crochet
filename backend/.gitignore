@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+appsettings.Local.json
+.env
+secrets.json
+TestResults/
+*.DotSettings.user

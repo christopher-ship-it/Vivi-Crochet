@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="VIVI.Core/VIVI.Core.csproj" />
+  <Project Path="VIVI.Infrastructure/VIVI.Infrastructure.csproj" />
+  <Project Path="VIVI.Api/VIVI.Api.csproj" />
+  <Project Path="VIVI.Api.Tests/VIVI.Api.Tests.csproj" />
+</Solution>
