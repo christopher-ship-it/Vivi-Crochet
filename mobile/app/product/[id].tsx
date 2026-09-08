@@ -283,20 +283,6 @@ export default function ProductDetailScreen() {
             <Text style={styles.tag}>Made to order</Text>
           </View>
 
-          {course && (
-            <Pressable style={styles.learnBanner} onPress={() => setLearnModalVisible(true)}>
-              <View style={styles.learnIcon}>
-                <Text style={styles.learnIconText}>▶</Text>
-              </View>
-              <View style={styles.learnBody}>
-                <Text style={styles.learnEyebrow}>LEARN</Text>
-                <Text style={styles.learnTitle}>How to make this crochet?</Text>
-                {learnMeta && <Text style={styles.learnMeta}>{learnMeta}</Text>}
-              </View>
-              <Text style={styles.learnArrow}>→</Text>
-            </Pressable>
-          )}
-
           {outOfStock ? (
             <View style={styles.oosBanner}>
               <Text style={styles.oosText}>OUT OF STOCK</Text>
@@ -349,6 +335,20 @@ export default function ProductDetailScreen() {
           >
             <Text style={styles.buyBtnText}>{outOfStock ? 'Unavailable' : 'Buy now →'}</Text>
           </Pressable>
+
+          {course && (
+            <Pressable style={styles.learnBanner} onPress={goToCourse}>
+              <View style={styles.learnIcon}>
+                <Text style={styles.learnIconText}>▶</Text>
+              </View>
+              <View style={styles.learnBody}>
+                <Text style={styles.learnEyebrow}>LEARN</Text>
+                <Text style={styles.learnTitle}>Want to learn this?</Text>
+                {learnMeta && <Text style={styles.learnMeta}>{learnMeta}</Text>}
+              </View>
+              <Text style={styles.learnArrow}>→</Text>
+            </Pressable>
+          )}
 
           {cartMessage && (
             <View style={styles.successBanner}>
