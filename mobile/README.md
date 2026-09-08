@@ -121,6 +121,36 @@ eas build --platform ios --profile production
 
 Production builds require HTTPS. Cleartext HTTP is only enabled when `EXPO_PUBLIC_ALLOW_HTTP=true` (local dev). See [AZURE_DEPLOYMENT.md](../AZURE_DEPLOYMENT.md).
 
+## OTA updates (EAS Update)
+
+Small JS / style / asset changes ship over the air — no new store bundle each time.
+
+| Git branch | GitHub Action | EAS channel | Who gets it |
+| --- | --- | --- | --- |
+| `staging` | `eas-update-staging.yml` | `staging` | Test phone (`preview` APK) |
+| `main` | `eas-update-production.yml` | `production` | Customer app (`production` build) |
+
+**Daily flow**
+
+1. Change code under `mobile/`
+2. Commit and push to `staging` → test on your phone after force-closing / reopening the app twice
+3. Merge to `main` → customers receive the same kind of OTA update
+
+**When you still need a native rebuild**
+
+- Native module / Expo SDK upgrades
+- Changing `version` / `runtimeVersion` (policy is `appVersion`)
+- Changing native config (permissions, package id, cleartext HTTP, splash plugins, etc.)
+
+### One-time setup
+
+1. Create an Expo access token at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
+2. Add it as GitHub repo secret `EXPO_TOKEN` on [christopher-ship-it/Vivi-Crochet](https://github.com/christopher-ship-it/Vivi-Crochet/settings/secrets/actions).
+3. Create a `staging` branch from `main` if it does not exist yet.
+4. Rebuild binaries **once** after Update config is in place (old installs cannot pull OTA):
+   - Test: `eas build --platform android --profile preview` → install APK on your phone (`channel: staging`)
+   - Customers: `eas build --platform android --profile production` (and iOS when ready) → store submit (`channel: production`)
+
 ```text
 mobile/
 ├── app/                 Expo Router screens

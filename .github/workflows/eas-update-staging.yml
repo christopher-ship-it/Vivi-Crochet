@@ -1,0 +1,52 @@
+name: EAS Update (staging)
+
+on:
+  push:
+    branches:
+      - staging
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/eas-update-staging.yml'
+
+jobs:
+  update:
+    name: Publish staging update
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Check for EXPO_TOKEN
+        working-directory: .
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "You must provide an EXPO_TOKEN secret linked to this project's Expo account."
+            echo "Create a token at https://expo.dev/settings/access-tokens and add it as a repo secret."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish EAS Update
+        env:
+          EXPO_PUBLIC_API_BASE_URL: https://app-vivi-api-hwbmc3dzhkewa5hb.centralindia-01.azurewebsites.net
+          EXPO_PUBLIC_ALLOW_HTTP: 'false'
+        run: |
+          eas update --channel staging --message "${{ github.event.head_commit.message }}" --non-interactive

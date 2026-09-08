@@ -20,6 +20,12 @@ module.exports = ({ config }) => {
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
+    runtimeVersion: {
+      policy: 'appVersion',
+    },
+    updates: {
+      url: 'https://u.expo.dev/4f86f1a4-7441-4b27-a794-d1bcc7b954da',
+    },
     androidStatusBar: {
       barStyle: 'dark-content',
       backgroundColor: '#ffffff',
