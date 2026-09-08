@@ -2,7 +2,7 @@ import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, fonts } from '../theme';
+import { colors, fonts, radii } from '../theme';
 import { formatDuration } from '../utils/format';
 
 interface LessonPlayerProps {
@@ -174,8 +174,7 @@ const styles = StyleSheet.create({
   retryBtn: {
     marginTop: 16,
     backgroundColor: colors.pink,
-    borderWidth: 2,
-    borderColor: colors.white,
+    borderRadius: radii.md,
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
@@ -201,12 +200,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   barTrack: {
-    height: 3,
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.3)',
     marginBottom: 12,
   },
   barFill: {
-    height: 3,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: colors.pink,
   },
   row: {
@@ -218,8 +220,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.pink,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderWidth: 2,
-    borderColor: colors.white,
+    borderRadius: radii.md,
   },
   playText: {
     fontFamily: fonts.extraBold,

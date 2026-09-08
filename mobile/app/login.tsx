@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -120,9 +121,19 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.root, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
     >
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.brandBlock}>
         <Image source={brandLogo} style={styles.logo} resizeMode="contain" accessibilityLabel="Vivi Crochet" />
         <Text style={styles.title}>Sign in</Text>
@@ -255,6 +266,7 @@ export default function LoginScreen() {
           <Text style={styles.skipText}>Continue without signing in</Text>
         </Pressable>
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -263,8 +275,11 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.pinkSoft,
-    paddingHorizontal: spacing.lg,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
   },
   brandBlock: {
     marginBottom: spacing.xl,

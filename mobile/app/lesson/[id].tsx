@@ -7,7 +7,7 @@ import { useShoppingSession } from '../../src/auth/SessionContext';
 import { LessonPlayer } from '../../src/components/LessonPlayer';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Video } from '../../src/types';
-import { colors, fonts, spacing } from '../../src/theme';
+import { colors, fonts, radii, spacing } from '../../src/theme';
 
 type LoadPhase = 'idle' | 'metadata' | 'stream';
 type AccessBlock = 'auth' | 'enrollment' | 'expired' | null;
@@ -217,8 +217,8 @@ const styles = StyleSheet.create({
   },
   meta: {
     padding: spacing.lg,
-    borderTopWidth: 2,
-    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    borderTopColor: colors.softBorder,
   },
   courseName: {
     fontFamily: fonts.semiBold,
@@ -243,13 +243,15 @@ const styles = StyleSheet.create({
   previewBadge: {
     marginTop: 12,
     alignSelf: 'flex-start',
-    fontFamily: fonts.semiBold,
-    fontSize: 11,
-    color: colors.pink,
-    borderWidth: 2,
-    borderColor: colors.pink,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    fontFamily: fonts.extraBold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: colors.pinkDark,
+    backgroundColor: colors.pinkSoft,
+    borderRadius: radii.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     textTransform: 'uppercase',
+    overflow: 'hidden',
   },
 });

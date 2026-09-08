@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { OrderStatus } from '../types/orders';
-import { fonts } from '../theme';
+import { fonts, radii } from '../theme';
 import { orderStatusColors, orderStatusLabel } from '../utils/orders';
 
 interface OrderStatusBadgeProps {
@@ -19,8 +19,9 @@ export function OrderStatusBadge({ status }: OrderStatusBadgeProps) {
 const styles = StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
   },
   text: {
     fontFamily: fonts.extraBold,

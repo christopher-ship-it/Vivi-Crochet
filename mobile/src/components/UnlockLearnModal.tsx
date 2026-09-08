@@ -13,7 +13,7 @@ import {
 import { useLearningCustomer, useShoppingSession } from '../auth/SessionContext';
 import type { LearningCustomerProfile } from '../auth/storage';
 import { updateMyProfile } from '../api/me';
-import { colors, fonts, spacing } from '../theme';
+import { colors, fonts, radii, spacing } from '../theme';
 import { isValidEmail, isValidName, isValidPhone, normalizePhone } from '../utils/validation';
 
 interface UnlockLearnModalProps {
@@ -200,17 +200,18 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
     fontSize: 11,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: colors.ink,
+    letterSpacing: 0.6,
+    color: colors.muted,
     marginBottom: 6,
     marginTop: 10,
   },
   input: {
-    borderWidth: 2,
-    borderColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.softBorder,
     backgroundColor: colors.white,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: radii.md,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     fontFamily: fonts.regular,
     fontSize: 15,
     color: colors.ink,
@@ -224,9 +225,8 @@ const styles = StyleSheet.create({
   primaryBtn: {
     marginTop: spacing.lg,
     backgroundColor: colors.pink,
-    borderWidth: 2,
-    borderColor: colors.border,
-    paddingVertical: 14,
+    borderRadius: radii.md,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   btnDisabled: {
