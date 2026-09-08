@@ -133,8 +133,10 @@ Small JS / style / asset changes ship over the air — no new store bundle each 
 **Daily flow**
 
 1. Change code under `mobile/`
-2. Commit and push to `staging` → test on your phone after force-closing / reopening the app twice
-3. Merge to `main` → customers receive the same kind of OTA update
+2. Commit and push to `staging` → test on your phone (or use the in-app **New update available** card → **Update**)
+3. Merge to `main` → customers get the same prompt / OTA update
+
+The app checks for EAS Updates on launch and when returning to the foreground, downloads in the background, then shows a small card. **Update** reloads into the new bundle; **Later** dismisses until the next check.
 
 **When you still need a native rebuild**
 

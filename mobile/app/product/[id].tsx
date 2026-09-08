@@ -24,9 +24,9 @@ import { LEARN_PROMPT_DELAY_MS } from '../../src/utils/learnPromptTimer';
 
 const HERO_COLORS = ['#ffe3ec', '#fff0f4', '#ffeaf1', '#ffffff'];
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const HERO_MIN_HEIGHT = 280;
-const HERO_MAX_HEIGHT = 440;
-const HERO_DEFAULT_HEIGHT = 340;
+const HERO_MIN_HEIGHT = 200;
+const HERO_MAX_HEIGHT = 300;
+const HERO_DEFAULT_HEIGHT = 240;
 
 function fitHeroHeight(imageWidth: number, imageHeight: number): number {
   if (imageWidth <= 0 || imageHeight <= 0) return HERO_DEFAULT_HEIGHT;
@@ -511,6 +511,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.pinkSoft,
     borderRadius: radii.lg,
     padding: 16,
+    marginTop: spacing.lg,
     marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: colors.softBorder,
