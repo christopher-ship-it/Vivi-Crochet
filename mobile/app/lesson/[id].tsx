@@ -14,6 +14,7 @@ import { getMyEnrollment, type Enrollment } from '../../src/api/enrollments';
 import { getVideo, getStreamUrl } from '../../src/api/videos';
 import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
+import { BackButton } from '../../src/components/BackButton';
 import { LessonPlayer } from '../../src/components/LessonPlayer';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Course, CourseLesson, Video } from '../../src/types';
@@ -252,18 +253,10 @@ export default function LessonScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable
-            style={styles.headerBtn}
-            onPress={() => {
-              if (router.canGoBack()) router.back();
-              else goToCourse();
-            }}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={22} color={colors.ink} />
-          </Pressable>
+          <BackButton onPress={() => {
+            if (router.canGoBack()) router.back();
+            else goToCourse();
+          }} />
           <Text style={styles.headerTitle} numberOfLines={1}>
             {displayCourseName || video.title}
           </Text>

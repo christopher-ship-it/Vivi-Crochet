@@ -11,6 +11,7 @@ import { SessionProvider } from '../src/auth/SessionContext';
 import { CartProvider } from '../src/cart/CartContext';
 import { WishlistProvider } from '../src/wishlist/WishlistContext';
 import { AppUpdateCard } from '../src/components/AppUpdateCard';
+import { BackButton } from '../src/components/BackButton';
 import { colors } from '../src/theme';
 import { applyStatusBar } from '../src/utils/statusBar';
 
@@ -45,6 +46,13 @@ export default function RootLayout() {
                 headerTintColor: colors.pink,
                 headerTitleStyle: { fontFamily: 'Archivo_800ExtraBold', color: colors.ink },
                 contentStyle: { backgroundColor: colors.white },
+                headerBackVisible: false,
+                headerLeft: ({ canGoBack }) =>
+                  canGoBack ? (
+                    <View style={{ marginLeft: 4 }}>
+                      <BackButton />
+                    </View>
+                  ) : null,
               }}
             >
               <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />

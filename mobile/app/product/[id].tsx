@@ -20,6 +20,7 @@ import { ApiClientError } from '../../src/api/client';
 import { useCart } from '../../src/cart/CartContext';
 import { canIncreaseQuantity, isOutOfStock } from '../../src/cart/stock';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
+import { BackButton } from '../../src/components/BackButton';
 import { LearnThisModal } from '../../src/components/LearnThisModal';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Product } from '../../src/types';
@@ -224,18 +225,7 @@ export default function ProductDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable
-            style={styles.headerBtn}
-            onPress={() => {
-              if (router.canGoBack()) router.back();
-              else router.replace('/(tabs)/shop');
-            }}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={22} color={colors.ink} />
-          </Pressable>
+          <BackButton fallbackHref="/(tabs)/shop" />
           <BrandWordmark size="sm" />
           <View style={styles.headerActions}>
             <Pressable
