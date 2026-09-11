@@ -12,6 +12,8 @@ import { CartProvider } from '../src/cart/CartContext';
 import { WishlistProvider } from '../src/wishlist/WishlistContext';
 import { AppUpdateCard } from '../src/components/AppUpdateCard';
 import { BackButton } from '../src/components/BackButton';
+import { GradientBackground } from '../src/components/GradientBackground';
+import { HeaderBackground } from '../src/components/HeaderBackground';
 import { colors } from '../src/theme';
 import { applyStatusBar } from '../src/utils/statusBar';
 
@@ -28,7 +30,7 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    // Default: dark icons on cream screens (Android network/battery visible)
+    // Default: dark icons on light gradient screens
     applyStatusBar('dark');
   }, []);
 
@@ -38,14 +40,21 @@ export default function RootLayout() {
     <SessionProvider>
       <CartProvider>
         <WishlistProvider>
-          <View style={{ flex: 1 }}>
-            <StatusBar style="dark" backgroundColor={colors.white} />
+          <GradientBackground>
+            <StatusBar style="dark" />
             <Stack
               screenOptions={{
-                headerStyle: { backgroundColor: colors.white },
+                headerStyle: {
+                  backgroundColor: 'transparent',
+                  elevation: 0,
+                  shadowOpacity: 0,
+                  borderBottomWidth: 0,
+                },
+                headerBackground: () => <HeaderBackground />,
                 headerTintColor: colors.pink,
                 headerTitleStyle: { fontFamily: 'Archivo_800ExtraBold', color: colors.ink },
-                contentStyle: { backgroundColor: colors.white },
+                contentStyle: { backgroundColor: 'transparent' },
+                headerShadowVisible: false,
                 headerBackVisible: false,
                 headerLeft: ({ canGoBack }) =>
                   canGoBack ? (
@@ -69,7 +78,7 @@ export default function RootLayout() {
               <Stack.Screen name="lesson/[id]" options={{ title: 'Lesson' }} />
             </Stack>
             <AppUpdateCard />
-          </View>
+          </GradientBackground>
         </WishlistProvider>
       </CartProvider>
     </SessionProvider>

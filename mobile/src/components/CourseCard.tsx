@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   media: {
     width: LIST_MEDIA_WIDTH,
     height: LIST_CARD_HEIGHT,
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.mediaWash,
   },
   mediaImage: {
     width: LIST_MEDIA_WIDTH,
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     height: LIST_CARD_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.pinkMist,
+    backgroundColor: colors.mediaWash,
     paddingHorizontal: 10,
   },
   mediaMark: {
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   railMedia: {
     width: RAIL_IMAGE_SIZE,
     height: Math.round(RAIL_IMAGE_SIZE * 0.92),
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.mediaWash,
   },
   railImage: {
     width: RAIL_IMAGE_SIZE,
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.pinkMist,
+    backgroundColor: colors.mediaWash,
   },
   railMark: {
     fontFamily: fonts.display,

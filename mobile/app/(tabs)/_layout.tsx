@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { PremiumTabBar, type PremiumTabBarProps } from '../../src/components/PremiumTabBar';
+import { HeaderBackground } from '../../src/components/HeaderBackground';
 import { colors, fonts } from '../../src/theme';
 
 export default function TabLayout() {
@@ -13,7 +14,13 @@ export default function TabLayout() {
         />
       )}
       screenOptions={{
-        headerStyle: { backgroundColor: colors.white },
+        headerStyle: {
+          backgroundColor: 'transparent',
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 0,
+        },
+        headerBackground: () => <HeaderBackground />,
         headerTitleStyle: { fontFamily: fonts.extraBold, fontSize: 16, color: colors.ink },
         headerTintColor: colors.pink,
         headerShadowVisible: false,

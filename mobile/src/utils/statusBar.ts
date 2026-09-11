@@ -13,7 +13,7 @@ export function applyStatusBar(theme: 'light' | 'dark') {
   if (Platform.OS !== 'android') return;
 
   const barStyle = theme === 'light' ? 'light-content' : 'dark-content';
-  const background = theme === 'light' ? colors.pink : colors.white;
+  const background = theme === 'light' ? colors.pink : '#ffe4ec';
 
   try {
     RNStatusBar.setBarStyle(barStyle, false);

@@ -160,7 +160,7 @@ export function RazorpayCheckoutModal({
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: colors.cream,
+    backgroundColor: colors.white,
   },
   header: {
     paddingHorizontal: spacing.lg,
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.cream,
+    backgroundColor: colors.white,
     gap: 12,
   },
   loadingText: {

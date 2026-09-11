@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.mediaWash,
   },
   imageWellGrid: {
     width: '100%',
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.mediaWash,
   },
   placeholderMark: {
     fontFamily: fonts.extraBold,

@@ -15,6 +15,7 @@ import { getVideo, getStreamUrl } from '../../src/api/videos';
 import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { BackButton } from '../../src/components/BackButton';
+import { HeroGradient } from '../../src/components/HeroGradient';
 import { LessonPlayer } from '../../src/components/LessonPlayer';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Course, CourseLesson, Video } from '../../src/types';
@@ -252,7 +253,7 @@ export default function LessonScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.root, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
+        <HeroGradient style={styles.header}>
           <BackButton onPress={() => {
             if (router.canGoBack()) router.back();
             else goToCourse();
@@ -269,7 +270,7 @@ export default function LessonScreen() {
           >
             <Ionicons name="ellipsis-horizontal" size={20} color={colors.ink} />
           </Pressable>
-        </View>
+        </HeroGradient>
 
         <ScrollView
           style={styles.scroll}
@@ -424,16 +425,13 @@ export default function LessonScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.softBorder,
-    backgroundColor: colors.white,
   },
   headerBtn: {
     width: 40,
@@ -593,7 +591,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.white,
   },
   nextEyebrow: {
     fontFamily: fonts.semiBold,

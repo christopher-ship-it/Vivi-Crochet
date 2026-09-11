@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { requestMobileOtp, verifyMobileOtp } from '../src/api/auth';
 import { ApiClientError } from '../src/api/client';
 import { useShoppingSession } from '../src/auth/SessionContext';
+import { HeroGradient } from '../src/components/HeroGradient';
 import { colors, fonts, radii, spacing } from '../src/theme';
 import { isValidName } from '../src/utils/validation';
 
@@ -240,7 +241,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.root}>
       {showHero ? (
-        <View style={[styles.heroWrap, { paddingTop: insets.top + 14 }]}>
+        <HeroGradient style={[styles.heroWrap, { paddingTop: insets.top + 14 }]}>
           <View style={styles.heroColumns}>
             {HERO_COLUMNS.map((column, columnIndex) => (
               <HeroMarqueeColumn
@@ -250,7 +251,7 @@ export default function LoginScreen() {
               />
             ))}
           </View>
-        </View>
+        </HeroGradient>
       ) : null}
 
       {/* Fixed pane: brand + form stay put; only the hero above mounts/unmounts. */}
@@ -443,12 +444,12 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.pinkSoft,
+    backgroundColor: 'transparent',
   },
   heroWrap: {
     height: HERO_WRAP_HEIGHT,
     overflow: 'hidden',
-    backgroundColor: colors.pinkSoft,
+    backgroundColor: 'transparent',
     paddingHorizontal: spacing.md,
   },
   heroColumns: {

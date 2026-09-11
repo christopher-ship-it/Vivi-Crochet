@@ -7,6 +7,7 @@ import { listMyLiveBookings, type LiveBooking } from '../../src/api/live';
 import { getMyProfile, type SavedShippingAddress } from '../../src/api/me';
 import { useLearningCustomer, useShoppingSession } from '../../src/auth/SessionContext';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
+import { HeroGradient } from '../../src/components/HeroGradient';
 import { colors, fonts, spacing } from '../../src/theme';
 import { applyStatusBar } from '../../src/utils/statusBar';
 import { realCustomerName } from '../../src/utils/validation';
@@ -109,7 +110,9 @@ export default function ProfileScreen() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.pageTitle}>My VIVI</Text>
+      <HeroGradient style={styles.pageHero}>
+        <Text style={styles.pageTitle}>My VIVI</Text>
+      </HeroGradient>
       <View style={styles.card}>
         <Text style={styles.eyebrow}>ACCOUNT</Text>
         {isAuthenticated || learningProfile ? (
@@ -237,13 +240,19 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
   },
+  pageHero: {
+    marginBottom: spacing.md,
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 0,
+  },
   pageTitle: {
     fontFamily: fonts.heading,
     fontSize: 36,
     lineHeight: 44,
     paddingBottom: 4,
     color: colors.ink,
-    marginBottom: spacing.md,
   },
   card: {
     backgroundColor: colors.white,

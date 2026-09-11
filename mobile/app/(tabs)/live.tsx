@@ -32,6 +32,7 @@ import {
   type RazorpaySuccessPayload,
 } from '../../src/components/RazorpayCheckoutModal';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
+import { HeroGradient } from '../../src/components/HeroGradient';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
 import { colors, fonts, radii, spacing } from '../../src/theme';
 import { formatInr } from '../../src/utils/format';
@@ -339,7 +340,7 @@ export default function LiveScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
+        <HeroGradient style={styles.hero}>
           <View style={[styles.heroCopy, { paddingRight: HERO_IMAGE_SIZE + 8 }]}>
             <Text style={styles.eyebrow}>LIVE CROCHET STUDIO</Text>
             <Text style={styles.title}>Crochet with Vivi, live</Text>
@@ -374,7 +375,7 @@ export default function LiveScreen() {
               ))}
             </View>
           </View>
-        </View>
+        </HeroGradient>
 
         <Text style={styles.sectionLabel}>SELECT WEEK</Text>
         <ScrollView
@@ -625,7 +626,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 12,
-    backgroundColor: colors.canvas,
+    backgroundColor: '#fff0f5',
   },
   eyebrow: {
     fontFamily: fonts.semiBold,
@@ -767,7 +768,7 @@ const styles = StyleSheet.create({
   },
   slotMedia: {
     height: 88,
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.mediaWash,
     alignItems: 'center',
     justifyContent: 'center',
   },

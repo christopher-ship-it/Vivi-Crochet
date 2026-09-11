@@ -20,6 +20,7 @@ import { useShoppingSession } from '../../src/auth/SessionContext';
 import { useCart } from '../../src/cart/CartContext';
 import { MyOrderCard } from '../../src/components/MyOrderCard';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
+import { HeroGradient } from '../../src/components/HeroGradient';
 import { ProductCard } from '../../src/components/ProductCard';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
@@ -147,7 +148,7 @@ export default function ShopScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+      <HeroGradient style={styles.header}>
         <View style={styles.brandRow}>
           <BrandWordmark />
           <View style={styles.brandRight}>
@@ -254,7 +255,7 @@ export default function ShopScreen() {
             </ScrollView>
           </>
         )}
-      </View>
+      </HeroGradient>
 
       {tab === 'products' ? (
         loading && !refreshing ? (
@@ -386,7 +387,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     gap: spacing.md,
-    backgroundColor: colors.canvas,
   },
   brandRow: {
     flexDirection: 'row',

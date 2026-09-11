@@ -15,6 +15,7 @@ import { cartSubtotal } from '../src/cart/calculations';
 import { applyLiveStockToCartQuantity } from '../src/cart/stock';
 import type { CartLineItem } from '../src/cart/types';
 import { CartLineRow } from '../src/components/CartLineRow';
+import { HeroGradient } from '../src/components/HeroGradient';
 import { EmptyView, ErrorView, LoadingView } from '../src/components/StateViews';
 import { colors, fonts, spacing } from '../src/theme';
 import { formatInr } from '../src/utils/format';
@@ -151,10 +152,10 @@ export default function CartScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
+        <HeroGradient style={styles.header}>
           <Text style={styles.title}>Your cart</Text>
           <Text style={styles.meta}>{itemCount} item{itemCount === 1 ? '' : 's'}</Text>
-        </View>
+        </HeroGradient>
 
         {(storageError || refreshError) && (
           <View style={styles.banner}>
@@ -236,6 +237,9 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: spacing.md,
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
   title: {
     fontFamily: fonts.extraBold,

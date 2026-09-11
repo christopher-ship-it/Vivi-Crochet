@@ -7,6 +7,7 @@ import { ApiClientError } from '../../src/api/client';
 import { OrderPipeline } from '../../src/components/OrderPipeline';
 import { OrderStatusBadge } from '../../src/components/OrderStatusBadge';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
+import { HeroGradient } from '../../src/components/HeroGradient';
 import { colors, fonts, radii, spacing } from '../../src/theme';
 import { formatInr } from '../../src/utils/format';
 import {
@@ -64,10 +65,12 @@ export default function OrderDetailScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.eyebrow}>ORDER #{order.orderNumber}</Text>
-        <View style={styles.statusRow}>
-          <OrderStatusBadge status={pipelineStatus} />
-        </View>
+        <HeroGradient style={styles.pageHero}>
+          <Text style={styles.eyebrow}>ORDER #{order.orderNumber}</Text>
+          <View style={styles.statusRow}>
+            <OrderStatusBadge status={pipelineStatus} />
+          </View>
+        </HeroGradient>
 
         <View style={styles.panel}>
           {(order.items ?? []).map((item, index) => (
@@ -151,6 +154,14 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.md,
   },
+  pageHero: {
+    marginHorizontal: -spacing.md,
+    marginTop: -spacing.md,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+  },
   eyebrow: {
     fontFamily: fonts.extraBold,
     fontSize: 11,
@@ -159,7 +170,6 @@ const styles = StyleSheet.create({
   },
   statusRow: {
     marginTop: 10,
-    marginBottom: spacing.md,
   },
   panel: {
     backgroundColor: colors.white,

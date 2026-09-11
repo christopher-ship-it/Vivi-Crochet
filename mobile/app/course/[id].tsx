@@ -23,6 +23,7 @@ import {
   type RazorpaySuccessPayload,
 } from '../../src/components/RazorpayCheckoutModal';
 import { UnlockLearnModal } from '../../src/components/UnlockLearnModal';
+import { HeroGradient } from '../../src/components/HeroGradient';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Course, CourseLesson } from '../../src/types';
 import { colors, fonts, radii, shadows, spacing } from '../../src/theme';
@@ -237,7 +238,7 @@ export default function CourseDetailScreen() {
     <>
       <Stack.Screen options={{ title: course.name }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.hero}>
+        <HeroGradient style={styles.hero}>
           <Text style={styles.type}>{COURSE_TYPE_LABELS[course.type] ?? course.type}</Text>
           <Text style={styles.title}>{course.name}</Text>
           {course.level && <Text style={styles.level}>{course.level}</Text>}
@@ -259,7 +260,7 @@ export default function CourseDetailScreen() {
               Access active until {new Date(enrollment.accessExpiryDate).toLocaleDateString('en-IN')}
             </Text>
           )}
-        </View>
+        </HeroGradient>
 
         {banner && (
           <View style={styles.banner}>
@@ -409,9 +410,6 @@ const styles = StyleSheet.create({
   },
   hero: {
     padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.softBorder,
-    backgroundColor: colors.white,
   },
   type: {
     fontFamily: fonts.extraBold,
@@ -524,14 +522,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radii.sm,
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.mediaWash,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.softBorder,
   },
   lessonIconLocked: {
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.mediaWash,
     opacity: 0.55,
   },
   lessonIconText: {

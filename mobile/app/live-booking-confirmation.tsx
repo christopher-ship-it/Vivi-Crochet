@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getLiveBooking, type LiveBooking } from '../src/api/live';
 import { ApiClientError } from '../src/api/client';
 import { ErrorView, LoadingView } from '../src/components/StateViews';
+import { HeroGradient } from '../src/components/HeroGradient';
 import { colors, fonts, spacing } from '../src/theme';
 import { formatInr } from '../src/utils/format';
 
@@ -62,13 +63,13 @@ export default function LiveBookingConfirmationScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
+        <HeroGradient style={styles.hero}>
           <Text style={styles.check}>✓</Text>
           <View style={styles.heroCopy}>
             <Text style={styles.title}>Booking confirmed</Text>
             <Text style={styles.slot}>{booking.slotName}</Text>
           </View>
-        </View>
+        </HeroGradient>
 
         <View style={styles.panel}>
           <Row label="Week" value={`Week ${booking.weekNumber}`} />
@@ -114,7 +115,7 @@ function Row({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: 'transparent',
   },
   content: {
     paddingHorizontal: spacing.md,
@@ -124,7 +125,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: colors.pinkSoft,
     borderWidth: 1,
     borderColor: colors.softBorder,
     borderRadius: 16,

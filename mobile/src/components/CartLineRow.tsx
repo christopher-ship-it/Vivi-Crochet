@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.mediaWash,
   },
   thumbImage: {
     width: '100%',
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.softBorder,
     borderRadius: radii.sm,
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.white,
     overflow: 'hidden',
   },
   qtyBtn: {

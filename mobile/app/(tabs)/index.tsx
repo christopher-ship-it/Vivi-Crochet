@@ -19,6 +19,7 @@ import {
 import { ApiClientError } from '../../src/api/client';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { CourseCard, COURSE_RAIL_WIDTH } from '../../src/components/CourseCard';
+import { HeroGradient } from '../../src/components/HeroGradient';
 import { ProductAutoScrollRail } from '../../src/components/ProductAutoScrollRail';
 import { LoadingView, ErrorView, EmptyView } from '../../src/components/StateViews';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
@@ -192,24 +193,20 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.topBar}>
-        <BrandWordmark size="sm" />
-        <Pressable
-          style={styles.iconBtn}
-          onPress={() => router.push('/(tabs)/profile')}
-          accessibilityRole="button"
-          accessibilityLabel="My VIVI settings"
-          hitSlop={8}
-        >
-          <Ionicons name="settings-outline" size={20} color={colors.ink} />
-        </Pressable>
-      </View>
+      <HeroGradient>
+        <View style={styles.topBar}>
+          <BrandWordmark size="sm" />
+          <Pressable
+            style={styles.iconBtn}
+            onPress={() => router.push('/(tabs)/profile')}
+            accessibilityRole="button"
+            accessibilityLabel="My VIVI settings"
+            hitSlop={8}
+          >
+            <Ionicons name="settings-outline" size={20} color={colors.ink} />
+          </Pressable>
+        </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: dockClearance + 24 }}
-        showsVerticalScrollIndicator={false}
-      >
         <View style={styles.hero}>
           {/* Hero image intentionally removed — copy-only header. */}
           <Text style={styles.heroEyebrow}>HANDMADE WITH LOVE</Text>
@@ -231,6 +228,13 @@ export default function HomeScreen() {
             </Text>
           </Text>
         </View>
+      </HeroGradient>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: dockClearance + 24 }}
+        showsVerticalScrollIndicator={false}
+      >
 
         <View style={styles.section}>
           <SectionHeader
@@ -376,7 +380,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: 'transparent',
   },
   scroll: {
     flex: 1,
@@ -528,7 +532,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   liveSlotCard: {
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.white,
     borderRadius: radii.md,
     paddingVertical: 12,
     paddingHorizontal: 12,
@@ -570,7 +574,7 @@ const styles = StyleSheet.create({
   },
   liveWeekFallback: {
     borderRadius: radii.md,
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.white,
     padding: 14,
   },
   liveWeekLabel: {

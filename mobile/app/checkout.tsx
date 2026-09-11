@@ -50,7 +50,7 @@ const FIELD_BG = '#fffdfd';
 const PANEL_BORDER = '#eadfe3';
 const ACCENT_SOFT = '#fff0f4';
 const CARD_BG = '#ffffff';
-const PAGE_BG = '#f7f4f5';
+const PAGE_BG = 'transparent';
 
 function Field({
   label,
@@ -1317,7 +1317,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.mediaWash,
   },
   summaryThumbImage: {
     width: '100%',

@@ -21,6 +21,7 @@ import { useCart } from '../../src/cart/CartContext';
 import { canIncreaseQuantity, isOutOfStock } from '../../src/cart/stock';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { BackButton } from '../../src/components/BackButton';
+import { HeroGradient } from '../../src/components/HeroGradient';
 import { LearnThisModal } from '../../src/components/LearnThisModal';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Product } from '../../src/types';
@@ -224,40 +225,36 @@ export default function ProductDetailScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.root, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <BackButton fallbackHref="/(tabs)/shop" />
-          <BrandWordmark size="sm" />
-          <View style={styles.headerActions}>
-            <Pressable
-              style={styles.headerBtn}
-              onPress={() => void handleWishlist()}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-            >
-              <Ionicons
-                name={wishlisted ? 'heart' : 'heart-outline'}
-                size={20}
-                color={wishlisted ? colors.pink : colors.ink}
-              />
-            </Pressable>
-            <Pressable
-              style={styles.headerBtn}
-              onPress={() => void handleShare()}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Share product"
-            >
-              <Ionicons name="share-outline" size={20} color={colors.ink} />
-            </Pressable>
+        <HeroGradient>
+          <View style={styles.header}>
+            <BackButton fallbackHref="/(tabs)/shop" />
+            <BrandWordmark size="sm" />
+            <View style={styles.headerActions}>
+              <Pressable
+                style={styles.headerBtn}
+                onPress={() => void handleWishlist()}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+              >
+                <Ionicons
+                  name={wishlisted ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={wishlisted ? colors.pink : colors.ink}
+                />
+              </Pressable>
+              <Pressable
+                style={styles.headerBtn}
+                onPress={() => void handleShare()}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Share product"
+              >
+                <Ionicons name="share-outline" size={20} color={colors.ink} />
+              </Pressable>
+            </View>
           </View>
-        </View>
 
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
-          showsVerticalScrollIndicator={false}
-        >
           <View style={styles.gallery}>
             {galleryUrls.length > 0 ? (
               <>
@@ -333,7 +330,13 @@ export default function ProductDetailScreen() {
               </View>
             )}
           </View>
+        </HeroGradient>
 
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
+          showsVerticalScrollIndicator={false}
+        >
           {galleryUrls.length > 1 && (
             <View style={styles.thumbsWrap}>
               <ScrollView
@@ -530,7 +533,7 @@ export default function ProductDetailScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
@@ -538,9 +541,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
-    backgroundColor: colors.white,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.softBorder,
   },
   headerBtn: {
     width: 40,
@@ -559,14 +559,12 @@ const styles = StyleSheet.create({
   gallery: {
     position: 'relative',
     height: GALLERY_HEIGHT,
-    backgroundColor: colors.white,
   },
   heroSlide: {
     width: SCREEN_WIDTH,
     height: GALLERY_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
   },
   heroImage: {
     width: SCREEN_WIDTH,
@@ -588,7 +586,7 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   heroFallback: {
-    backgroundColor: colors.pinkMist,
+    backgroundColor: colors.mediaWash,
   },
   heroInitial: {
     fontFamily: fonts.extraBold,

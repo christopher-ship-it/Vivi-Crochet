@@ -15,6 +15,7 @@ import { listCategories, listCourses } from '../../src/api/courses';
 import { ApiClientError } from '../../src/api/client';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { CourseCard } from '../../src/components/CourseCard';
+import { HeroGradient } from '../../src/components/HeroGradient';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
 import type { Category, Course } from '../../src/types';
@@ -78,18 +79,20 @@ export default function LearnScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.topBar}>
-        <BrandWordmark />
-        <Pressable
-          style={styles.iconBtn}
-          onPress={() => router.push('/(tabs)/profile')}
-          accessibilityRole="button"
-          accessibilityLabel="My VIVI settings"
-          hitSlop={8}
-        >
-          <Ionicons name="settings-outline" size={22} color={colors.ink} />
-        </Pressable>
-      </View>
+      <HeroGradient>
+        <View style={styles.topBar}>
+          <BrandWordmark />
+          <Pressable
+            style={styles.iconBtn}
+            onPress={() => router.push('/(tabs)/profile')}
+            accessibilityRole="button"
+            accessibilityLabel="My VIVI settings"
+            hitSlop={8}
+          >
+            <Ionicons name="settings-outline" size={22} color={colors.ink} />
+          </Pressable>
+        </View>
+      </HeroGradient>
 
       <FlatList
         data={courses}
@@ -99,7 +102,7 @@ export default function LearnScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.pink} />
         }
         ListHeaderComponent={
-          <View style={styles.listHeader}>
+          <HeroGradient style={styles.listHeader}>
             <Text style={styles.eyebrow}>CROCHET ACADEMY</Text>
             <Text style={styles.title}>Learn & Loop</Text>
             <Text style={styles.scriptAccent}>Made with love</Text>
@@ -146,7 +149,7 @@ export default function LearnScreen() {
                 </Pressable>
               </View>
             ) : null}
-          </View>
+          </HeroGradient>
         }
         ListEmptyComponent={
           <EmptyView
@@ -193,6 +196,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   listHeader: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
   eyebrow: {

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getOrder, type OrderResponse } from '../src/api/orders';
 import { ApiClientError } from '../src/api/client';
 import { ErrorView, LoadingView } from '../src/components/StateViews';
+import { HeroGradient } from '../src/components/HeroGradient';
 import { colors, fonts, radii, spacing } from '../src/theme';
 import { formatInr } from '../src/utils/format';
 
@@ -60,7 +61,7 @@ export default function OrderConfirmationScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
+        <HeroGradient style={styles.hero}>
           <View style={styles.checkMark}>
             <Text style={styles.checkMarkText}>✓</Text>
           </View>
@@ -68,7 +69,7 @@ export default function OrderConfirmationScreen() {
             <Text style={styles.title}>Booking confirmed</Text>
             <Text style={styles.sub}>Payment received · you’re all set</Text>
           </View>
-        </View>
+        </HeroGradient>
 
         <View style={styles.panel}>
           <Row label="Order" value={order.orderNumber} />
@@ -150,6 +151,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     marginBottom: spacing.md,
+    borderRadius: radii.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   checkMark: {
     width: 44,

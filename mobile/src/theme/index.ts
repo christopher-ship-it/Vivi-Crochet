@@ -3,9 +3,13 @@ export const colors = {
   pinkDark: '#c8145a',
   pinkSoft: '#fff0f4',
   pinkMist: '#ffe3ec',
+  /** Soft lilac used in the page gradient. */
+  lilac: '#e8d9f8',
+  lilacSoft: '#f3ebfc',
   ink: '#221a1e',
-  cream: '#ffffff',
-  canvas: '#fff7f9',
+  /** Page wash under the gradient (fallback / non-gradient contexts). */
+  cream: 'transparent',
+  canvas: 'transparent',
   muted: '#7a6d72',
   /** Kept for rare video chrome; prefer pink/white elsewhere. */
   dark: '#120e10',
@@ -16,6 +20,22 @@ export const colors = {
   success: '#1a7a4a',
   danger: '#b42318',
   academy: '#fff0f4',
+  /** Soft fill for image placeholders (not page background). */
+  mediaWash: '#ffe3ec',
+};
+
+/** Pink → light purple page background. */
+export const pageGradient = {
+  colors: ['#ffe4ec', '#f6e7f5', '#ebe0f8'] as const,
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
+
+/** Stronger pink wash for headers + heroes (horizontal so stacked bands flow as one). */
+export const heroGradient = {
+  colors: ['#ffb6cc', '#ffe0ea', '#fff0f5'] as const,
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 0 },
 };
 
 export const spacing = {
