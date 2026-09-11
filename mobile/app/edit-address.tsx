@@ -20,6 +20,7 @@ import {
   getShippingAddressError,
   normalizePhone,
   normalizePin,
+  realCustomerName,
 } from '../src/utils/validation';
 
 export default function EditAddressScreen() {
@@ -30,7 +31,7 @@ export default function EditAddressScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fullName, setFullName] = useState(user?.name ?? '');
+  const [fullName, setFullName] = useState(() => realCustomerName(user?.name));
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [address1, setAddress1] = useState('');
   const [address2, setAddress2] = useState('');
@@ -41,11 +42,11 @@ export default function EditAddressScreen() {
 
   const applySaved = useCallback((saved: SavedShippingAddress | null | undefined, profileName?: string) => {
     if (!saved) {
-      setFullName((current) => current.trim() || profileName || user?.name || '');
+      setFullName((current) => realCustomerName(current, profileName, user?.name));
       setPhone((current) => normalizePhone(current) || normalizePhone(user?.phone ?? ''));
       return;
     }
-    setFullName(saved.fullName);
+    setFullName(realCustomerName(saved.fullName, profileName, user?.name) || saved.fullName);
     setPhone(normalizePhone(saved.phoneNumber));
     setAddress1(saved.addressLine1);
     setAddress2(saved.addressLine2 ?? '');
@@ -101,6 +102,7 @@ export default function EditAddressScreen() {
     setError(null);
     try {
       await updateMyProfile({
+        fullName: fullName.trim(),
         shippingAddress: {
           fullName: fullName.trim(),
           phoneNumber: normalizePhone(phone),

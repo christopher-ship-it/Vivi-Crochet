@@ -297,7 +297,7 @@ export function ProductFormPage() {
           </div>
           <div className="form-field">
             <label>Product type</label>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center', minHeight: 42 }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', minHeight: 32 }}>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
                   type="radio"
@@ -328,61 +328,72 @@ export function ProductFormPage() {
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             />
           </div>
-          <div className="form-field">
-            <label htmlFor="price">Price (₹)</label>
-            <input
-              id="price"
-              type="number"
-              required
-              min={0}
-              value={form.price}
-              onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))}
-            />
-          </div>
-          <div className="form-field">
-            <label htmlFor="mrp">MRP (₹)</label>
-            <input
-              id="mrp"
-              type="number"
-              min={0}
-              value={form.mrp ?? ''}
-              onChange={(e) => setForm((f) => ({
-                ...f,
-                mrp: e.target.value === '' ? null : Number(e.target.value),
-              }))}
-            />
-          </div>
-          <div className="form-field">
-            <label htmlFor="availableStock">Available Stock</label>
-            <input
-              id="availableStock"
-              type="number"
-              required
-              min={0}
-              step={1}
-              value={form.availableStock}
-              onChange={(e) => setForm((f) => ({
-                ...f,
-                availableStock: Math.max(0, Math.floor(Number(e.target.value) || 0)),
-              }))}
-            />
-            <span className="page-header__subtitle">Maximum quantity customers can purchase.</span>
-          </div>
-          <div className="form-field">
-            <label htmlFor="spec1">Spec 1</label>
-            <input
-              id="spec1"
-              value={form.spec1 ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, spec1: e.target.value }))}
-            />
-          </div>
-          <div className="form-field">
-            <label htmlFor="spec2">Spec 2</label>
-            <input
-              id="spec2"
-              value={form.spec2 ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, spec2: e.target.value }))}
-            />
+          <div className="form-grid--full form-row">
+            <div className="form-field form-field--narrow">
+              <label htmlFor="price">Price (₹)</label>
+              <input
+                id="price"
+                type="number"
+                required
+                min={0}
+                value={form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))}
+              />
+            </div>
+            <div className="form-field form-field--narrow">
+              <label htmlFor="mrp">MRP (₹)</label>
+              <input
+                id="mrp"
+                type="number"
+                min={0}
+                value={form.mrp ?? ''}
+                onChange={(e) => setForm((f) => ({
+                  ...f,
+                  mrp: e.target.value === '' ? null : Number(e.target.value),
+                }))}
+              />
+            </div>
+            <div className="form-field form-field--narrow">
+              <label htmlFor="availableStock">Available Stock</label>
+              <input
+                id="availableStock"
+                type="number"
+                required
+                min={0}
+                step={1}
+                value={form.availableStock}
+                onChange={(e) => setForm((f) => ({
+                  ...f,
+                  availableStock: Math.max(0, Math.floor(Number(e.target.value) || 0)),
+                }))}
+              />
+              <span className="form-hint">Maximum quantity customers can purchase.</span>
+            </div>
+            <div className="form-field form-field--narrow">
+              <label htmlFor="spec1">Spec 1</label>
+              <input
+                id="spec1"
+                value={form.spec1 ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, spec1: e.target.value }))}
+              />
+            </div>
+            <div className="form-field form-field--narrow">
+              <label htmlFor="spec2">Spec 2</label>
+              <input
+                id="spec2"
+                value={form.spec2 ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, spec2: e.target.value }))}
+              />
+            </div>
+            <div className="form-field form-field--narrow">
+              <label htmlFor="sortOrder">Sort order</label>
+              <input
+                id="sortOrder"
+                type="number"
+                value={form.sortOrder}
+                onChange={(e) => setForm((f) => ({ ...f, sortOrder: Number(e.target.value) }))}
+              />
+            </div>
           </div>
           <div className="form-field">
             <label htmlFor="courseId">Linked course</label>
@@ -399,15 +410,6 @@ export function ProductFormPage() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-          </div>
-          <div className="form-field">
-            <label htmlFor="sortOrder">Sort order</label>
-            <input
-              id="sortOrder"
-              type="number"
-              value={form.sortOrder}
-              onChange={(e) => setForm((f) => ({ ...f, sortOrder: Number(e.target.value) }))}
-            />
           </div>
         </div>
 
@@ -437,10 +439,13 @@ export function ProductFormPage() {
               <div
                 key={image.id}
                 style={{
-                  border: image.isMain ? '2px solid var(--pink, #e8215b)' : '1px solid var(--border)',
-                  borderRadius: 12,
+                  border: image.isMain
+                    ? '2px solid var(--vivi-pink)'
+                    : '1px solid var(--vivi-border-soft)',
+                  borderRadius: 'var(--radius-lg)',
                   padding: 10,
                   background: '#fff',
+                  boxShadow: 'var(--shadow-xs)',
                 }}
               >
                 <div style={{ position: 'relative' }}>

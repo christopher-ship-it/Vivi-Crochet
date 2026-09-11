@@ -109,7 +109,7 @@ export function LiveWeeksPage() {
         <div>
           <h1 className="page-header__title">Live weeks</h1>
           <p className="page-header__subtitle">
-            Season calendar, break days, bookable flag, and seat capacity.
+            Season calendar, optional weekday break, bookable flag, and seat capacity (max 4 per circle).
           </p>
         </div>
         <div className="page-header__actions">

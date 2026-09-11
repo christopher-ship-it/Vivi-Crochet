@@ -9,6 +9,9 @@ namespace VIVI.Infrastructure.Auth;
 
 public sealed class CustomerAccountService
 {
+    /// <summary>Stored when OTP verify did not include a name. Treat as unset in UI/admin.</summary>
+    public const string PlaceholderName = "VIVI Customer";
+
     private readonly ViviDbContext _db;
     private readonly IPasswordHasher<AdminUser> _passwordHasher;
 
@@ -17,6 +20,10 @@ public sealed class CustomerAccountService
         _db = db;
         _passwordHasher = passwordHasher;
     }
+
+    public static bool IsPlaceholderName(string? name) =>
+        string.IsNullOrWhiteSpace(name)
+        || string.Equals(name.Trim(), PlaceholderName, StringComparison.OrdinalIgnoreCase);
 
     public static string NormalizePhone(string phone)
     {
@@ -36,6 +43,8 @@ public sealed class CustomerAccountService
         var email = EmailForPhone(normalized);
         var user = await _db.AdminUsers.SingleOrDefaultAsync(u => u.Email == email, cancellationToken);
         var now = DateTime.UtcNow;
+        var hasRealName = !IsPlaceholderName(name);
+        var resolvedName = hasRealName ? name!.Trim() : PlaceholderName;
 
         if (user is null)
         {
@@ -43,7 +52,7 @@ public sealed class CustomerAccountService
             {
                 Id = Guid.NewGuid(),
                 Email = email,
-                Name = string.IsNullOrWhiteSpace(name) ? "VIVI Customer" : name.Trim(),
+                Name = resolvedName,
                 Role = UserRole.Customer,
                 IsActive = true,
                 CreatedAt = now,
@@ -69,8 +78,8 @@ public sealed class CustomerAccountService
             if (!user.IsActive)
                 throw ViviException.Unauthorized("INVALID_CREDENTIALS", "This account is inactive.");
 
-            if (!string.IsNullOrWhiteSpace(name))
-                user.Name = name.Trim();
+            if (hasRealName)
+                user.Name = resolvedName;
 
             user.UpdatedAt = now;
 
@@ -89,9 +98,11 @@ public sealed class CustomerAccountService
                     UpdatedAt = now
                 });
             }
-            else if (!string.IsNullOrWhiteSpace(name))
+            else
             {
-                customer.FullName = name.Trim();
+                if (hasRealName)
+                    customer.FullName = resolvedName;
+                // Every successful sign-in refreshes last-active for admin tracking.
                 customer.UpdatedAt = now;
             }
         }

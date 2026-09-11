@@ -3,6 +3,7 @@ using VIVI.Api.DTOs.Orders;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Interfaces;
+using VIVI.Infrastructure.Auth;
 using VIVI.Infrastructure.Commerce;
 
 namespace VIVI.Api.Mapping;
@@ -126,7 +127,7 @@ public static class CommerceMapper
             Status = order.Status,
             PaymentStatus = payment?.Status,
             TotalAmount = order.TotalAmount,
-            CustomerName = order.Customer?.FullName ?? string.Empty,
+            CustomerName = DisplayCustomerName(order.Customer, order.ShipFullName),
             CustomerPhone = order.Customer?.PhoneNumber ?? order.ShipPhone ?? string.Empty,
             CreatedAt = order.CreatedAt,
             HasPhysicalItems = hasPhysical,
@@ -160,7 +161,7 @@ public static class CommerceMapper
             Items = baseDto.Items,
             ShippingAddress = baseDto.ShippingAddress,
             Delivery = baseDto.Delivery,
-            CustomerName = order.Customer?.FullName ?? string.Empty,
+            CustomerName = DisplayCustomerName(order.Customer, order.ShipFullName),
             CustomerPhone = order.Customer?.PhoneNumber ?? order.ShipPhone ?? string.Empty,
             CustomerEmail = order.Customer?.Email ?? string.Empty,
             OverrideReason = order.DeliveryDateOverrideReason,
@@ -252,5 +253,20 @@ public static class CommerceMapper
             IsOverridden = overridden,
             CustomerLabel = string.Empty
         };
+    }
+
+    /// <summary>Prefer a real account name; fall back to shipping name when OTP left the placeholder.</summary>
+    public static string DisplayCustomerName(Customer? customer, string? shipFullName = null)
+    {
+        if (customer is not null && !CustomerAccountService.IsPlaceholderName(customer.FullName))
+            return customer.FullName;
+
+        if (!CustomerAccountService.IsPlaceholderName(shipFullName))
+            return shipFullName!.Trim();
+
+        if (customer is not null && !CustomerAccountService.IsPlaceholderName(customer.ShipFullName))
+            return customer.ShipFullName!.Trim();
+
+        return customer?.FullName ?? string.Empty;
     }
 }

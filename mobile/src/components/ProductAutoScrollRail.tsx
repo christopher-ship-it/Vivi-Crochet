@@ -11,7 +11,7 @@ import type { Product } from '../types';
 import { spacing } from '../theme';
 import { ProductCard, PRODUCT_CARD_GAP, RAIL_CARD_WIDTH } from './ProductCard';
 
-const CARD_GAP = PRODUCT_CARD_GAP;
+const CARD_GAP = Math.max(8, PRODUCT_CARD_GAP - 4);
 const ITEM_STRIDE = RAIL_CARD_WIDTH + CARD_GAP;
 const SCROLL_SPEED = 0.45;
 const RESUME_DELAY_MS = 2500;
@@ -184,11 +184,11 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   content: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    paddingTop: 2,
+    paddingHorizontal: spacing.md,
+    paddingBottom: 2,
+    paddingTop: 0,
   },
   gap: {
-    width: CARD_GAP,
+    width: Math.max(8, CARD_GAP - 4),
   },
 });

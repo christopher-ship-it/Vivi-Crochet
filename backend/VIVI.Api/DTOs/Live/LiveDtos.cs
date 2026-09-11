@@ -17,6 +17,9 @@ public class LiveWeekSummaryResponse
 public sealed class LiveWeekDetailResponse : LiveWeekSummaryResponse
 {
     public IReadOnlyList<LiveDayResponse> Days { get; set; } = Array.Empty<LiveDayResponse>();
+    /// <summary>Hours of live learning included each week (Mon–Fri × 2 hrs).</summary>
+    public int WeeklyLiveHours { get; set; }
+    public int HoursPerClassDay { get; set; }
 }
 
 public sealed class LiveDayResponse
@@ -31,6 +34,8 @@ public sealed class LiveSlotAvailabilityResponse
 {
     public string SlotType { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    /// <summary>Studio hours for this circle, e.g. 11:00 AM – 1:00 PM.</summary>
+    public string Hours { get; set; } = string.Empty;
     public int SeatCapacity { get; set; }
     public int SeatsBooked { get; set; }
     public int SeatsRemaining { get; set; }
@@ -67,10 +72,12 @@ public sealed class LiveBookingResponse
     public string Status { get; set; } = string.Empty;
     public string SlotType { get; set; } = string.Empty;
     public string SlotName { get; set; } = string.Empty;
+    public string SlotHours { get; set; } = string.Empty;
     public int WeekNumber { get; set; }
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public decimal PackagePrice { get; set; }
+    public int WeeklyLiveHours { get; set; }
     public IReadOnlyList<LiveDayResponse> Days { get; set; } = Array.Empty<LiveDayResponse>();
     public DateTime? ConfirmedAt { get; set; }
 }

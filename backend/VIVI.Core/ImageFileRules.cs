@@ -66,4 +66,10 @@ public static class ImageFileRules
 
     public static bool IsOwnedBlobPath(Guid productId, string blobPath)
         => blobPath.StartsWith($"products/{productId:D}/image/", StringComparison.OrdinalIgnoreCase);
+
+    public static string BuildCourseThumbnailBlobPath(Guid courseId, string sanitizedFileName)
+        => $"courses/{courseId:D}/thumbnail/{sanitizedFileName}";
+
+    public static bool IsOwnedCourseThumbnailPath(Guid courseId, string blobPath)
+        => blobPath.StartsWith($"courses/{courseId:D}/thumbnail/", StringComparison.OrdinalIgnoreCase);
 }

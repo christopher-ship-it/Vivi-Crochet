@@ -15,6 +15,8 @@ public sealed class Course
     public int AccessDays { get; set; } = 30;
     public byte RenewalPercentage { get; set; } = 50;
     public string? Languages { get; set; }
+    /// <summary>Blob path for the Learn & Loop course cover (resolved to a read SAS in API responses).</summary>
+    public string? ThumbnailUrl { get; set; }
     public CourseStatus Status { get; set; } = CourseStatus.Draft;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

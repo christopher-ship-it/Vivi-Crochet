@@ -5,6 +5,7 @@ export type LiveSlotType = 'Morning' | 'Evening';
 export interface LiveSlotAvailability {
   slotType: LiveSlotType | string;
   name: string;
+  hours?: string;
   seatCapacity: number;
   seatsBooked: number;
   seatsRemaining: number;
@@ -31,6 +32,8 @@ export interface LiveWeekSummary {
 
 export interface LiveWeekDetail extends LiveWeekSummary {
   days: LiveDay[];
+  weeklyLiveHours?: number;
+  hoursPerClassDay?: number;
 }
 
 export interface CreateLiveBookingResponse {
@@ -55,16 +58,46 @@ export interface LiveBooking {
   status: string;
   slotType: string;
   slotName: string;
+  slotHours?: string;
   weekNumber: number;
   startDate: string;
   endDate: string;
   packagePrice: number;
+  weeklyLiveHours?: number;
   days: LiveDay[];
   confirmedAt?: string | null;
 }
 
+function toLocalIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Monday that starts the current Live week (local device calendar). */
+function currentWeekMonday(from = new Date()): Date {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const day = d.getDay(); // 0 = Sun
+  const offset = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + offset);
+  return d;
+}
+
+/** Customer UI: only this week + next week (defends against older APIs returning the full season). */
+export function filterCurrentAndNextLiveWeeks(weeks: LiveWeekSummary[]): LiveWeekSummary[] {
+  const monday = currentWeekMonday();
+  const next = new Date(monday);
+  next.setDate(next.getDate() + 7);
+  const allowed = new Set([toLocalIsoDate(monday), toLocalIsoDate(next)]);
+  return weeks
+    .filter((w) => allowed.has(String(w.startDate).slice(0, 10)))
+    .sort((a, b) => a.weekNumber - b.weekNumber || a.startDate.localeCompare(b.startDate));
+}
+
 export async function listLiveWeeks(): Promise<LiveWeekSummary[]> {
-  return apiRequest<LiveWeekSummary[]>('/api/live/weeks', {}, false);
+  const weeks = await apiRequest<LiveWeekSummary[]>('/api/live/weeks', {}, false);
+  return filterCurrentAndNextLiveWeeks(weeks);
 }
 
 export async function getLiveWeek(weekId: string): Promise<LiveWeekDetail> {

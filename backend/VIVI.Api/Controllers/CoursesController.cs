@@ -6,6 +6,8 @@ using VIVI.Api.DTOs.Enrollments;
 using VIVI.Api.DTOs.Courses;
 using VIVI.Api.Extensions;
 using VIVI.Api.Mapping;
+using VIVI.Api.Services;
+using VIVI.Core;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
@@ -63,7 +65,9 @@ public sealed class CoursesController : ControllerBase
             .OrderBy(c => c.Name)
             .ToListAsync(cancellationToken);
 
-        return Ok(items.Select(c => c.ToDto(includeLessons: false, adminView: admin)).ToList());
+        var dtos = items.Select(c => c.ToDto(includeLessons: false, adminView: admin)).ToList();
+        await ResolveThumbnailsAsync(dtos, cancellationToken);
+        return Ok(dtos);
     }
 
     /// <summary>Course detail plus lessons. Draft courses are hidden from non-admins.</summary>
@@ -86,7 +90,9 @@ public sealed class CoursesController : ControllerBase
         if (course is null || (!admin && course.Status != CourseStatus.Published))
             throw ViviException.NotFound("COURSE_NOT_FOUND", "Course was not found.");
 
-        return Ok(course.ToDto(includeLessons: true, adminView: admin));
+        var dto = course.ToDto(includeLessons: true, adminView: admin);
+        await ResolveThumbnailAsync(dto, cancellationToken);
+        return Ok(dto);
     }
 
     /// <summary>Returns the server-authoritative current price and launch-offer information.</summary>
@@ -126,7 +132,9 @@ public sealed class CoursesController : ControllerBase
         await SyncBundleAndLaunchAsync(course, request, now, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         course = await Load(course.Id, cancellationToken);
-        return CreatedAtAction(nameof(Get), new { id = course.Id }, course.ToDto(true, true));
+        var dto = course.ToDto(true, true);
+        await ResolveThumbnailAsync(dto, cancellationToken);
+        return CreatedAtAction(nameof(Get), new { id = course.Id }, dto);
     }
 
     /// <summary>Updates course metadata. Does not change publish status. Admin only.</summary>
@@ -141,7 +149,123 @@ public sealed class CoursesController : ControllerBase
         await SyncBundleAndLaunchAsync(course, request, DateTime.UtcNow, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         course = await Load(id, cancellationToken);
-        return Ok(course.ToDto(true, true));
+        var dto = course.ToDto(true, true);
+        await ResolveThumbnailAsync(dto, cancellationToken);
+        return Ok(dto);
+    }
+
+    /// <summary>Returns a short-lived write SAS URL for a course thumbnail. Admin only.</summary>
+    [HttpPost("{id:guid}/thumbnail-upload-url")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(CourseThumbnailUploadUrlResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CourseThumbnailUploadUrlResponse>> CreateThumbnailUploadUrl(
+        Guid id,
+        [FromBody] CourseThumbnailUploadUrlRequest request,
+        CancellationToken cancellationToken)
+    {
+        _ = await Load(id, cancellationToken);
+
+        ImageFileRules.Validate(
+            request.FileName,
+            request.ContentType,
+            request.FileSizeBytes,
+            ImageFileRules.DefaultMaxBytes);
+
+        var safeName = ImageFileRules.SanitizeFileName(request.FileName);
+        var uniqueName = $"{Guid.NewGuid():N}-{safeName}";
+        var blobPath = ImageFileRules.BuildCourseThumbnailBlobPath(id, uniqueName);
+        var ticket = await _blob.CreateUploadSasAsync(blobPath, request.ContentType.Trim(), cancellationToken);
+
+        return Ok(new CourseThumbnailUploadUrlResponse
+        {
+            UploadUrl = ticket.UploadUrl,
+            ExpiresAt = ticket.ExpiresAt,
+            BlobPath = blobPath,
+            MaxFileSizeBytes = ImageFileRules.DefaultMaxBytes
+        });
+    }
+
+    /// <summary>Confirms a finished thumbnail upload and sets it on the course. Admin only.</summary>
+    [HttpPost("{id:guid}/thumbnail-upload-complete")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(CourseResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CourseResponse>> CompleteThumbnailUpload(
+        Guid id,
+        [FromBody] CourseThumbnailUploadCompleteRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ImageFileRules.IsOwnedCourseThumbnailPath(id, request.BlobPath))
+            throw new ViviException("INVALID_BLOB_PATH", "The blob path does not belong to this course.");
+
+        ImageFileRules.Validate(
+            Path.GetFileName(request.BlobPath),
+            request.ContentType,
+            request.FileSizeBytes,
+            ImageFileRules.DefaultMaxBytes);
+
+        var completed = await _blob.TryCompleteUploadAsync(
+            request.BlobPath,
+            request.FileSizeBytes,
+            request.ContentType.Trim(),
+            cancellationToken);
+
+        if (!completed)
+            throw ViviException.Conflict(
+                "BLOB_MISSING",
+                "The image file was not found in storage. Upload it to the SAS URL, then retry.");
+
+        var course = await Load(id, cancellationToken);
+        var previous = course.ThumbnailUrl;
+        course.ThumbnailUrl = request.BlobPath;
+        course.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(previous)
+            && !string.Equals(previous, request.BlobPath, StringComparison.OrdinalIgnoreCase)
+            && ProductImageResolver.IsBlobPath(previous))
+        {
+            try
+            {
+                await _blob.DeleteAsync(previous, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete previous course thumbnail {BlobPath}", previous);
+            }
+        }
+
+        var dto = course.ToDto(true, true);
+        await ResolveThumbnailAsync(dto, cancellationToken);
+        return Ok(dto);
+    }
+
+    /// <summary>Removes the course thumbnail. Admin only.</summary>
+    [HttpDelete("{id:guid}/thumbnail")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(CourseResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CourseResponse>> DeleteThumbnail(Guid id, CancellationToken cancellationToken)
+    {
+        var course = await Load(id, cancellationToken);
+        var previous = course.ThumbnailUrl;
+        course.ThumbnailUrl = null;
+        course.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(previous) && ProductImageResolver.IsBlobPath(previous))
+        {
+            try
+            {
+                await _blob.DeleteAsync(previous, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete course thumbnail {BlobPath}", previous);
+            }
+        }
+
+        var dto = course.ToDto(true, true);
+        await ResolveThumbnailAsync(dto, cancellationToken);
+        return Ok(dto);
     }
 
     /// <summary>Deletes a course and its videos. Admin only.</summary>
@@ -171,6 +295,7 @@ public sealed class CoursesController : ControllerBase
 
         var blobPaths = course.Videos
             .SelectMany(v => new[] { v.BlobPath, v.ThumbnailBlobPath, v.PatternPdfBlobPath })
+            .Append(course.ThumbnailUrl)
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(path => path!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -224,7 +349,9 @@ public sealed class CoursesController : ControllerBase
         course.Status = CourseStatus.Published;
         course.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(course.ToDto(true, true));
+        var dto = course.ToDto(true, true);
+        await ResolveThumbnailAsync(dto, cancellationToken);
+        return Ok(dto);
     }
 
     /// <summary>Unpublishes a course. Lessons stay as they are. Admin only.</summary>
@@ -237,7 +364,29 @@ public sealed class CoursesController : ControllerBase
         course.Status = CourseStatus.Draft;
         course.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(course.ToDto(true, true));
+        var dto = course.ToDto(true, true);
+        await ResolveThumbnailAsync(dto, cancellationToken);
+        return Ok(dto);
+    }
+
+    private async Task ResolveThumbnailAsync(CourseResponse dto, CancellationToken cancellationToken)
+    {
+        try
+        {
+            dto.ThumbnailUrl = await ProductImageResolver.ResolveAsync(dto.ThumbnailUrl, _blob, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resolve thumbnail for course {CourseId}", dto.Id);
+            // Keep listing courses even if SAS/blob resolution fails.
+            if (ProductImageResolver.IsBlobPath(dto.ThumbnailUrl))
+                dto.ThumbnailUrl = null;
+        }
+    }
+
+    private async Task ResolveThumbnailsAsync(IReadOnlyList<CourseResponse> dtos, CancellationToken cancellationToken)
+    {
+        await Task.WhenAll(dtos.Select(dto => ResolveThumbnailAsync(dto, cancellationToken)));
     }
 
     private async Task<Course> Load(Guid id, CancellationToken cancellationToken)

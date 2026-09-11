@@ -52,6 +52,7 @@ export interface Course {
   accessDays: number;
   renewalPercentage: number;
   languages?: string | null;
+  thumbnailUrl?: string | null;
   status: CourseStatus;
   videoCount: number;
   createdAt: string;

@@ -1,34 +1,43 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { listProductCategories, listProducts } from '../../src/api/products';
 import { listMyOrders, type OrderResponse } from '../../src/api/orders';
 import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { useCart } from '../../src/cart/CartContext';
 import { MyOrderCard } from '../../src/components/MyOrderCard';
+import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { ProductCard } from '../../src/components/ProductCard';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
 import type { Product } from '../../src/types';
 import { colors, fonts, spacing } from '../../src/theme';
 import { applyStatusBar } from '../../src/utils/statusBar';
+import { useWishlist } from '../../src/wishlist/WishlistContext';
 
 type ShopTab = 'products' | 'orders';
+const WISHLIST_FILTER = 'Wishlist';
 
 export default function ShopScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { shopTab: shopTabParam } = useLocalSearchParams<{ shopTab?: string | string[] }>();
   const shopTab = Array.isArray(shopTabParam) ? shopTabParam[0] : shopTabParam;
   const { itemCount } = useCart();
+  const { productIds: wishlistIds } = useWishlist();
   const { isAuthenticated } = useShoppingSession();
   const dockClearance = useTabDockClearance();
   const [tab, setTab] = useState<ShopTab>(shopTab === 'orders' ? 'orders' : 'products');
@@ -44,6 +53,7 @@ export default function ShopScreen() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
   const hasLoadedOnce = useRef(false);
   const requestId = useRef(0);
 
@@ -74,7 +84,9 @@ export default function ShopScreen() {
       const [cats, data] = await Promise.all([
         listProductCategories(),
         listProducts(
-          activeCategory === 'All' ? undefined : activeCategory,
+          activeCategory === 'All' || activeCategory === WISHLIST_FILTER
+            ? undefined
+            : activeCategory,
           debouncedQuery || undefined,
         ),
       ]);
@@ -121,28 +133,52 @@ export default function ShopScreen() {
     if (tab === 'orders') void loadOrders();
   }, [loadOrders, tab]);
 
-  const tabs = ['All', ...categories.filter((c) => c !== 'All')];
+  const tabs = ['All', WISHLIST_FILTER, ...categories.filter((c) => c !== 'All')];
+  const filterActive = activeCategory !== 'All';
+  const displayedProducts =
+    activeCategory === WISHLIST_FILTER
+      ? products.filter((p) => wishlistIds.includes(p.id))
+      : products;
+
+  function selectCategory(cat: string) {
+    setActiveCategory(cat);
+    setFilterOpen(false);
+  }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerTitles}>
-            <Text style={styles.title}>VIVI&apos;s Magic Products</Text>
+        <View style={styles.brandRow}>
+          <BrandWordmark />
+          <View style={styles.brandRight}>
+            <Text style={styles.tagline} numberOfLines={1}>
+              Handmade for you
+            </Text>
+            <Pressable
+              style={styles.cartBtn}
+              onPress={() => router.push('/cart')}
+              accessibilityRole="button"
+              accessibilityLabel={`Cart${itemCount > 0 ? `, ${itemCount} items` : ''}`}
+              hitSlop={8}
+            >
+              <Ionicons name="cart-outline" size={24} color={colors.ink} />
+              {itemCount > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{itemCount > 99 ? '99+' : itemCount}</Text>
+                </View>
+              )}
+            </Pressable>
           </View>
-          <Pressable style={styles.cartBtn} onPress={() => router.push('/cart')}>
-            <Text style={styles.cartBtnLabel}>Cart</Text>
-            {itemCount > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{itemCount > 99 ? '99+' : itemCount}</Text>
-              </View>
-            )}
-          </Pressable>
+        </View>
+
+        <View style={styles.pageIntro}>
+          <Text style={styles.title}>Shop Handmade</Text>
+          <Text style={styles.subtitle}>Curated crochet pieces, made with care.</Text>
         </View>
 
         <View style={styles.mainTabs}>
           <Pressable
-            style={[styles.mainTab, tab === 'products' && styles.mainTabActive]}
+            style={styles.mainTab}
             onPress={() => setTab('products')}
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === 'products' }}
@@ -150,36 +186,60 @@ export default function ShopScreen() {
             <Text style={[styles.mainTabText, tab === 'products' && styles.mainTabTextActive]}>
               Products
             </Text>
+            {tab === 'products' ? <View style={styles.mainTabIndicator} /> : <View style={styles.mainTabIndicatorSpacer} />}
           </Pressable>
           <Pressable
-            style={[styles.mainTab, tab === 'orders' && styles.mainTabActive]}
+            style={styles.mainTab}
             onPress={() => setTab('orders')}
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === 'orders' }}
           >
             <Text style={[styles.mainTabText, tab === 'orders' && styles.mainTabTextActive]}>
-              My orders
+              My Orders
             </Text>
+            {tab === 'orders' ? <View style={styles.mainTabIndicator} /> : <View style={styles.mainTabIndicatorSpacer} />}
           </Pressable>
         </View>
 
         {tab === 'products' && (
           <>
-            <TextInput
-              style={styles.search}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search bags, toys, blankets…"
-              placeholderTextColor={colors.muted}
-              returnKeyType="search"
-              onSubmitEditing={() => load()}
-            />
-            <View style={styles.categoryTabs}>
+            <View style={styles.searchRow}>
+              <Ionicons name="search-outline" size={18} color={colors.muted} />
+              <TextInput
+                style={styles.search}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search bags, toys, blankets..."
+                placeholderTextColor={colors.muted}
+                returnKeyType="search"
+                onSubmitEditing={() => load()}
+              />
+              <View style={styles.searchDivider} />
+              <Pressable
+                style={styles.filterBtn}
+                onPress={() => setFilterOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Filter by category"
+                hitSlop={6}
+              >
+                <Ionicons
+                  name="options-outline"
+                  size={20}
+                  color={filterActive ? colors.pink : colors.ink}
+                />
+                {filterActive ? <View style={styles.filterDot} /> : null}
+              </Pressable>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryTabs}
+            >
               {tabs.map((cat) => (
                 <Pressable
                   key={cat}
                   style={[styles.categoryTab, activeCategory === cat && styles.categoryTabActive]}
-                  onPress={() => setActiveCategory(cat)}
+                  onPress={() => selectCategory(cat)}
                 >
                   <Text
                     style={[
@@ -191,7 +251,7 @@ export default function ShopScreen() {
                   </Text>
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
           </>
         )}
       </View>
@@ -203,7 +263,8 @@ export default function ShopScreen() {
           <ErrorView message={error} onRetry={() => load()} />
         ) : (
           <FlatList
-            data={products}
+            key="shop-products-grid"
+            data={displayedProducts}
             keyExtractor={(item) => item.id}
             numColumns={2}
             columnWrapperStyle={styles.row}
@@ -215,7 +276,14 @@ export default function ShopScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.pink} />
             }
             ListEmptyComponent={
-              <EmptyView title="No products found" message="Try another category or search term." />
+              <EmptyView
+                title={activeCategory === WISHLIST_FILTER ? 'Wishlist is empty' : 'No products found'}
+                message={
+                  activeCategory === WISHLIST_FILTER
+                    ? 'Tap the heart on a product to save it here.'
+                    : 'Try another category or search term.'
+                }
+              />
             }
             renderItem={({ item, index }) => (
               <ProductCard
@@ -246,6 +314,7 @@ export default function ShopScreen() {
         <ErrorView message={ordersError} onRetry={() => loadOrders()} />
       ) : (
         <FlatList
+          key="shop-orders-list"
           data={orders}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.ordersList, { paddingBottom: dockClearance + 16 }]}
@@ -267,89 +336,289 @@ export default function ShopScreen() {
           renderItem={({ item }) => <MyOrderCard order={item} />}
         />
       )}
+
+      <Modal
+        visible={filterOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFilterOpen(false)}
+      >
+        <View style={styles.filterSheetRoot}>
+          <Pressable style={styles.filterBackdrop} onPress={() => setFilterOpen(false)} />
+          <View style={[styles.filterSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <View style={styles.filterHandle} />
+            <View style={styles.filterHeader}>
+              <Text style={styles.filterTitle}>Filter by category</Text>
+              <Pressable onPress={() => setFilterOpen(false)} hitSlop={8}>
+                <Text style={styles.filterClose}>Close</Text>
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {tabs.map((cat) => {
+                const selected = activeCategory === cat;
+                return (
+                  <Pressable
+                    key={cat}
+                    style={[styles.filterOption, selected && styles.filterOptionActive]}
+                    onPress={() => selectCategory(cat)}
+                  >
+                    <Text style={[styles.filterOptionText, selected && styles.filterOptionTextActive]}>
+                      {cat}
+                    </Text>
+                    {selected ? (
+                      <Ionicons name="checkmark" size={18} color={colors.pink} />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.cream },
+  container: { flex: 1, backgroundColor: colors.canvas },
   header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
-    gap: spacing.sm,
-    backgroundColor: colors.cream,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.softBorder,
+    gap: spacing.md,
+    backgroundColor: colors.canvas,
   },
-  headerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  headerTitles: { flex: 1 },
-  title: { fontFamily: fonts.extraBold, fontSize: 20, color: colors.ink, letterSpacing: -0.3 },
-  cartBtn: {
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.pink,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  cartBtnLabel: { fontFamily: fonts.semiBold, fontSize: 12, color: colors.white },
-  cartBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.white,
+  brandRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexShrink: 1,
+  },
+  tagline: {
+    fontFamily: fonts.decorative,
+    fontSize: 26,
+    lineHeight: 32,
+    paddingBottom: 4,
+    color: colors.ink,
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  cartBtn: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
   },
-  cartBadgeText: { fontFamily: fonts.semiBold, fontSize: 10, color: colors.pink },
+  cartBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.pink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  cartBadgeText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 9,
+    color: colors.white,
+  },
+  pageIntro: {
+    gap: 4,
+  },
+  title: {
+    fontFamily: fonts.heading,
+    fontSize: 36,
+    lineHeight: 44,
+    paddingBottom: 4,
+    color: colors.ink,
+  },
+  subtitle: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.muted,
+    lineHeight: 20,
+  },
   mainTabs: {
     flexDirection: 'row',
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: colors.softBorder,
-    zIndex: 2,
+    gap: 22,
   },
   mainTab: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 36,
+    paddingBottom: 8,
+    alignItems: 'flex-start',
   },
-  mainTabActive: { backgroundColor: colors.pink },
-  mainTabText: { fontFamily: fonts.semiBold, fontSize: 13, color: colors.muted },
-  mainTabTextActive: { color: colors.white },
-  search: {
+  mainTabText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 15,
+    color: colors.muted,
+  },
+  mainTabTextActive: {
+    color: colors.pink,
+  },
+  mainTabIndicator: {
+    marginTop: 8,
+    height: 2.5,
+    alignSelf: 'stretch',
+    backgroundColor: colors.pink,
+    borderRadius: 2,
+  },
+  mainTabIndicatorSpacer: {
+    marginTop: 8,
+    height: 2.5,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.softBorder,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    borderRadius: 999,
+    paddingLeft: 14,
+    paddingRight: 6,
+    minHeight: 48,
+    gap: 8,
+  },
+  search: {
+    flex: 1,
+    paddingVertical: 12,
     fontFamily: fonts.regular,
     fontSize: 14,
     color: colors.ink,
   },
-  categoryTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  searchDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 22,
+    backgroundColor: colors.softBorder,
+  },
+  filterBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.pink,
+  },
+  filterSheetRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  filterBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(34, 26, 30, 0.4)',
+  },
+  filterSheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingHorizontal: spacing.md,
+    paddingTop: 10,
+  },
+  filterHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: colors.softBorder,
+    marginBottom: 12,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  filterTitle: {
+    fontFamily: fonts.extraBold,
+    fontSize: 17,
+    color: colors.ink,
+  },
+  filterClose: {
+    fontFamily: fonts.semiBold,
+    fontSize: 14,
+    color: colors.muted,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.softBorder,
+  },
+  filterOptionActive: {
+    backgroundColor: colors.pinkSoft,
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  filterOptionText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  filterOptionTextActive: {
+    color: colors.pink,
+  },
+  categoryTabs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: spacing.md,
+  },
   categoryTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.softBorder,
   },
-  categoryTabActive: { backgroundColor: colors.pinkSoft, borderColor: colors.pink },
-  categoryTabText: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
-  categoryTabTextActive: { fontFamily: fonts.semiBold, color: colors.ink },
-  list: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
-  row: { gap: spacing.md, marginBottom: spacing.md, alignItems: 'flex-start' },
-  ordersList: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.md },
-  ordersEmpty: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
+  categoryTabActive: {
+    backgroundColor: colors.pink,
+    borderColor: colors.pink,
+  },
+  categoryTabText: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.muted,
+  },
+  categoryTabTextActive: {
+    fontFamily: fonts.semiBold,
+    color: colors.white,
+  },
+  list: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+  },
+  row: {
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+    alignItems: 'stretch',
+  },
+  ordersList: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    gap: spacing.md,
+  },
+  ordersEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
 });

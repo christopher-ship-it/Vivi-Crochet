@@ -1,15 +1,19 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  completeCourseThumbnailUpload,
   createCourse,
+  deleteCourseThumbnail,
   getCourse,
   listCategories,
   listCourses,
+  requestCourseThumbnailUploadUrl,
   updateCourse,
 } from '../api/courses';
 import { ApiClientError } from '../api/client';
 import type { Category, Course, CourseRequest, CourseType } from '../types';
-import { LANGUAGE_OPTIONS } from '../utils/format';
+import { LANGUAGE_OPTIONS, validateImageFile } from '../utils/format';
+import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
 
 const COURSE_TYPES: { value: CourseType; label: string }[] = [
   { value: 'DigitalCourse', label: 'Course' },
@@ -42,9 +46,13 @@ export function CourseFormPage() {
   const [selectedLangs, setSelectedLangs] = useState<string[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [catalog, setCatalog] = useState<Course[]>([]);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     listCategories()
@@ -82,6 +90,7 @@ export function CourseFormPage() {
         setSelectedLangs(
           course.languages ? course.languages.split(',').map((l) => l.trim()).filter(Boolean) : [],
         );
+        setThumbnailUrl(course.thumbnailUrl ?? null);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ApiClientError ? err.message : 'Failed to load course.');
@@ -121,12 +130,65 @@ export function CourseFormPage() {
         navigate(`/courses/${id}`);
       } else {
         const created = await createCourse(payload);
-        navigate(`/courses/${created.id}`);
+        navigate(`/courses/${created.id}/edit`);
       }
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Save failed.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleThumbnailSelect(fileList: FileList | null) {
+    if (!id || !fileList?.length) return;
+    const file = fileList[0];
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      setUploadError(validation.error ?? 'Invalid image');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError(null);
+    setUploadProgress(null);
+    try {
+      const ticket = await requestCourseThumbnailUploadUrl(id, {
+        fileName: file.name,
+        contentType: validation.contentType ?? file.type,
+        fileSizeBytes: file.size,
+      });
+      const uploadResult = await uploadToBlob(
+        ticket.uploadUrl,
+        file,
+        validation.contentType ?? file.type,
+        setUploadProgress,
+      );
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error ?? 'Upload failed');
+      }
+      const course = await completeCourseThumbnailUpload(id, {
+        blobPath: ticket.blobPath,
+        fileSizeBytes: file.size,
+        contentType: validation.contentType ?? file.type,
+      });
+      setThumbnailUrl(course.thumbnailUrl ?? null);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Thumbnail upload failed.');
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
+    }
+  }
+
+  async function handleRemoveThumbnail() {
+    if (!id || !thumbnailUrl) return;
+    if (!window.confirm('Remove this course thumbnail?')) return;
+    setUploadError(null);
+    try {
+      const course = await deleteCourseThumbnail(id);
+      setThumbnailUrl(course.thumbnailUrl ?? null);
+    } catch (err) {
+      setUploadError(err instanceof ApiClientError ? err.message : 'Could not remove thumbnail.');
     }
   }
 
@@ -144,7 +206,9 @@ export function CourseFormPage() {
         <div>
           <h1 className="page-header__title">{isEdit ? 'Edit course' : 'New course'}</h1>
           <p className="page-header__subtitle">
-            {isEdit ? 'Update course details' : 'Courses are created as Draft'}
+            {isEdit
+              ? 'Update course details and Learn & Loop thumbnail'
+              : 'Courses are created as Draft — add a thumbnail after creating'}
           </p>
         </div>
         <div className="page-header__actions">
@@ -361,6 +425,79 @@ export function CourseFormPage() {
           </button>
         </div>
       </form>
+
+      {isEdit && id && (
+        <section className="card" style={{ marginTop: 24 }}>
+          <h2 style={{ fontSize: 18, marginBottom: 8 }}>Course thumbnail</h2>
+          <p className="page-header__subtitle" style={{ marginBottom: 16 }}>
+            Shown on Learn & Loop course cards. JPG, PNG, or WebP up to 5 MB.
+          </p>
+
+          {uploadError && (
+            <div className="form-error" style={{ marginBottom: 16 }}>{uploadError}</div>
+          )}
+
+          {thumbnailUrl ? (
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16 }}>
+              <img
+                src={thumbnailUrl}
+                alt={form.name || 'Course thumbnail'}
+                style={{
+                  width: 180,
+                  height: 180,
+                  objectFit: 'cover',
+                  borderRadius: 12,
+                  border: '1px solid var(--vivi-border-soft)',
+                  background: '#fff7f9',
+                }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label className="btn btn--ghost" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+                  {uploading ? 'Uploading…' : 'Replace image'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                    hidden
+                    disabled={uploading}
+                    onChange={(e) => {
+                      void handleThumbnailSelect(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  disabled={uploading}
+                  onClick={() => void handleRemoveThumbnail()}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <label className="btn btn--primary" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+              {uploading ? 'Uploading…' : 'Upload thumbnail'}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                hidden
+                disabled={uploading}
+                onChange={(e) => {
+                  void handleThumbnailSelect(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          )}
+
+          {uploadProgress && (
+            <p className="page-header__subtitle" style={{ marginTop: 12 }}>
+              Uploading… {Math.round(uploadProgress.percent)}%
+            </p>
+          )}
+        </section>
+      )}
     </>
   );
 }

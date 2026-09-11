@@ -22,3 +22,13 @@ export async function updateOrderDeliveryDate(
     body: JSON.stringify(data),
   });
 }
+
+export async function updateOrderStatus(
+  id: string,
+  data: { status: string; note?: string | null },
+): Promise<AdminOrderDetail> {
+  return apiRequest<AdminOrderDetail>(`/api/admin/orders/${id}/status`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}

@@ -12,7 +12,7 @@ public sealed class LiveWeek
     public DateOnly StartDate { get; set; }
     /// <summary>Sunday of the same calendar week.</summary>
     public DateOnly EndDate { get; set; }
-    /// <summary>Optional single Mon–Fri break day that moves to Saturday replacement. Null = none.</summary>
+    /// <summary>Optional single Mon–Fri studio break day. Saturday remains replacement-only; Sunday always OFF.</summary>
     public DayOfWeek? BreakWeekday { get; set; }
     public bool IsBookable { get; set; } = true;
     public DateTime CreatedAt { get; set; }
@@ -27,7 +27,7 @@ public sealed class LiveWeekSlot
     public Guid Id { get; set; }
     public Guid LiveWeekId { get; set; }
     public LiveSlotType SlotType { get; set; }
-    public int SeatCapacity { get; set; } = 5;
+    public int SeatCapacity { get; set; } = 4;
     /// <summary>Confirmed + pending-payment reservations currently held.</summary>
     public int SeatsBooked { get; set; }
     public DateTime CreatedAt { get; set; }

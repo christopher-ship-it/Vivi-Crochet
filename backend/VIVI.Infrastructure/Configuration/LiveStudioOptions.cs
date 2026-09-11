@@ -7,7 +7,8 @@ public sealed class LiveStudioOptions
     /// <summary>Package price in INR. Mobile must not override this.</summary>
     public decimal PackagePrice { get; set; } = 999m;
 
-    public int DefaultSeatCapacity { get; set; } = 5;
+    /// <summary>Max seats per Morning or Evening circle (final studio rule: 4).</summary>
+    public int DefaultSeatCapacity { get; set; } = 4;
 
     public int ReservationMinutes { get; set; } = 15;
 
@@ -17,4 +18,25 @@ public sealed class LiveStudioOptions
     public string MorningSlotName { get; set; } = "Morning Crochet Circle";
 
     public string EveningSlotName { get; set; } = "Evening Crochet Circle";
+
+    /// <summary>Display hours for Morning Crochet Circle.</summary>
+    public string MorningSlotHours { get; set; } = "11:00 AM – 1:00 PM";
+
+    /// <summary>Display hours for Evening Crochet Circle.</summary>
+    public string EveningSlotHours { get; set; } = "6:00 PM – 8:00 PM";
+
+    /// <summary>Hours of live class per weekday session.</summary>
+    public int HoursPerClassDay { get; set; } = 2;
+
+    /// <summary>Regular class days Monday–Friday.</summary>
+    public int ClassDaysPerWeek { get; set; } = 5;
+
+    /// <summary>Total live hours per booked week (5 × 2).</summary>
+    public int WeeklyLiveHours { get; set; } = 10;
+
+    /// <summary>
+    /// How many weeks customers may see/book, starting at the current India week.
+    /// Default 2 = this week + next week only.
+    /// </summary>
+    public int CustomerSelectableWeekCount { get; set; } = 2;
 }

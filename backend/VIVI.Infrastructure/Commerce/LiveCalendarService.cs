@@ -23,8 +23,59 @@ public sealed class LiveCalendarService
 
     public decimal PackagePrice => _options.PackagePrice;
 
+    public int MaxSeatCapacity => _options.DefaultSeatCapacity;
+
+    public int WeeklyLiveHours => _options.WeeklyLiveHours;
+
+    public int HoursPerClassDay => _options.HoursPerClassDay;
+
+    /// <summary>India-local calendar date for "today" (Live studio scheduling).</summary>
+    public DateOnly GetIndiaToday()
+    {
+        var ist = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, IndiaTimeZone);
+        return DateOnly.FromDateTime(ist);
+    }
+
+    /// <summary>Monday that starts the current Live week in India.</summary>
+    public DateOnly GetCurrentWeekMonday(DateOnly? today = null)
+    {
+        var day = today ?? GetIndiaToday();
+        var offset = ((int)day.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return day.AddDays(-offset);
+    }
+
+    /// <summary>
+    /// Customer-facing bookable window: current week Monday through
+    /// (count - 1) weeks ahead. Default count is 2 (this + next).
+    /// A count of 52+ means the full season (used by tests).
+    /// </summary>
+    public IReadOnlyList<DateOnly> GetCustomerSelectableWeekStarts(DateOnly? today = null)
+    {
+        var count = Math.Max(1, _options.CustomerSelectableWeekCount);
+        if (count >= 52)
+            return Array.Empty<DateOnly>(); // signal: no date filter / full season
+
+        var monday = GetCurrentWeekMonday(today);
+        var starts = new List<DateOnly>(count);
+        for (var i = 0; i < count; i++)
+            starts.Add(monday.AddDays(i * 7));
+        return starts;
+    }
+
+    public bool IsCustomerSelectableWeek(LiveWeek week, DateOnly? today = null)
+    {
+        if (_options.CustomerSelectableWeekCount >= 52)
+            return true;
+
+        var starts = GetCustomerSelectableWeekStarts(today);
+        return starts.Contains(week.StartDate);
+    }
+
     public string SlotName(LiveSlotType slotType) =>
         slotType == LiveSlotType.Morning ? _options.MorningSlotName : _options.EveningSlotName;
+
+    public string SlotHours(LiveSlotType slotType) =>
+        slotType == LiveSlotType.Morning ? _options.MorningSlotHours : _options.EveningSlotHours;
 
     public async Task EnsureSeasonAsync(CancellationToken cancellationToken)
     {
@@ -32,7 +83,10 @@ public sealed class LiveCalendarService
         var year = start.Year;
         var existing = await _db.LiveWeeks.CountAsync(w => w.SeasonYear == year, cancellationToken);
         if (existing >= 52)
+        {
+            await NormalizeSeatCapacitiesAsync(cancellationToken);
             return;
+        }
 
         var now = DateTime.UtcNow;
         for (var week = 1; week <= 52; week++)
@@ -77,7 +131,6 @@ public sealed class LiveCalendarService
                     }
                 }
             };
-            // Fix FK on slots
             foreach (var slot in entity.Slots)
                 slot.LiveWeekId = entity.Id;
 
@@ -85,8 +138,15 @@ public sealed class LiveCalendarService
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+        await NormalizeSeatCapacitiesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Final studio week shape:
+    /// Mon–Fri = Class (or one optional admin Break weekday),
+    /// Saturday = Replacement only (never a normal class day),
+    /// Sunday = OFF.
+    /// </summary>
     public IReadOnlyList<LiveDayPlan> BuildDayPlan(LiveWeek week)
     {
         if (week.BreakWeekday is DayOfWeek.Sunday)
@@ -110,16 +170,9 @@ public sealed class LiveCalendarService
             }
             else if (weekday == DayOfWeek.Saturday)
             {
-                if (week.BreakWeekday.HasValue)
-                {
-                    kind = LiveDayKind.Replacement;
-                    label = "REPLACEMENT";
-                }
-                else
-                {
-                    kind = LiveDayKind.Available;
-                    label = "AVAILABLE";
-                }
+                // Always reserved for missed Mon–Fri make-up — never a sixth regular class.
+                kind = LiveDayKind.Replacement;
+                label = "REPLACEMENT";
             }
             else if (week.BreakWeekday.HasValue && weekday == week.BreakWeekday.Value)
             {
@@ -135,16 +188,32 @@ public sealed class LiveCalendarService
             days.Add(new LiveDayPlan(date, weekday, kind, label));
         }
 
-        var classDays = days.Count(d => d.Kind is LiveDayKind.Class or LiveDayKind.Replacement);
-        if (week.BreakWeekday.HasValue && classDays != 5)
-            throw ViviException.Conflict("INVALID_SCHEDULE", "A live week with one break must still have exactly 5 class days.");
+        var monFriClass = days.Count(d =>
+            d.Weekday is >= DayOfWeek.Monday and <= DayOfWeek.Friday
+            && d.Kind == LiveDayKind.Class);
+        var monFriBreak = days.Count(d =>
+            d.Weekday is >= DayOfWeek.Monday and <= DayOfWeek.Friday
+            && d.Kind == LiveDayKind.Break);
 
-        if (!week.BreakWeekday.HasValue)
+        if (week.BreakWeekday.HasValue)
         {
-            var monFri = days.Count(d => d.Kind == LiveDayKind.Class);
-            if (monFri != 5)
-                throw ViviException.Conflict("INVALID_SCHEDULE", "A standard live week must have Monday–Friday classes.");
+            if (monFriBreak != 1 || monFriClass != 4)
+                throw ViviException.Conflict(
+                    "INVALID_SCHEDULE",
+                    "A live week with one break must have 4 weekday classes and 1 weekday break.");
         }
+        else if (monFriClass != 5)
+        {
+            throw ViviException.Conflict(
+                "INVALID_SCHEDULE",
+                "A standard live week must have Monday–Friday classes.");
+        }
+
+        if (days.Count(d => d.Weekday == DayOfWeek.Saturday && d.Kind == LiveDayKind.Replacement) != 1)
+            throw ViviException.Conflict("INVALID_SCHEDULE", "Saturday must be a replacement class day.");
+
+        if (days.Count(d => d.Weekday == DayOfWeek.Sunday && d.Kind == LiveDayKind.Off) != 1)
+            throw ViviException.Conflict("INVALID_SCHEDULE", "Sunday must be OFF.");
 
         return days;
     }
@@ -159,7 +228,6 @@ public sealed class LiveCalendarService
 
         week.BreakWeekday = breakWeekday;
         week.UpdatedAt = DateTime.UtcNow;
-        // Validate schedule shape
         _ = BuildDayPlan(week);
         await _db.SaveChangesAsync(cancellationToken);
     }
@@ -180,8 +248,12 @@ public sealed class LiveCalendarService
         int seatCapacity,
         CancellationToken cancellationToken)
     {
-        if (seatCapacity < 1)
-            throw ViviException.Conflict("INVALID_CAPACITY", "Seat capacity must be at least 1.");
+        if (seatCapacity < 1 || seatCapacity > _options.DefaultSeatCapacity)
+        {
+            throw ViviException.Conflict(
+                "INVALID_CAPACITY",
+                $"Seat capacity must be between 1 and {_options.DefaultSeatCapacity}.");
+        }
 
         var slot = await _db.LiveWeekSlots
             .SingleOrDefaultAsync(s => s.LiveWeekId == weekId && s.SlotType == slotType, cancellationToken)
@@ -197,6 +269,29 @@ public sealed class LiveCalendarService
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Brings existing season slots that exceed the configured max (4) down when safe.
+    /// Slots already booked above the new max keep capacity at SeatsBooked.
+    /// </summary>
+    public async Task NormalizeSeatCapacitiesAsync(CancellationToken cancellationToken)
+    {
+        var max = _options.DefaultSeatCapacity;
+        var slots = await _db.LiveWeekSlots
+            .Where(s => s.SeatCapacity > max)
+            .ToListAsync(cancellationToken);
+        if (slots.Count == 0)
+            return;
+
+        var now = DateTime.UtcNow;
+        foreach (var slot in slots)
+        {
+            slot.SeatCapacity = Math.Max(slot.SeatsBooked, max);
+            slot.UpdatedAt = now;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
     private DateOnly ParseSeasonStart()
     {
         if (!DateOnly.TryParse(_options.SeasonStartMonday, out var start))
@@ -204,5 +299,19 @@ public sealed class LiveCalendarService
         if (start.DayOfWeek != DayOfWeek.Monday)
             throw ViviException.Conflict("LIVE_SEASON_INVALID", "SeasonStartMonday must be a Monday.");
         return start;
+    }
+
+    private static readonly TimeZoneInfo IndiaTimeZone = ResolveIndiaTimeZone();
+
+    private static TimeZoneInfo ResolveIndiaTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+        }
     }
 }

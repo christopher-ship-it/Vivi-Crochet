@@ -218,6 +218,57 @@ public sealed class DeliveryTests
     }
 
     [Fact]
+    public async Task Admin_can_move_physical_order_to_dispatched()
+    {
+        var (customer, orderId) = await PlacePhysicalOrderAsync("Coimbatore", ProductType.Handmade);
+        await PayAsync(customer, orderId);
+
+        var admin = _factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+
+        var detail = await admin.GetFromJsonAsync<AdminOrderDetailResponse>($"/api/admin/orders/{orderId}", AuthTests.Json);
+        Assert.Equal(OrderStatus.Confirmed, detail!.Status);
+
+        var shipped = await admin.PutAsJsonAsync($"/api/admin/orders/{orderId}/status", new
+        {
+            status = "Shipped"
+        });
+        Assert.True(shipped.IsSuccessStatusCode, await shipped.Content.ReadAsStringAsync());
+        var afterShip = await shipped.Content.ReadFromJsonAsync<AdminOrderDetailResponse>(AuthTests.Json);
+        Assert.Equal(OrderStatus.Shipped, afterShip!.Status);
+
+        var customerView = await customer.GetFromJsonAsync<OrderResponse>($"/api/orders/{orderId}", AuthTests.Json);
+        Assert.Equal(OrderStatus.Shipped, customerView!.Status);
+
+        var invalid = await admin.PutAsJsonAsync($"/api/admin/orders/{orderId}/status", new
+        {
+            status = "Confirmed"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, invalid.StatusCode);
+
+        var delivered = await admin.PutAsJsonAsync($"/api/admin/orders/{orderId}/status", new
+        {
+            status = "Delivered"
+        });
+        delivered.EnsureSuccessStatusCode();
+        var afterDeliver = await delivered.Content.ReadFromJsonAsync<AdminOrderDetailResponse>(AuthTests.Json);
+        Assert.Equal(OrderStatus.Delivered, afterDeliver!.Status);
+    }
+
+    [Fact]
+    public async Task Customer_cannot_update_order_status()
+    {
+        var (customer, orderId) = await PlacePhysicalOrderAsync("Chennai", ProductType.Resell);
+        await PayAsync(customer, orderId);
+
+        var response = await customer.PutAsJsonAsync($"/api/admin/orders/{orderId}/status", new
+        {
+            status = "Shipped"
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Admin_can_override_delivery_date_and_customer_sees_effective_date()
     {
         var emails = _factory.GetFakeEmailService();

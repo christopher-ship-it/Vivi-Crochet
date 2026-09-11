@@ -1,9 +1,14 @@
-import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Stack, useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -30,12 +35,22 @@ import {
 import { EmptyView, LoadingView } from '../src/components/StateViews';
 import { colors, fonts, spacing } from '../src/theme';
 import { formatInr } from '../src/utils/format';
-import { isValidEmail, isValidName, normalizePhone, normalizePin, getShippingAddressError } from '../src/utils/validation';
+import { formatDeliveryRange } from '../src/utils/orders';
+import {
+  getShippingAddressError,
+  isValidEmail,
+  isValidName,
+  normalizePhone,
+  normalizePin,
+  realCustomerName,
+} from '../src/utils/validation';
 
 const FIELD_BORDER = '#eadfe3';
 const FIELD_BG = '#fffdfd';
 const PANEL_BORDER = '#eadfe3';
 const ACCENT_SOFT = '#fff0f4';
+const CARD_BG = '#ffffff';
+const PAGE_BG = '#f7f4f5';
 
 function Field({
   label,
@@ -62,11 +77,13 @@ function Section({
   step,
   title,
   subtitle,
+  badge,
   children,
 }: {
   step?: string;
   title: string;
   subtitle?: string;
+  badge?: string;
   children: ReactNode;
 }) {
   return (
@@ -78,33 +95,88 @@ function Section({
           </View>
         ) : null}
         <View style={styles.sectionTitles}>
-          <Text style={styles.sectionTitle}>{title}</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>{title}</Text>
+            {badge ? (
+              <View style={styles.sectionPill}>
+                <Text style={styles.sectionPillText}>{badge}</Text>
+              </View>
+            ) : null}
+          </View>
           {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
         </View>
       </View>
-      <View style={styles.panel}>{children}</View>
+      <View style={styles.sectionBody}>{children}</View>
     </View>
   );
 }
 
-function BagLine({ item, index, isLast }: { item: CartLineItem; index: number; isLast: boolean }) {
+function SummaryLine({ item, index }: { item: CartLineItem; index: number }) {
   const fallback = ['#ffe3ec', '#fff0f4', '#ffeaf1', '#ffffff'][index % 4];
   return (
-    <View style={[styles.bagLine, !isLast && styles.bagLineBorder]}>
-      <View style={[styles.bagThumb, !item.imageUrl && { backgroundColor: fallback }]}>
+    <View style={styles.summaryLine}>
+      <View style={[styles.summaryThumb, !item.imageUrl && { backgroundColor: fallback }]}>
         {item.imageUrl ? (
-          <Image source={{ uri: item.imageUrl }} style={styles.bagThumbImage} resizeMode="contain" />
+          <Image source={{ uri: item.imageUrl }} style={styles.summaryThumbImage} resizeMode="contain" />
         ) : (
-          <Text style={styles.bagThumbInitial}>{item.name.charAt(0)}</Text>
+          <Text style={styles.summaryThumbInitial}>{item.name.charAt(0)}</Text>
         )}
       </View>
-      <View style={styles.bagBody}>
-        <Text style={styles.bagName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.bagMeta}>Qty {item.quantity}</Text>
+      <View style={styles.summaryLineBody}>
+        <Text style={styles.summaryLineName} numberOfLines={2}>{item.name}</Text>
+        <Text style={styles.summaryLineMeta}>Qty: {item.quantity}</Text>
       </View>
-      <Text style={styles.bagPrice}>{formatInr(lineTotal(item))}</Text>
+      <Text style={styles.summaryLinePrice}>{formatInr(lineTotal(item))}</Text>
     </View>
   );
+}
+
+function estimateLabel(quote: DeliveryQuote | null): string {
+  if (!quote) return '—';
+  const range = formatDeliveryRange(
+    quote.estimatedDeliveryDateFrom,
+    quote.estimatedDeliveryDateTo,
+  );
+  if (range) return range.replace('–', ' – ');
+  return quote.summary;
+}
+
+function isSyntheticEmail(value: string): boolean {
+  return value.trim().toLowerCase().endsWith('@vivicrochet.dev');
+}
+
+function isUsableCheckoutEmail(value: string): boolean {
+  return isValidEmail(value) && !isSyntheticEmail(value);
+}
+
+function formatPhoneDisplay(phone: string): string {
+  const digits = normalizePhone(phone);
+  if (digits.length !== 10) return digits ? `+91 ${digits}` : 'Add phone number';
+  return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+}
+
+function buildAddressDisplayLines(input: {
+  address1: string;
+  address2: string;
+  landmark: string;
+  city: string;
+  state: string;
+  pinCode: string;
+}): string[] {
+  const lines: string[] = [];
+  const line1 = input.address1.trim();
+  if (line1) lines.push(line1);
+
+  const area = [input.address2.trim(), input.landmark.trim()].filter(Boolean).join(', ');
+  if (area) lines.push(area);
+
+  const cityState = [input.city.trim(), input.state.trim()].filter(Boolean).join(', ');
+  const pin = normalizePin(input.pinCode);
+  if (cityState && pin) lines.push(`${cityState} – ${pin}`);
+  else if (cityState) lines.push(cityState);
+  else if (pin) lines.push(`PIN ${pin}`);
+
+  return lines;
 }
 
 function firstNonEmpty(...values: Array<string | null | undefined>): string {
@@ -124,7 +196,7 @@ export default function CheckoutScreen() {
   const { items, subtotal, itemCount, isLoading: cartLoading, clearCart } = useCart();
 
   const [fullName, setFullName] = useState(() =>
-    firstNonEmpty(learningProfile?.fullName, user?.name),
+    realCustomerName(learningProfile?.fullName, user?.name),
   );
   const [email, setEmail] = useState(learningProfile?.email ?? '');
   const [phone, setPhone] = useState(() =>
@@ -137,7 +209,10 @@ export default function CheckoutScreen() {
   const [state, setState] = useState('');
   const [pinCode, setPinCode] = useState('');
   const [saveAddress, setSaveAddress] = useState(true);
-  const [hasSavedAddress, setHasSavedAddress] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [editingDelivery, setEditingDelivery] = useState(false);
+  const [showAddAddressOptions, setShowAddAddressOptions] = useState(false);
+  const [locatingAddress, setLocatingAddress] = useState(false);
   const [quote, setQuote] = useState<DeliveryQuote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState(false);
@@ -145,6 +220,18 @@ export default function CheckoutScreen() {
   const [checkoutPayload, setCheckoutPayload] = useState<RazorpayCheckoutPayload | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (cartLoading || authLoading) return;
@@ -154,12 +241,14 @@ export default function CheckoutScreen() {
   }, [items.length, cartLoading, authLoading, router]);
 
   useEffect(() => {
-    const accountName = firstNonEmpty(learningProfile?.fullName, user?.name);
+    const accountName = realCustomerName(learningProfile?.fullName, user?.name);
     if (accountName) {
-      setFullName((current) => current.trim() || accountName);
+      setFullName((current) => realCustomerName(current) || accountName);
     }
-    if (learningProfile?.email) {
-      setEmail((current) => current.trim() || learningProfile.email);
+    if (learningProfile?.email && isUsableCheckoutEmail(learningProfile.email)) {
+      setEmail((current) =>
+        isUsableCheckoutEmail(current) ? current : learningProfile.email,
+      );
     }
     const accountPhone = normalizePhone(firstNonEmpty(learningProfile?.phone, user?.phone));
     if (accountPhone) {
@@ -174,14 +263,22 @@ export default function CheckoutScreen() {
       try {
         const profile = await getMyProfile();
         if (cancelled) return;
-        setFullName((current) => current.trim() || firstNonEmpty(profile.fullName, user?.name));
-        setEmail((current) => current.trim() || profile.email);
+        const profileEmail = profile.email?.trim() ?? '';
+        if (isUsableCheckoutEmail(profileEmail)) {
+          setEmail((current) => (isUsableCheckoutEmail(current) ? current : profileEmail));
+          setEditingEmail(false);
+        } else {
+          setEmail((current) => (isUsableCheckoutEmail(current) ? current : ''));
+          setEditingEmail(false);
+        }
         setPhone((current) => normalizePhone(current) || normalizePhone(profile.phoneNumber));
 
         const saved = profile.shippingAddress;
+        setFullName((current) =>
+          realCustomerName(current, profile.fullName, user?.name, saved?.fullName),
+        );
         if (saved) {
-          setHasSavedAddress(true);
-          setFullName((current) => current.trim() || saved.fullName);
+          setSaveAddress(true);
           setPhone((current) => normalizePhone(current) || normalizePhone(saved.phoneNumber));
           setAddress1((current) => current.trim() || saved.addressLine1);
           setAddress2((current) => current.trim() || saved.addressLine2 || '');
@@ -189,6 +286,11 @@ export default function CheckoutScreen() {
           setCity((current) => current.trim() || saved.city);
           setState((current) => current.trim() || saved.state);
           setPinCode((current) => normalizePin(current) || normalizePin(saved.pinCode));
+          setEditingDelivery(false);
+          setShowAddAddressOptions(false);
+        } else {
+          setEditingDelivery(false);
+          setShowAddAddressOptions(false);
         }
       } catch {
         // Prefill is best-effort; checkout still works with manual entry.
@@ -215,6 +317,20 @@ export default function CheckoutScreen() {
     : null;
 
   const shippingReady = shippingAddressError === null;
+  const emailReady = isUsableCheckoutEmail(email);
+  const checkoutReady = shippingReady && emailReady;
+  const hasDeliveryAddress = address1.trim().length > 0;
+
+  const addressLines = buildAddressDisplayLines({
+    address1,
+    address2,
+    landmark,
+    city,
+    state,
+    pinCode,
+  });
+  const phoneDisplay = formatPhoneDisplay(effectivePhone);
+  const emailDisplay = emailReady ? email.trim() : 'Add your email';
 
   function buildShippingAddress() {
     return {
@@ -228,6 +344,72 @@ export default function CheckoutScreen() {
       pinCode: normalizePin(pinCode),
       country: 'India' as const,
     };
+  }
+
+  function openAddAddress() {
+    setEditingDelivery(false);
+    setShowAddAddressOptions(true);
+  }
+
+  function openManualAddress() {
+    setShowAddAddressOptions(false);
+    setEditingDelivery(true);
+  }
+
+  async function fillFromCurrentLocation() {
+    setLocatingAddress(true);
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert(
+          'Location needed',
+          'Allow location access to fill your address, or enter it manually.',
+        );
+        return;
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const places = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+      const place = places[0];
+      if (!place) {
+        Alert.alert('Could not find address', 'Try entering your address manually.');
+        openManualAddress();
+        return;
+      }
+
+      const streetParts = [place.streetNumber, place.street]
+        .map((part) => part?.trim())
+        .filter(Boolean);
+      const street =
+        streetParts.join(' ')
+        || (place.name && place.name !== place.city ? place.name : '')
+        || place.district
+        || '';
+      const area = [place.district, place.subregion]
+        .map((part) => part?.trim())
+        .filter((part): part is string => Boolean(part) && part !== place.city && part !== street)
+        .filter((part, index, all) => all.indexOf(part) === index)
+        .join(', ');
+
+      setAddress1(street);
+      setAddress2(area);
+      setCity(place.city || place.subregion || place.district || '');
+      setState(place.region || '');
+      setPinCode(normalizePin(place.postalCode || ''));
+      setSaveAddress(true);
+      setShowAddAddressOptions(false);
+      setEditingDelivery(true);
+    } catch {
+      Alert.alert('Location failed', 'Could not read your location. Enter the address manually.');
+      openManualAddress();
+    } finally {
+      setLocatingAddress(false);
+    }
   }
 
   useEffect(() => {
@@ -283,7 +465,7 @@ export default function CheckoutScreen() {
     if (!isValidName(fullName)) {
       throw new Error('Enter your full name so we can notify you about this order.');
     }
-    if (!isValidEmail(email)) {
+    if (!isUsableCheckoutEmail(email)) {
       throw new Error('Enter a valid email — we will notify you there.');
     }
 
@@ -321,6 +503,13 @@ export default function CheckoutScreen() {
       return;
     }
 
+    if (!isUsableCheckoutEmail(email)) {
+      setEditingEmail(true);
+      setStatus('Enter a valid email for order updates.');
+      Alert.alert('Email required', 'Enter a valid email for order updates.');
+      return;
+    }
+
     const addressError = getShippingAddressError({
       fullName,
       phone: effectivePhone,
@@ -330,6 +519,8 @@ export default function CheckoutScreen() {
       pinCode,
     });
     if (addressError) {
+      setEditingDelivery(hasDeliveryAddress);
+      setShowAddAddressOptions(!hasDeliveryAddress);
       setStatus(addressError);
       Alert.alert('Delivery details incomplete', addressError);
       return;
@@ -426,192 +617,205 @@ export default function CheckoutScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
-    >
+    <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          title: 'VIVI CROCHET',
+          headerRight: () => (
+            <View style={styles.secureHeader}>
+              <Text style={styles.secureLock}>🔒</Text>
+              <Text style={styles.secureHeaderText}>Secure Payment</Text>
+            </View>
+          ),
+        }}
+      />
+
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <Text style={styles.eyebrow}>CHECKOUT</Text>
-          <Text style={styles.title}>Order summary</Text>
-          <Text style={styles.meta}>
-            {itemCount} handmade piece{itemCount === 1 ? '' : 's'} · booked into production after payment
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>Checkout</Text>
+          <Text style={styles.pageSubtitle}>
+            Almost there! Review your details and place your order.
           </Text>
         </View>
 
-        <Section title="Your bag" subtitle="Review what you’re booking">
-          {items.map((item, index) => (
-            <BagLine
-              key={item.productId}
-              item={item}
-              index={index}
-              isLast={index === items.length - 1}
-            />
-          ))}
-          <View style={styles.totalStrip}>
-            <View>
-              <Text style={styles.totalLabel}>Subtotal</Text>
-              <Text style={styles.totalHint}>Taxes & delivery noted after address</Text>
-            </View>
-            <Text style={styles.totalValue}>{formatInr(subtotal)}</Text>
-          </View>
-        </Section>
-
-        {isAuthenticated ? (
-          <Section
-            step="1"
-            title="Order updates"
-            subtitle="We’ll email your booking confirmation here"
-          >
-            <Field
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@email.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </Section>
-        ) : (
+        {!isAuthenticated ? (
           <View style={styles.authPanel}>
             <Text style={styles.authTitle}>Almost there</Text>
             <Text style={styles.authBody}>
               Verify your mobile number to place the order. You’ll be notified once payment is done.
             </Text>
           </View>
-        )}
-
-        {isAuthenticated && (
-          <Section
-            step="2"
-            title="Delivery"
-            subtitle={
-              hasSavedAddress
-                ? 'Using your saved address. Edit if needed.'
-                : 'We ship across India · Coimbatore arrives faster'
-            }
-          >
-            <Field
-              label="Recipient name"
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Full name"
-              autoCapitalize="words"
-            />
-            <Field
-              label="Phone"
-              value={phone}
-              onChangeText={(value) => setPhone(normalizePhone(value))}
-              placeholder="10-digit mobile"
-              keyboardType="phone-pad"
-              maxLength={10}
-            />
-            <Field
-              label="Address line 1"
-              value={address1}
-              onChangeText={setAddress1}
-              placeholder="House / street"
-            />
-            <Field
-              label="Address line 2"
-              optional
-              value={address2}
-              onChangeText={setAddress2}
-              placeholder="Apartment, floor"
-            />
-            <Field
-              label="Landmark"
-              optional
-              value={landmark}
-              onChangeText={setLandmark}
-              placeholder="Near…"
-            />
-            <View style={styles.fieldRow}>
-              <Field
-                label="City"
-                style={styles.fieldHalf}
-                value={city}
-                onChangeText={setCity}
-                placeholder="Coimbatore"
-                autoCapitalize="words"
-              />
-              <Field
-                label="PIN"
-                style={styles.fieldHalf}
-                value={pinCode}
-                onChangeText={(value) => setPinCode(normalizePin(value))}
-                placeholder="641001"
-                keyboardType="number-pad"
-                maxLength={6}
-              />
-            </View>
-            <Field
-              label="State"
-              value={state}
-              onChangeText={setState}
-              placeholder="Tamil Nadu"
-              autoCapitalize="words"
-            />
-            <View style={styles.countryPill}>
-              <Text style={styles.countryPillText}>India</Text>
-            </View>
-            <Pressable
-              style={styles.saveRow}
-              onPress={() => setSaveAddress((value) => !value)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: saveAddress }}
+        ) : (
+          <>
+            <Section
+              step="1"
+              title="Order updates"
+              subtitle="We'll email your booking confirmation here."
             >
-              <View style={[styles.saveCheck, saveAddress && styles.saveCheckOn]}>
-                {saveAddress ? <Text style={styles.saveCheckMark}>✓</Text> : null}
-              </View>
-              <View style={styles.saveCopy}>
-                <Text style={styles.saveTitle}>Save this address</Text>
-                <Text style={styles.saveHint}>Prefill it automatically next time you checkout</Text>
-              </View>
-            </Pressable>
-            {shippingAddressError ? (
-              <Text style={styles.fieldHint}>{shippingAddressError}</Text>
-            ) : null}
-          </Section>
-        )}
-
-        {isAuthenticated && (
-          <Section step="3" title="Payment" subtitle="Secure checkout via Razorpay">
-            <View style={styles.payMethod}>
-              <View style={styles.payMethodLeft}>
-                <View style={styles.radioOuter}>
-                  <View style={styles.radioInner} />
+              <View style={styles.card}>
+                <View style={styles.cardTopRow}>
+                  <View style={styles.cardIcon}>
+                    <Ionicons name="mail-outline" size={18} color={colors.pink} />
+                  </View>
+                  <Text style={styles.cardHeading}>Email</Text>
+                  <Pressable onPress={() => setEditingEmail(true)} hitSlop={8}>
+                    <Text style={styles.editLink}>{emailReady ? 'Edit' : 'Add'}</Text>
+                  </Pressable>
                 </View>
-                <View>
-                  <Text style={styles.payLabel}>Pay online</Text>
-                  <Text style={styles.payMeta}>Cards · UPI · Net banking</Text>
+                <Pressable onPress={() => setEditingEmail(true)}>
+                  <Text
+                    style={[styles.cardValue, !emailReady && styles.cardPlaceholder]}
+                    numberOfLines={2}
+                  >
+                    {emailDisplay}
+                  </Text>
+                </Pressable>
+              </View>
+            </Section>
+
+            <Section step="2" title="Delivery" badge="Ships across India">
+              <View style={styles.cardStack}>
+                <View style={styles.card}>
+                  <View style={styles.cardTopRow}>
+                    <View style={styles.cardIcon}>
+                      <Ionicons name="location-outline" size={18} color={colors.pink} />
+                    </View>
+                    <Text style={styles.cardHeading}>Delivery address</Text>
+                    {hasDeliveryAddress ? (
+                      <Pressable
+                        onPress={() => {
+                          setShowAddAddressOptions(false);
+                          setEditingDelivery(true);
+                        }}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.editLink}>Edit</Text>
+                      </Pressable>
+                    ) : showAddAddressOptions ? null : (
+                      <Pressable onPress={openAddAddress} hitSlop={8}>
+                        <Text style={styles.editLink}>Add</Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {!hasDeliveryAddress ? (
+                    showAddAddressOptions || locatingAddress ? (
+                      <View style={styles.addOptions}>
+                        <Pressable
+                          style={[styles.addOptionBtn, locatingAddress && styles.addOptionDisabled]}
+                          onPress={() => void fillFromCurrentLocation()}
+                          disabled={locatingAddress}
+                        >
+                          {locatingAddress ? (
+                            <ActivityIndicator color={colors.pink} />
+                          ) : (
+                            <Text style={styles.addOptionText}>Use current location</Text>
+                          )}
+                        </Pressable>
+                        <Pressable
+                          style={[styles.addOptionBtn, locatingAddress && styles.addOptionDisabled]}
+                          onPress={openManualAddress}
+                          disabled={locatingAddress}
+                        >
+                          <Text style={styles.addOptionText}>Enter address manually</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable onPress={openAddAddress}>
+                        <Text style={styles.cardMetaPlaceholder}>
+                          Add where we should deliver your order.
+                        </Text>
+                      </Pressable>
+                    )
+                  ) : (
+                    <>
+                      <Pressable
+                        onPress={() => {
+                          setShowAddAddressOptions(false);
+                          setEditingDelivery(true);
+                        }}
+                      >
+                        <Text style={styles.cardValue}>{fullName || 'Add recipient name'}</Text>
+                        <Text style={styles.cardMeta}>{phoneDisplay}</Text>
+                        {addressLines.length > 0 ? (
+                          <View style={styles.addressLines}>
+                            {addressLines.map((line, index) => (
+                              <Text key={`addr-${index}`} style={styles.cardMeta}>
+                                {line}
+                              </Text>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text style={[styles.cardMeta, styles.cardPlaceholder]}>
+                            House / street, Area, City, State – Pincode
+                          </Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        style={styles.saveRowCompact}
+                        onPress={() => setSaveAddress((value) => !value)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: saveAddress }}
+                      >
+                        <View style={[styles.saveCheck, saveAddress && styles.saveCheckOn]}>
+                          {saveAddress ? <Text style={styles.saveCheckMark}>✓</Text> : null}
+                        </View>
+                        <Text style={styles.saveTitle}>Save this address for next time</Text>
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+
+                <View style={styles.estimateCard}>
+                  <Text style={styles.estimateIcon}>🚚</Text>
+                  <View style={styles.estimateCopy}>
+                    <Text style={styles.estimateLabel}>Estimated delivery</Text>
+                    <Text style={styles.estimateDetail}>
+                      {quoteError && !quote
+                        ? quoteError
+                        : 'Coimbatore typically arrives faster'}
+                    </Text>
+                  </View>
+                  <Text style={styles.estimateRange}>
+                    {quote
+                      ? estimateLabel(quote)
+                      : shippingReady
+                        ? '…'
+                        : '—'}
+                  </Text>
+                  <Text style={styles.estimateChevron}>›</Text>
                 </View>
               </View>
-              <View style={styles.paySelected}>
-                <Text style={styles.paySelectedText}>Selected</Text>
-              </View>
-            </View>
-          </Section>
-        )}
+            </Section>
 
-        {quote ? (
-          <View style={styles.estimateBanner}>
-            <Text style={styles.estimateEyebrow}>DELIVERY WINDOW</Text>
-            <Text style={styles.estimateTitle}>{quote.locationLabel}</Text>
-            <Text style={styles.estimateValue}>{quote.summary}</Text>
-          </View>
-        ) : null}
-        {quoteError && !quote ? (
-          <View style={styles.statusBox}>
-            <Text style={styles.statusText}>{quoteError}</Text>
-          </View>
-        ) : null}
+            <Section step="3" title="Order summary">
+              <View style={styles.card}>
+                {items.map((item, index) => (
+                  <SummaryLine key={item.productId} item={item} index={index} />
+                ))}
+                <View style={styles.breakdown}>
+                  <View style={styles.orderSummaryRow}>
+                    <Text style={styles.orderSummaryKey}>Items ({itemCount})</Text>
+                    <Text style={styles.orderSummaryVal}>{formatInr(subtotal)}</Text>
+                  </View>
+                  <View style={styles.orderSummaryRow}>
+                    <Text style={styles.orderSummaryKey}>Delivery</Text>
+                    <Text style={styles.orderSummaryMuted}>Calculated at next step</Text>
+                  </View>
+                  <View style={[styles.orderSummaryRow, styles.orderSummaryTotal]}>
+                    <Text style={styles.orderSummaryTotalKey}>Total Amount</Text>
+                    <Text style={styles.orderSummaryTotalVal}>{formatInr(subtotal)}</Text>
+                  </View>
+                </View>
+              </View>
+            </Section>
+          </>
+        )}
 
         {status ? (
           <View style={styles.statusBox}>
@@ -620,27 +824,219 @@ export default function CheckoutScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <View style={styles.footerTop}>
-          <Text style={styles.footerAmountLabel}>Amount due</Text>
-          <Text style={styles.footerAmount}>{formatInr(subtotal)}</Text>
+      {!keyboardVisible ? (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          <View style={styles.trustBanner}>
+            <Text style={styles.trustIcon}>🛡</Text>
+            <View style={styles.trustCopy}>
+              <Text style={styles.trustTitle}>Secure & Safe Payments</Text>
+              <Text style={styles.trustBody}>Your payment information is always protected.</Text>
+            </View>
+          </View>
+          <Pressable
+            style={[styles.proceedBtn, purchasing && styles.btnDisabled]}
+            onPress={() => {
+              if (isAuthenticated && !emailReady) {
+                setEditingEmail(true);
+                Alert.alert('Email required', 'Add your email for order updates.');
+                return;
+              }
+              if (isAuthenticated && !shippingReady) {
+                if (hasDeliveryAddress) {
+                  setEditingDelivery(true);
+                } else {
+                  openAddAddress();
+                }
+              }
+              void handlePay();
+            }}
+            disabled={purchasing}
+          >
+            <Text style={styles.proceedBtnText}>
+              {!isAuthenticated
+                ? 'Continue · Verify mobile →'
+                : purchasing
+                  ? 'Starting payment…'
+                  : !checkoutReady
+                    ? 'Complete delivery to pay →'
+                    : 'Pay online →'}
+            </Text>
+          </Pressable>
         </View>
-        <Pressable
-          style={[styles.proceedBtn, purchasing && styles.btnDisabled]}
-          onPress={() => void handlePay()}
-          disabled={purchasing}
+      ) : null}
+
+      <Modal
+        visible={editingEmail}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditingEmail(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.sheetRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <Text style={styles.proceedBtnText}>
-            {!isAuthenticated
-              ? 'Continue · Verify mobile'
-              : purchasing
-                ? 'Starting payment…'
-                : !shippingReady
-                  ? 'Complete delivery to pay'
-                  : 'Pay online'}
-          </Text>
-        </Pressable>
-      </View>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setEditingEmail(false)} />
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>
+                {emailReady ? 'Edit email' : 'Add email'}
+              </Text>
+              <Pressable onPress={() => setEditingEmail(false)} hitSlop={8}>
+                <Text style={styles.sheetClose}>Close</Text>
+              </Pressable>
+            </View>
+            <View style={styles.sheetScroll}>
+              <Field
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@email.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+              />
+            </View>
+            <Pressable
+              style={styles.sheetSaveBtn}
+              onPress={() => {
+                if (!isUsableCheckoutEmail(email)) {
+                  Alert.alert('Email required', 'Enter a valid email for order updates.');
+                  return;
+                }
+                setEditingEmail(false);
+              }}
+            >
+              <Text style={styles.sheetSaveBtnText}>
+                {emailReady ? 'Save email' : 'Add email'}
+              </Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={editingDelivery}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditingDelivery(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.sheetRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.sheetBackdrop} onPress={() => setEditingDelivery(false)} />
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>
+                {hasDeliveryAddress ? 'Edit delivery address' : 'Add delivery address'}
+              </Text>
+              <Pressable onPress={() => setEditingDelivery(false)} hitSlop={8}>
+                <Text style={styles.sheetClose}>Close</Text>
+              </Pressable>
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.sheetScroll}
+            >
+              <Field
+                label="Recipient name"
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="Full name"
+                autoCapitalize="words"
+              />
+              <Field
+                label="Phone"
+                value={phone}
+                onChangeText={(value) => setPhone(normalizePhone(value))}
+                placeholder="10-digit mobile"
+                keyboardType="phone-pad"
+                maxLength={10}
+              />
+              <Field
+                label="Address line 1"
+                value={address1}
+                onChangeText={(value) => {
+                  setAddress1(value);
+                  if (value.trim().length > 0) setSaveAddress(true);
+                }}
+                placeholder="House / street"
+              />
+              <Pressable
+                style={styles.saveRow}
+                onPress={() => setSaveAddress((value) => !value)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: saveAddress }}
+              >
+                <View style={[styles.saveCheck, saveAddress && styles.saveCheckOn]}>
+                  {saveAddress ? <Text style={styles.saveCheckMark}>✓</Text> : null}
+                </View>
+                <Text style={styles.saveTitle}>Save this address for next time</Text>
+              </Pressable>
+              <Field
+                label="Address line 2"
+                optional
+                value={address2}
+                onChangeText={setAddress2}
+                placeholder="Apartment, floor"
+              />
+              <Field
+                label="Landmark"
+                optional
+                value={landmark}
+                onChangeText={setLandmark}
+                placeholder="Near…"
+              />
+              <View style={styles.fieldRow}>
+                <Field
+                  label="City"
+                  style={styles.fieldHalf}
+                  value={city}
+                  onChangeText={setCity}
+                  placeholder="Coimbatore"
+                  autoCapitalize="words"
+                />
+                <Field
+                  label="PIN"
+                  style={styles.fieldHalf}
+                  value={pinCode}
+                  onChangeText={(value) => setPinCode(normalizePin(value))}
+                  placeholder="641001"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+              </View>
+              <Field
+                label="State"
+                value={state}
+                onChangeText={setState}
+                placeholder="Tamil Nadu"
+                autoCapitalize="words"
+              />
+              {shippingAddressError ? (
+                <Text style={styles.fieldHint}>{shippingAddressError}</Text>
+              ) : null}
+            </ScrollView>
+            <Pressable
+              style={styles.sheetSaveBtn}
+              onPress={() => {
+                if (shippingAddressError) {
+                  Alert.alert('Delivery details incomplete', shippingAddressError);
+                  return;
+                }
+                setShowAddAddressOptions(false);
+                setEditingDelivery(false);
+              }}
+            >
+              <Text style={styles.sheetSaveBtnText}>Save address</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <RazorpayCheckoutModal
         visible={checkoutVisible}
@@ -660,45 +1056,50 @@ export default function CheckoutScreen() {
           Alert.alert('Payment failed', message);
         }}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.cream,
+    backgroundColor: PAGE_BG,
   },
   scroll: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
   },
-  hero: {
+  secureHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginRight: 4,
+  },
+  secureLock: {
+    fontSize: 11,
+  },
+  secureHeaderText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 11,
+    color: colors.muted,
+  },
+  pageHeader: {
     marginBottom: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: PANEL_BORDER,
+    paddingTop: 4,
   },
-  eyebrow: {
-    fontFamily: fonts.extraBold,
-    fontSize: 10,
-    letterSpacing: 2.4,
-    color: colors.pink,
-  },
-  title: {
+  pageTitle: {
     fontFamily: fonts.extraBold,
     fontSize: 28,
     color: colors.ink,
-    marginTop: 6,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
-  meta: {
+  pageSubtitle: {
     fontFamily: fonts.regular,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.muted,
-    marginTop: 8,
-    lineHeight: 19,
+    marginTop: 6,
+    lineHeight: 20,
   },
   section: {
     marginBottom: spacing.lg,
@@ -707,12 +1108,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   stepBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: colors.pink,
     alignItems: 'center',
     justifyContent: 'center',
@@ -726,11 +1127,28 @@ const styles = StyleSheet.create({
   sectionTitles: {
     flex: 1,
   },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   sectionTitle: {
     fontFamily: fonts.extraBold,
     fontSize: 17,
     color: colors.ink,
     letterSpacing: -0.2,
+  },
+  sectionPill: {
+    backgroundColor: ACCENT_SOFT,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  sectionPillText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 11,
+    color: colors.pink,
   },
   sectionSubtitle: {
     fontFamily: fonts.regular,
@@ -739,89 +1157,254 @@ const styles = StyleSheet.create({
     marginTop: 3,
     lineHeight: 17,
   },
-  panel: {
-    backgroundColor: colors.white,
-    borderRadius: 18,
+  sectionBody: {
+    gap: 10,
+  },
+  cardStack: {
+    gap: 10,
+  },
+  card: {
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: PANEL_BORDER,
-    padding: 16,
-    gap: 12,
+    padding: 14,
+    gap: 10,
   },
-  bagLine: {
+  cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingBottom: 12,
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
   },
-  bagLineBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: PANEL_BORDER,
-    marginBottom: 4,
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  bagThumb: {
-    width: 56,
-    height: 56,
+  cardIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: ACCENT_SOFT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardIconGlyph: {
+    fontSize: 15,
+    color: colors.ink,
+  },
+  cardBody: {
+    flex: 1,
+    gap: 2,
+  },
+  cardEyebrow: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.muted,
+  },
+  cardHeading: {
+    flex: 1,
+    fontFamily: fonts.extraBold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  cardValue: {
+    fontFamily: fonts.semiBold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  cardMeta: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.ink,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  addressLines: {
+    marginTop: 2,
+    gap: 2,
+  },
+  cardPlaceholder: {
+    color: colors.muted,
+  },
+  editLink: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.pink,
+  },
+  addOptions: {
+    gap: 8,
+    marginTop: 4,
+  },
+  addOptionBtn: {
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: ACCENT_SOFT,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  addOptionDisabled: {
+    opacity: 0.7,
+  },
+  addOptionText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  cardMetaPlaceholder: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
+  },
+  estimateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  estimateIcon: {
+    fontSize: 18,
+  },
+  estimateCopy: {
+    flex: 1,
+  },
+  estimateLabel: {
+    fontFamily: fonts.extraBold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  estimateDetail: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  estimateRange: {
+    fontFamily: fonts.extraBold,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  estimateChevron: {
+    fontFamily: fonts.semiBold,
+    fontSize: 18,
+    color: colors.muted,
+    marginLeft: 2,
+  },
+  summaryLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  summaryThumb: {
+    width: 52,
+    height: 52,
     borderRadius: 12,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.canvas,
   },
-  bagThumbImage: {
+  summaryThumbImage: {
     width: '100%',
     height: '100%',
   },
-  bagThumbInitial: {
+  summaryThumbInitial: {
     fontFamily: fonts.extraBold,
-    fontSize: 20,
+    fontSize: 18,
     color: colors.ink,
     opacity: 0.22,
   },
-  bagBody: {
+  summaryLineBody: {
     flex: 1,
   },
-  bagName: {
+  summaryLineName: {
     fontFamily: fonts.semiBold,
     fontSize: 14,
     color: colors.ink,
     lineHeight: 18,
   },
-  bagMeta: {
+  summaryLineMeta: {
     fontFamily: fonts.regular,
     fontSize: 12,
     color: colors.muted,
     marginTop: 3,
   },
-  bagPrice: {
+  summaryLinePrice: {
     fontFamily: fonts.extraBold,
     fontSize: 14,
     color: colors.ink,
   },
-  totalStrip: {
+  breakdown: {
+    marginTop: 4,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: PANEL_BORDER,
+    gap: 10,
+  },
+  orderSummaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
-    paddingTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: PANEL_BORDER,
+    gap: 12,
   },
-  totalLabel: {
+  orderSummaryKey: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  orderSummaryVal: {
     fontFamily: fonts.semiBold,
     fontSize: 13,
     color: colors.ink,
   },
-  totalHint: {
+  orderSummaryMuted: {
     fontFamily: fonts.regular,
-    fontSize: 11,
+    fontSize: 13,
     color: colors.muted,
+  },
+  orderSummaryTotal: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: PANEL_BORDER,
+    paddingTop: 10,
     marginTop: 2,
   },
-  totalValue: {
+  orderSummaryTotalKey: {
     fontFamily: fonts.extraBold,
-    fontSize: 22,
-    color: colors.pink,
-    letterSpacing: -0.3,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  orderSummaryTotalVal: {
+    fontFamily: fonts.extraBold,
+    fontSize: 16,
+    color: colors.ink,
+  },
+  inlineDone: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.pink,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  inlineDoneText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 13,
+    color: colors.white,
   },
   field: {
     gap: 6,
@@ -858,35 +1441,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.ink,
   },
-  countryPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.canvas,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  countryPillText: {
-    fontFamily: fonts.semiBold,
-    fontSize: 12,
-    color: colors.muted,
-  },
   saveRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
     marginTop: 4,
     paddingTop: 4,
   },
+  saveRowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+  },
   saveCheck: {
     width: 22,
     height: 22,
-    borderRadius: 7,
+    borderRadius: 6,
     borderWidth: 1.5,
     borderColor: colors.softBorder,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
   },
   saveCheckOn: {
     backgroundColor: colors.pink,
@@ -898,20 +1474,11 @@ const styles = StyleSheet.create({
     color: colors.white,
     lineHeight: 14,
   },
-  saveCopy: {
-    flex: 1,
-  },
   saveTitle: {
     fontFamily: fonts.semiBold,
-    fontSize: 14,
+    fontSize: 13,
     color: colors.ink,
-  },
-  saveHint: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 2,
-    lineHeight: 17,
+    flex: 1,
   },
   fieldHint: {
     fontFamily: fonts.regular,
@@ -939,87 +1506,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 19,
   },
-  payMethod: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: ACCENT_SOFT,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: '#f5d0db',
-  },
-  payMethodLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.pink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioInner: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: colors.pink,
-  },
-  payLabel: {
-    fontFamily: fonts.extraBold,
-    fontSize: 15,
-    color: colors.ink,
-  },
-  payMeta: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 2,
-  },
-  paySelected: {
-    backgroundColor: colors.white,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  paySelectedText: {
-    fontFamily: fonts.semiBold,
-    fontSize: 11,
-    color: colors.pink,
-  },
-  estimateBanner: {
-    marginBottom: spacing.md,
-    padding: 18,
-    borderRadius: 18,
-    backgroundColor: colors.pinkSoft,
-    borderWidth: 1,
-    borderColor: colors.softBorder,
-  },
-  estimateEyebrow: {
-    fontFamily: fonts.extraBold,
-    fontSize: 10,
-    letterSpacing: 1.8,
-    color: colors.pink,
-  },
-  estimateTitle: {
-    fontFamily: fonts.semiBold,
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 8,
-  },
-  estimateValue: {
-    fontFamily: fonts.extraBold,
-    fontSize: 18,
-    color: colors.ink,
-    marginTop: 4,
-    letterSpacing: -0.2,
-  },
   statusBox: {
     marginBottom: spacing.md,
     padding: 14,
@@ -1040,25 +1526,34 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     paddingHorizontal: spacing.md,
     paddingTop: 12,
+    gap: 12,
   },
-  footerTop: {
+  trustBanner: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 12,
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: ACCENT_SOFT,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  footerAmountLabel: {
-    fontFamily: fonts.semiBold,
+  trustIcon: {
+    fontSize: 18,
+  },
+  trustCopy: {
+    flex: 1,
+  },
+  trustTitle: {
+    fontFamily: fonts.extraBold,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  trustBody: {
+    fontFamily: fonts.regular,
     fontSize: 12,
     color: colors.muted,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  footerAmount: {
-    fontFamily: fonts.extraBold,
-    fontSize: 22,
-    color: colors.ink,
-    letterSpacing: -0.3,
+    marginTop: 2,
+    lineHeight: 16,
   },
   proceedBtn: {
     backgroundColor: colors.pink,
@@ -1074,5 +1569,64 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.white,
     letterSpacing: 0.2,
+  },
+  sheetRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(34, 26, 30, 0.45)',
+  },
+  sheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    maxHeight: '92%',
+    paddingHorizontal: spacing.md,
+    paddingTop: 10,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#e2dce0',
+    marginBottom: 12,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sheetTitle: {
+    fontFamily: fonts.extraBold,
+    fontSize: 18,
+    color: colors.ink,
+    letterSpacing: -0.2,
+    flex: 1,
+    paddingRight: 12,
+  },
+  sheetClose: {
+    fontFamily: fonts.semiBold,
+    fontSize: 14,
+    color: colors.muted,
+  },
+  sheetScroll: {
+    gap: 12,
+    paddingBottom: spacing.md,
+  },
+  sheetSaveBtn: {
+    backgroundColor: colors.pink,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  sheetSaveBtnText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 15,
+    color: colors.white,
   },
 });

@@ -77,6 +77,7 @@ public static class DtoMapper
             AccessDays = course.AccessDays,
             RenewalPercentage = course.RenewalPercentage,
             Languages = course.Languages,
+            ThumbnailUrl = course.ThumbnailUrl,
             Status = course.Status,
             VideoCount = visible.Count(),
             CreatedAt = course.CreatedAt,

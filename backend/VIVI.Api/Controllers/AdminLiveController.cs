@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VIVI.Api.DTOs.Live;
+using VIVI.Api.Mapping;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
 using VIVI.Infrastructure.Commerce;
@@ -184,6 +185,7 @@ public sealed class AdminLiveController : ControllerBase
         {
             SlotType = slot.SlotType.ToString(),
             Name = _calendar.SlotName(slot.SlotType),
+            Hours = _calendar.SlotHours(slot.SlotType),
             SeatCapacity = slot.SeatCapacity,
             SeatsBooked = slot.SeatsBooked,
             SeatsRemaining = remaining,
@@ -199,7 +201,7 @@ public sealed class AdminLiveController : ControllerBase
         {
             Id = booking.Id,
             Status = booking.Status.ToString(),
-            CustomerName = booking.Customer?.FullName ?? string.Empty,
+            CustomerName = CommerceMapper.DisplayCustomerName(booking.Customer),
             CustomerPhone = booking.Customer?.PhoneNumber ?? string.Empty,
             CustomerEmail = booking.Customer?.Email ?? string.Empty,
             WeekNumber = week.WeekNumber,

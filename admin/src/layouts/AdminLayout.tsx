@@ -1,18 +1,20 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { GlobalSearch } from '../components/GlobalSearch';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true },
-  { to: '/orders', label: 'Orders' },
+  { to: '/orders', label: 'Product orders' },
+  { to: '/course-orders', label: 'Course & video orders' },
   { to: '/live', label: 'Live classes' },
   { to: '/courses', label: 'Courses & videos' },
   { to: '/products', label: 'Shop products' },
   { to: '/categories', label: 'Categories' },
+  { to: '/customers', label: 'Customers' },
 ];
 
 const DISABLED_NAV = [
   'Production',
-  'Customers',
   'Payments',
   'Audit log',
 ];
@@ -64,7 +66,7 @@ export function AdminLayout() {
       <div className="admin-main">
         <header className="admin-header">
           <div className="admin-header__search">
-            <input type="search" placeholder="Search (coming soon)" disabled aria-label="Search" />
+            <GlobalSearch />
           </div>
         </header>
         <main className="admin-content">

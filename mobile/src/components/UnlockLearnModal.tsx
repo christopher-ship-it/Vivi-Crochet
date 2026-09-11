@@ -14,7 +14,13 @@ import { useLearningCustomer, useShoppingSession } from '../auth/SessionContext'
 import type { LearningCustomerProfile } from '../auth/storage';
 import { updateMyProfile } from '../api/me';
 import { colors, fonts, radii, spacing } from '../theme';
-import { isValidEmail, isValidName, isValidPhone, normalizePhone } from '../utils/validation';
+import {
+  isValidEmail,
+  isValidName,
+  isValidPhone,
+  normalizePhone,
+  realCustomerName,
+} from '../utils/validation';
 
 interface UnlockLearnModalProps {
   visible: boolean;
@@ -31,7 +37,7 @@ export function UnlockLearnModal({
 }: UnlockLearnModalProps) {
   const { profile, saveProfile } = useLearningCustomer();
   const { isAuthenticated } = useShoppingSession();
-  const [fullName, setFullName] = useState(profile?.fullName ?? '');
+  const [fullName, setFullName] = useState(() => realCustomerName(profile?.fullName));
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [email, setEmail] = useState(profile?.email ?? '');
   const [error, setError] = useState<string | null>(null);

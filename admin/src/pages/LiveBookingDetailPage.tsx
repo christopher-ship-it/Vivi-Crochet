@@ -6,7 +6,8 @@ import type { AdminLiveBookingDetail } from '../types';
 import { formatDate, formatInr } from '../utils/format';
 
 function canCancel(status: string): boolean {
-  return status === 'PendingPayment' || status === 'Confirmed';
+  // Confirmed bookings are final (studio rule). Only unpaid holds can be released.
+  return status === 'PendingPayment';
 }
 
 export function LiveBookingDetailPage() {
@@ -37,7 +38,7 @@ export function LiveBookingDetailPage() {
   async function handleCancel() {
     if (!id || !booking) return;
     const ok = window.confirm(
-      'Cancel this booking and free the seat? Paid refunds are not automatic — handle those separately if needed.',
+      'Release this unpaid seat hold? Confirmed bookings cannot be cancelled.',
     );
     if (!ok) return;
 

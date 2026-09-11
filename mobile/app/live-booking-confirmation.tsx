@@ -16,9 +16,10 @@ function formatRange(start: string, end: string): string {
   return `${s.toLocaleDateString('en-GB', opts)} – ${e.toLocaleDateString('en-GB', opts)}`;
 }
 
-function scheduleCopy(booking: LiveBooking): string {
-  const hasReplacement = booking.days.some((d) => d.kind === 'Replacement');
-  return hasReplacement ? 'Mon – Fri + Saturday replacement' : 'Mon – Fri';
+function slotTimeCopy(slotType: string): string {
+  if (slotType === 'Morning') return '11:00 AM – 1:00 PM';
+  if (slotType === 'Evening') return '6:00 PM – 8:00 PM';
+  return '';
 }
 
 export default function LiveBookingConfirmationScreen() {
@@ -51,37 +52,42 @@ export default function LiveBookingConfirmationScreen() {
     return <ErrorView message={error ?? 'Booking not found.'} onRetry={load} />;
   }
 
+  const time = slotTimeCopy(booking.slotType);
+
   return (
     <>
-      <Stack.Screen options={{ title: 'Booking confirmed', headerShadowVisible: false }} />
+      <Stack.Screen options={{ title: '', headerShadowVisible: false }} />
       <ScrollView
         style={styles.container}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 36 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
           <Text style={styles.check}>✓</Text>
-          <Text style={styles.title}>BOOKING CONFIRMED</Text>
-          <Text style={styles.slot}>{booking.slotName}</Text>
+          <View style={styles.heroCopy}>
+            <Text style={styles.title}>Booking confirmed</Text>
+            <Text style={styles.slot}>{booking.slotName}</Text>
+          </View>
         </View>
 
         <View style={styles.panel}>
           <Row label="Week" value={`Week ${booking.weekNumber}`} />
           <Row label="Dates" value={formatRange(booking.startDate, booking.endDate)} />
-          <Row label="Schedule" value={scheduleCopy(booking)} />
+          {time ? <Row label="Time" value={time} /> : null}
+          <Row label="Schedule" value="Mon–Fri · 2 hrs/day" />
           <Row label="Price" value={formatInr(booking.packagePrice)} />
           <Row label="Reference" value={booking.orderNumber} last />
         </View>
 
         <Text style={styles.note}>
-          Sunday is always OFF. Your seat is confirmed after successful payment verification.
+          Sat = replacement if a weekday is missed · Sun OFF · No cancel once confirmed.
         </Text>
 
         <Pressable style={styles.primary} onPress={() => router.replace('/(tabs)/live')}>
-          <Text style={styles.primaryText}>BACK TO LIVE</Text>
+          <Text style={styles.primaryText}>Back to Live</Text>
         </Pressable>
         <Pressable style={styles.secondary} onPress={() => router.replace('/(tabs)/profile')}>
-          <Text style={styles.secondaryText}>MY VIVI</Text>
+          <Text style={styles.secondaryText}>My Vivi</Text>
         </Pressable>
       </ScrollView>
     </>
@@ -111,51 +117,57 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   content: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
   },
   hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     backgroundColor: colors.pinkSoft,
     borderWidth: 1,
     borderColor: colors.softBorder,
-    borderRadius: 18,
-    padding: spacing.lg,
-    alignItems: 'flex-start',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   check: {
     fontFamily: fonts.extraBold,
-    fontSize: 28,
+    fontSize: 22,
     color: colors.pink,
+  },
+  heroCopy: {
+    flex: 1,
   },
   title: {
     fontFamily: fonts.extraBold,
-    fontSize: 22,
-    letterSpacing: 1.2,
+    fontSize: 18,
     color: colors.ink,
-    marginTop: 8,
+    letterSpacing: -0.2,
   },
   slot: {
     fontFamily: fonts.semiBold,
-    fontSize: 16,
+    fontSize: 14,
     color: colors.pink,
-    marginTop: 10,
+    marginTop: 2,
   },
   panel: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     borderWidth: 1,
     borderColor: colors.softBorder,
     backgroundColor: colors.white,
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   row: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
   },
   rowBorder: {
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.softBorder,
   },
   rowLabel: {
@@ -172,38 +184,35 @@ const styles = StyleSheet.create({
   },
   note: {
     fontFamily: fonts.regular,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.muted,
-    lineHeight: 20,
-    marginTop: spacing.md,
+    lineHeight: 18,
+    marginTop: spacing.sm,
   },
   primary: {
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
     backgroundColor: colors.pink,
-    borderWidth: 0,
     borderRadius: 14,
-    paddingVertical: 15,
+    paddingVertical: 14,
     alignItems: 'center',
   },
   primaryText: {
     fontFamily: fonts.extraBold,
-    fontSize: 13,
-    letterSpacing: 1.4,
+    fontSize: 14,
     color: colors.white,
   },
   secondary: {
-    marginTop: 10,
+    marginTop: 8,
     borderWidth: 1,
     borderColor: colors.softBorder,
     backgroundColor: colors.white,
     borderRadius: 14,
-    paddingVertical: 15,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   secondaryText: {
     fontFamily: fonts.extraBold,
-    fontSize: 13,
-    letterSpacing: 1.4,
+    fontSize: 14,
     color: colors.pink,
   },
 });

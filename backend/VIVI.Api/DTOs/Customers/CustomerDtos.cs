@@ -41,3 +41,17 @@ public sealed class SavedShippingAddressRequest
     public string PinCode { get; set; } = string.Empty;
     public string? Country { get; set; }
 }
+
+/// <summary>Admin list row for a mobile app customer (OTP sign-in).</summary>
+public sealed class AdminCustomerListItemResponse
+{
+    public Guid Id { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public DateTime SignedUpAt { get; set; }
+    /// <summary>Approx. last app activity — updated on each OTP sign-in.</summary>
+    public DateTime LastActiveAt { get; set; }
+    public int OrderCount { get; set; }
+}

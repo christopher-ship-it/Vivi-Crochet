@@ -24,34 +24,35 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          headerStyle: { backgroundColor: colors.white },
-          headerTintColor: colors.pink,
-          headerTitleStyle: { fontFamily: fonts.extraBold, fontSize: 16, color: colors.ink },
-          headerShadowVisible: false,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="shop"
         options={{
           title: 'Shop',
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="learn"
         options={{
           title: 'Learn & Loop',
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="live"
         options={{
           title: 'Live',
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'My VIVI',
+          headerShown: false,
         }}
       />
     </Tabs>

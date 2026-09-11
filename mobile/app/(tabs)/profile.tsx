@@ -1,6 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiClientError } from '../../src/api/client';
 import { listMyLiveBookings, type LiveBooking } from '../../src/api/live';
 import { getMyProfile, type SavedShippingAddress } from '../../src/api/me';
@@ -8,6 +9,7 @@ import { useLearningCustomer, useShoppingSession } from '../../src/auth/SessionC
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
 import { colors, fonts, spacing } from '../../src/theme';
 import { applyStatusBar } from '../../src/utils/statusBar';
+import { realCustomerName } from '../../src/utils/validation';
 
 function formatLiveRange(start: string, end: string): string {
   const s = new Date(`${start}T12:00:00`);
@@ -19,6 +21,7 @@ function formatLiveRange(start: string, end: string): string {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user, isAuthenticated, signOut } = useShoppingSession();
   const { profile: learningProfile } = useLearningCustomer();
   const dockClearance = useTabDockClearance();
@@ -31,9 +34,10 @@ export default function ProfileScreen() {
   const [liveError, setLiveError] = useState<string | null>(null);
 
   const displayName =
-    (isAuthenticated ? user?.name : null)?.trim() ||
-    learningProfile?.fullName?.trim() ||
-    'VIVI member';
+    realCustomerName(
+      isAuthenticated ? user?.name : null,
+      learningProfile?.fullName,
+    ) || 'VIVI member';
   const displayPhone =
     (isAuthenticated ? user?.phone : null)?.replace(/\D/g, '') ||
     learningProfile?.phone?.replace(/\D/g, '') ||
@@ -99,9 +103,13 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.content, { paddingBottom: dockClearance + 24 }]}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + spacing.md, paddingBottom: dockClearance + 24 },
+      ]}
       showsVerticalScrollIndicator={false}
     >
+      <Text style={styles.pageTitle}>My VIVI</Text>
       <View style={styles.card}>
         <Text style={styles.eyebrow}>ACCOUNT</Text>
         {isAuthenticated || learningProfile ? (
@@ -228,6 +236,14 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
+  },
+  pageTitle: {
+    fontFamily: fonts.heading,
+    fontSize: 36,
+    lineHeight: 44,
+    paddingBottom: 4,
+    color: colors.ink,
+    marginBottom: spacing.md,
   },
   card: {
     backgroundColor: colors.white,

@@ -38,6 +38,16 @@ export const fonts = {
   regular: 'Archivo_400Regular',
   semiBold: 'Archivo_600SemiBold',
   extraBold: 'Archivo_800ExtraBold',
+  /** High-contrast serif for brand wordmark (VIVI). */
+  display: 'PlayfairDisplay_700Bold',
+  /** Calligraphic Regular — short decorative brand phrases only. */
+  decorative: 'Italianno_400Regular',
+  /** Script for main screen titles only. */
+  heading: 'Niconne_400Regular',
+  /** Tangerine Regular — optional accent. */
+  tangerine: 'Tangerine_400Regular',
+  /** Tangerine Bold — Live supporting phrase. */
+  tangerineBold: 'Tangerine_700Bold',
 };
 
 export const shadows = {

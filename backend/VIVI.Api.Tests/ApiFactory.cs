@@ -27,8 +27,10 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Razorpay:KeySecret", "test_secret");
         builder.UseSetting("Razorpay:WebhookSecret", "test_webhook_secret");
         builder.UseSetting("LiveStudio:PackagePrice", "999");
-        builder.UseSetting("LiveStudio:DefaultSeatCapacity", "5");
+        builder.UseSetting("LiveStudio:DefaultSeatCapacity", "4");
         builder.UseSetting("LiveStudio:ReservationMinutes", "15");
         builder.UseSetting("LiveStudio:SeasonStartMonday", "2026-01-05");
+        // Tests book across many weeks on a shared DB; production default is 2 (this + next).
+        builder.UseSetting("LiveStudio:CustomerSelectableWeekCount", "52");
     }
 }

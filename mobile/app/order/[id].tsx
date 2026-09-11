@@ -94,15 +94,34 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.datesCard}>
-          <View style={styles.dateRow}>
-            <Text style={styles.dateLabel}>Ordered</Text>
-            <Text style={styles.dateValue}>{formatOrderDate(order.createdAt)}</Text>
+        <View style={styles.panel}>
+          {order.shippingAddress ? (
+            <>
+              <Text style={styles.groupLabel}>📍 Delivery Address</Text>
+              <Text style={styles.addressName}>{order.shippingAddress.fullName}</Text>
+              <Text style={styles.addressText}>
+                {order.shippingAddress.addressLine1}
+                {order.shippingAddress.addressLine2
+                  ? `, ${order.shippingAddress.addressLine2}`
+                  : ''}
+              </Text>
+              <Text style={[styles.addressText, styles.addressTextLast]}>
+                {order.shippingAddress.city}, {order.shippingAddress.state} –{' '}
+                {order.shippingAddress.pinCode}
+              </Text>
+              <View style={styles.divider} />
+            </>
+          ) : null}
+
+          <Text style={styles.groupLabel}>📦 Delivery</Text>
+          <View style={styles.deliveryRow}>
+            <Text style={styles.deliveryRowLabel}>Ordered</Text>
+            <Text style={styles.deliveryRowValue}>{formatOrderDate(order.createdAt)}</Text>
           </View>
           {order.delivery?.expectedFrom ? (
-            <View style={styles.dateRow}>
-              <Text style={styles.dateLabel}>Estimated delivery</Text>
-              <Text style={styles.dateValue}>
+            <View style={styles.deliveryRow}>
+              <Text style={styles.deliveryRowLabel}>Estimated delivery</Text>
+              <Text style={styles.deliveryRowValue}>
                 {formatDeliveryRange(order.delivery.expectedFrom, order.delivery.expectedTo) ?? '—'}
               </Text>
             </View>
@@ -111,20 +130,6 @@ export default function OrderDetailScreen() {
             <Text style={styles.deliveryNote}>{order.delivery.customerLabel}</Text>
           ) : null}
         </View>
-
-        {order.shippingAddress ? (
-          <View style={styles.panel}>
-            <Text style={styles.sectionTitle}>Delivery address</Text>
-            <Text style={styles.addressText}>
-              {order.shippingAddress.fullName}{'\n'}
-              {order.shippingAddress.addressLine1}
-              {order.shippingAddress.addressLine2 ? `\n${order.shippingAddress.addressLine2}` : ''}
-              {'\n'}
-              {order.shippingAddress.city}, {order.shippingAddress.state}{' '}
-              {order.shippingAddress.pinCode}
-            </Text>
-          </View>
-        ) : null}
 
         <Text style={styles.sectionTitle}>Production status</Text>
         <OrderPipeline steps={pipeline} />
@@ -224,34 +229,43 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.pink,
   },
-  datesCard: {
-    backgroundColor: colors.pinkSoft,
-    borderRadius: radii.lg,
-    padding: 16,
-    marginBottom: spacing.md,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: colors.softBorder,
+  groupLabel: {
+    fontFamily: fonts.extraBold,
+    fontSize: 11,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.muted,
+    marginBottom: 8,
   },
-  dateRow: {
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.softBorder,
+    marginVertical: 12,
+  },
+  deliveryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 6,
   },
-  dateLabel: {
+  deliveryRowLabel: {
     fontFamily: fonts.regular,
     fontSize: 13,
     color: colors.muted,
   },
-  dateValue: {
+  deliveryRowValue: {
     fontFamily: fonts.extraBold,
     fontSize: 13,
     color: colors.ink,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   deliveryNote: {
     fontFamily: fonts.semiBold,
     fontSize: 13,
     color: colors.pink,
-    marginTop: 4,
+    marginTop: 2,
   },
   sectionTitle: {
     fontFamily: fonts.extraBold,
@@ -261,11 +275,21 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginBottom: 10,
   },
-  addressText: {
-    fontFamily: fonts.regular,
+  addressName: {
+    fontFamily: fonts.semiBold,
     fontSize: 14,
     color: colors.ink,
-    lineHeight: 21,
+    marginBottom: 2,
+  },
+  addressText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.ink,
+    lineHeight: 19,
+    marginBottom: 2,
+  },
+  addressTextLast: {
+    marginBottom: 0,
   },
   note: {
     fontFamily: fonts.regular,

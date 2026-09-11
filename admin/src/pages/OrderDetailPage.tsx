@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getAdminOrder, updateOrderDeliveryDate } from '../api/orders';
+import { getAdminOrder, updateOrderDeliveryDate, updateOrderStatus } from '../api/orders';
 import { ApiClientError } from '../api/client';
-import type { AdminOrderDetail } from '../types';
+import type { AdminOrderDetail, OrderStatus } from '../types';
 import { formatDate, formatDay, formatInr } from '../utils/format';
 
 function toDateInput(iso: string): string {
@@ -12,6 +12,30 @@ function toDateInput(iso: string): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  PendingPayment: 'Pending payment',
+  Paid: 'Paid',
+  Confirmed: 'Confirmed',
+  InProduction: 'In production',
+  Shipped: 'Dispatched',
+  Delivered: 'Delivered',
+  Cancelled: 'Cancelled',
+  PaymentFailed: 'Payment failed',
+};
+
+function nextStatuses(current: OrderStatus): OrderStatus[] {
+  switch (current) {
+    case 'Confirmed':
+      return ['InProduction', 'Shipped'];
+    case 'InProduction':
+      return ['Shipped', 'Delivered'];
+    case 'Shipped':
+      return ['Delivered'];
+    default:
+      return [];
+  }
 }
 
 export function OrderDetailPage() {
@@ -24,6 +48,8 @@ export function OrderDetailPage() {
   const [to, setTo] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [nextStatus, setNextStatus] = useState<OrderStatus | ''>('');
 
   async function load() {
     if (!id) return;
@@ -32,11 +58,9 @@ export function OrderDetailPage() {
     try {
       const data = await getAdminOrder(id);
       setOrder(data);
-      if (data.delivery) {
-        setFrom(toDateInput(data.delivery.expectedFrom));
-        setTo(toDateInput(data.delivery.expectedTo));
-        setReason(data.overrideReason ?? '');
-      }
+      resetDeliveryForm(data);
+      const options = nextStatuses(data.status);
+      setNextStatus(options[0] ?? '');
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to load order.');
     } finally {
@@ -48,9 +72,41 @@ export function OrderDetailPage() {
     void load();
   }, [id]);
 
+  function resetDeliveryForm(source: AdminOrderDetail | null) {
+    if (source?.delivery) {
+      setFrom(toDateInput(source.delivery.expectedFrom));
+      setTo(toDateInput(source.delivery.expectedTo));
+      setReason(source.overrideReason ?? '');
+    } else {
+      setFrom('');
+      setTo('');
+      setReason('');
+    }
+  }
+
+  function openEdit() {
+    resetDeliveryForm(order);
+    setError(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    resetDeliveryForm(order);
+    setError(null);
+    setEditing(false);
+  }
+
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (!id) return;
+    if (!from) {
+      setError('Pick an "expected from" date.');
+      return;
+    }
+    if (to && to < from) {
+      setError('"Expected to" can\'t be before "expected from".');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -60,11 +116,29 @@ export function OrderDetailPage() {
         reason: reason.trim() || null,
       });
       setOrder(updated);
+      resetDeliveryForm(updated);
       setEditing(false);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Could not update delivery date.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleStatusUpdate(e: FormEvent) {
+    e.preventDefault();
+    if (!id || !nextStatus) return;
+    setStatusSaving(true);
+    setError(null);
+    try {
+      const updated = await updateOrderStatus(id, { status: nextStatus });
+      setOrder(updated);
+      const options = nextStatuses(updated.status);
+      setNextStatus(options[0] ?? '');
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not update production status.');
+    } finally {
+      setStatusSaving(false);
     }
   }
 
@@ -87,6 +161,10 @@ export function OrderDetailPage() {
   }
 
   const delivery = order.delivery;
+  const hasPhysicalItems = order.items.some((item) => item.itemType === 'Product');
+  const backTo = hasPhysicalItems ? '/orders' : '/course-orders';
+  const backLabel = hasPhysicalItems ? 'Back to product orders' : 'Back to course & video orders';
+  const statusOptions = nextStatuses(order.status);
 
   return (
     <>
@@ -98,7 +176,7 @@ export function OrderDetailPage() {
           </p>
         </div>
         <div className="page-header__actions">
-          <Link to="/orders" className="btn btn--ghost">Back</Link>
+          <Link to={backTo} className="btn btn--ghost">{backLabel}</Link>
         </div>
       </header>
 
@@ -107,7 +185,7 @@ export function OrderDetailPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <dl style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '12px 24px' }}>
           <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Status</dt>
-          <dd>{order.status}</dd>
+          <dd>{STATUS_LABELS[order.status] ?? order.status}</dd>
           <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Payment</dt>
           <dd>{order.paymentStatus ?? '—'} · {order.paymentMethod}</dd>
           <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Amount</dt>
@@ -118,6 +196,38 @@ export function OrderDetailPage() {
           <dd>{order.customerName} · {order.customerEmail}</dd>
         </dl>
       </div>
+
+      {hasPhysicalItems && statusOptions.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h2 style={{ marginTop: 0, fontSize: 16 }}>Production status</h2>
+          <p className="page-header__subtitle" style={{ marginTop: 0 }}>
+            Current: <strong>{STATUS_LABELS[order.status] ?? order.status}</strong>
+            {' · '}
+            Mark dispatched when the parcel leaves Vivi.
+          </p>
+          <form onSubmit={(e) => void handleStatusUpdate(e)} className="form-grid" style={{ marginTop: 12 }}>
+            <div className="form-field">
+              <label htmlFor="status">Move to</label>
+              <select
+                id="status"
+                value={nextStatus}
+                onChange={(e) => setNextStatus(e.target.value as OrderStatus)}
+              >
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {STATUS_LABELS[status] ?? status}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-grid--full" style={{ display: 'flex', gap: 8 }}>
+              <button type="submit" className="btn btn--primary" disabled={statusSaving || !nextStatus}>
+                {statusSaving ? 'Updating…' : 'Update status'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <h2 style={{ marginTop: 0, fontSize: 16 }}>Items</h2>
@@ -177,7 +287,7 @@ export function OrderDetailPage() {
           )}
 
           {!editing && (
-            <button type="button" className="btn btn--primary" onClick={() => setEditing(true)}>
+            <button type="button" className="btn btn--primary" style={{ marginTop: 4 }} onClick={openEdit}>
               Edit delivery date
             </button>
           )}
@@ -190,7 +300,7 @@ export function OrderDetailPage() {
               </div>
               <div className="form-field">
                 <label htmlFor="to">Expected to</label>
-                <input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+                <input id="to" type="date" min={from || undefined} value={to} onChange={(e) => setTo(e.target.value)} />
               </div>
               <div className="form-field form-grid--full">
                 <label htmlFor="reason">Reason (optional)</label>
@@ -202,11 +312,11 @@ export function OrderDetailPage() {
                   maxLength={400}
                 />
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="form-grid--full" style={{ display: 'flex', gap: 8 }}>
                 <button type="submit" className="btn btn--primary" disabled={saving}>
                   {saving ? 'Saving…' : 'Save'}
                 </button>
-                <button type="button" className="btn btn--ghost" onClick={() => setEditing(false)}>
+                <button type="button" className="btn btn--ghost" disabled={saving} onClick={cancelEdit}>
                   Cancel
                 </button>
               </div>

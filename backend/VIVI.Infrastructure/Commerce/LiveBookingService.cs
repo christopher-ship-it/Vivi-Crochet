@@ -101,9 +101,8 @@ public sealed class LiveBookingService
     }
 
     /// <summary>
-    /// Admin cancel for PendingPayment or Confirmed bookings. Releases the seat hold and
-    /// cancels the linked order when it is still PendingPayment or Confirmed.
-    /// Idempotent for already Cancelled/Expired bookings. Does not issue payment refunds.
+    /// Admin may release PendingPayment holds. Confirmed bookings cannot be cancelled
+    /// (final studio rule: once booked, the class seat is final).
     /// </summary>
     public async Task AdminCancelBookingAsync(Guid bookingId, CancellationToken cancellationToken)
     {
@@ -115,7 +114,14 @@ public sealed class LiveBookingService
         if (booking.Status is LiveBookingStatus.Cancelled or LiveBookingStatus.Expired)
             return;
 
-        if (booking.Status is not (LiveBookingStatus.PendingPayment or LiveBookingStatus.Confirmed))
+        if (booking.Status == LiveBookingStatus.Confirmed)
+        {
+            throw ViviException.Conflict(
+                "LIVE_BOOKING_CONFIRMED_NO_CANCEL",
+                "Confirmed live bookings cannot be cancelled.");
+        }
+
+        if (booking.Status is not LiveBookingStatus.PendingPayment)
             throw ViviException.Conflict("LIVE_BOOKING_NOT_CANCELLABLE", "This booking cannot be cancelled.");
 
         var now = DateTime.UtcNow;
@@ -124,8 +130,7 @@ public sealed class LiveBookingService
         booking.ReservationExpiresAt = null;
         booking.UpdatedAt = now;
 
-        if (booking.Order is not null
-            && booking.Order.Status is OrderStatus.PendingPayment or OrderStatus.Confirmed or OrderStatus.Paid)
+        if (booking.Order is not null && booking.Order.Status == OrderStatus.PendingPayment)
         {
             booking.Order.Status = OrderStatus.Cancelled;
             booking.Order.UpdatedAt = now;
@@ -158,6 +163,11 @@ public sealed class LiveBookingService
 
             if (!week.IsBookable)
                 throw ViviException.Conflict("WEEK_NOT_BOOKABLE", "This week is not open for booking.");
+
+            if (!_calendar.IsCustomerSelectableWeek(week))
+                throw ViviException.Conflict(
+                    "WEEK_OUTSIDE_WINDOW",
+                    "You can only book the current week or next week.");
 
             // Validate schedule (Sunday never bookable; replacement rules).
             _ = _calendar.BuildDayPlan(week);

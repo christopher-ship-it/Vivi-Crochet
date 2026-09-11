@@ -41,11 +41,67 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
         Assert.Equal(2, first.Slots.Count);
         Assert.Contains(first.Slots, s => s.Name == "Morning Crochet Circle" && s.SlotType == "Morning");
         Assert.Contains(first.Slots, s => s.Name == "Evening Crochet Circle" && s.SlotType == "Evening");
-        Assert.All(first.Slots, s => Assert.Equal(5, s.SeatCapacity));
+        Assert.All(first.Slots, s => Assert.Equal(4, s.SeatCapacity));
+        Assert.Contains(first.Slots, s => s.SlotType == "Morning" && s.Hours == "11:00 AM – 1:00 PM");
+        Assert.Contains(first.Slots, s => s.SlotType == "Evening" && s.Hours == "6:00 PM – 8:00 PM");
     }
 
     [Fact]
-    public async Task Standard_week_has_mon_fri_class_and_sunday_off()
+    public async Task Customer_week_list_is_only_current_and_next_week_when_restricted()
+    {
+        await using var factory = _factory.WithWebHostBuilder(builder =>
+            builder.UseSetting("LiveStudio:CustomerSelectableWeekCount", "2"));
+        // Unique DB so this host does not share weeks/bookings with the class fixture.
+        factory.ClientOptions.HandleCookies = true;
+
+        var client = factory.CreateClient();
+        // Force season seed via list
+        var weeks = await client.GetFromJsonAsync<List<LiveWeekSummaryResponse>>("/api/live/weeks", Json);
+        Assert.NotNull(weeks);
+        Assert.InRange(weeks!.Count, 0, 2);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var calendar = scope.ServiceProvider.GetRequiredService<LiveCalendarService>();
+        var expected = calendar.GetCustomerSelectableWeekStarts();
+        Assert.Equal(2, expected.Count);
+        Assert.All(weeks, w => Assert.Contains(w.StartDate, expected));
+        Assert.Equal(expected.Count(d => weeks.Any(w => w.StartDate == d)), weeks.Count);
+
+        if (weeks.Count > 0)
+        {
+            var admin = factory.CreateClient();
+            AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+            var all = await admin.GetFromJsonAsync<List<AdminLiveWeekResponse>>("/api/admin/live/weeks", Json);
+            Assert.Equal(52, all!.Count);
+        }
+    }
+
+    [Fact]
+    public async Task Booking_outside_current_or_next_week_is_rejected_when_restricted()
+    {
+        await using var factory = _factory.WithWebHostBuilder(builder =>
+            builder.UseSetting("LiveStudio:CustomerSelectableWeekCount", "2"));
+
+        var admin = factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+        var all = await admin.GetFromJsonAsync<List<AdminLiveWeekResponse>>("/api/admin/live/weeks", Json);
+        Assert.NotNull(all);
+        Assert.True(all!.Count >= 3);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var cal = scope.ServiceProvider.GetRequiredService<LiveCalendarService>();
+        var allowed = cal.GetCustomerSelectableWeekStarts();
+        var outside = all.First(w => !allowed.Contains(w.StartDate));
+
+        var customer = await AuthTests.LoginCustomerAsync(factory.CreateClient(), NextPhone());
+        var fail = await customer.PostAsJsonAsync(
+            "/api/live/bookings",
+            new { weekId = outside.Id, slotType = "Morning" });
+        Assert.Equal(HttpStatusCode.Conflict, fail.StatusCode);
+    }
+
+    [Fact]
+    public async Task Standard_week_has_mon_fri_class_saturday_replacement_sunday_off()
     {
         var client = _factory.CreateClient();
         var weeks = await client.GetFromJsonAsync<List<LiveWeekSummaryResponse>>("/api/live/weeks", Json);
@@ -53,8 +109,10 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
         Assert.NotNull(detail);
         Assert.Equal(7, detail!.Days.Count);
         Assert.Equal(5, detail.Days.Count(d => d.Kind == "Class"));
+        Assert.Contains(detail.Days, d => d.Weekday == "SAT" && d.Kind == "Replacement" && d.Label == "REPLACEMENT");
         Assert.Contains(detail.Days, d => d.Weekday == "SUN" && d.Kind == "Off" && d.Label == "OFF");
-        Assert.DoesNotContain(detail.Days, d => d.Kind == "Replacement");
+        Assert.Equal(10, detail.WeeklyLiveHours);
+        Assert.Equal(2, detail.HoursPerClassDay);
         Assert.Equal(DayOfWeek.Monday, detail.StartDate.DayOfWeek);
         Assert.Equal(DayOfWeek.Sunday, detail.EndDate.DayOfWeek);
     }
@@ -75,7 +133,8 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
         Assert.Contains(detail!.Days, d => d.Weekday == "WED" && d.Kind == "Break");
         Assert.Contains(detail.Days, d => d.Weekday == "SAT" && d.Kind == "Replacement");
         Assert.Contains(detail.Days, d => d.Weekday == "SUN" && d.Kind == "Off");
-        Assert.Equal(5, detail.Days.Count(d => d.Kind is "Class" or "Replacement"));
+        Assert.Equal(4, detail.Days.Count(d => d.Kind == "Class"));
+        Assert.Equal(1, detail.Days.Count(d => d.Kind == "Replacement"));
     }
 
     [Fact]
@@ -94,7 +153,7 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
     public async Task Fully_booked_slot_cannot_be_booked_and_seats_update_after_payment()
     {
         var weekId = (await WeeksAsync())[4].Id;
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 4; i++)
         {
             var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
             var checkout = await CreateLiveCheckoutAsync(customer, weekId, LiveSlotType.Morning);
@@ -169,7 +228,7 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
     {
         var weekId = (await WeeksAsync())[10].Id;
 
-        for (var i = 0; i < 4; i++)
+        for (var i = 0; i < 3; i++)
         {
             var c = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
             var co = await CreateLiveCheckoutAsync(c, weekId, LiveSlotType.Morning);
@@ -195,7 +254,7 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
 
         var held = await _factory.CreateClient()
             .GetFromJsonAsync<LiveWeekDetailResponse>($"/api/live/weeks/{weekId}", Json);
-        Assert.Equal(4, held!.Slots.Single(s => s.SlotType == "Evening").SeatsRemaining);
+        Assert.Equal(3, held!.Slots.Single(s => s.SlotType == "Evening").SeatsRemaining);
     }
 
     [Fact]
@@ -216,7 +275,7 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
 
         var after = await _factory.CreateClient()
             .GetFromJsonAsync<LiveWeekDetailResponse>($"/api/live/weeks/{weekId}", Json);
-        Assert.Equal(5, after!.Slots.Single(s => s.SlotType == "Morning").SeatsRemaining);
+        Assert.Equal(4, after!.Slots.Single(s => s.SlotType == "Morning").SeatsRemaining);
 
         var bookingStatus = await customer.GetFromJsonAsync<LiveBookingResponse>(
             $"/api/live/bookings/{checkout.BookingId}",
@@ -272,7 +331,7 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Admin_cancel_confirmed_booking_releases_seat()
+    public async Task Admin_cannot_cancel_confirmed_booking()
     {
         var weekId = (await WeeksAsync())[15].Id;
         var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
@@ -281,22 +340,37 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
 
         var before = await _factory.CreateClient()
             .GetFromJsonAsync<LiveWeekDetailResponse>($"/api/live/weeks/{weekId}", Json);
-        Assert.Equal(4, before!.Slots.Single(s => s.SlotType == "Evening").SeatsRemaining);
+        Assert.Equal(3, before!.Slots.Single(s => s.SlotType == "Evening").SeatsRemaining);
+
+        var admin = _factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+        var cancel = await admin.PostAsync($"/api/admin/live/bookings/{checkout.BookingId}/cancel", null);
+        Assert.Equal(HttpStatusCode.Conflict, cancel.StatusCode);
+
+        var after = await _factory.CreateClient()
+            .GetFromJsonAsync<LiveWeekDetailResponse>($"/api/live/weeks/{weekId}", Json);
+        Assert.Equal(3, after!.Slots.Single(s => s.SlotType == "Evening").SeatsRemaining);
+    }
+
+    [Fact]
+    public async Task Admin_can_cancel_pending_payment_hold()
+    {
+        var weekId = (await WeeksAsync())[17].Id;
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        var checkout = await CreateLiveCheckoutAsync(customer, weekId, LiveSlotType.Morning);
 
         var admin = _factory.CreateClient();
         AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
         var cancel = await admin.PostAsync($"/api/admin/live/bookings/{checkout.BookingId}/cancel", null);
         Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
-        var detail = await cancel.Content.ReadFromJsonAsync<AdminLiveBookingDetailResponse>(Json);
-        Assert.Equal("Cancelled", detail!.Status);
 
         var after = await _factory.CreateClient()
             .GetFromJsonAsync<LiveWeekDetailResponse>($"/api/live/weeks/{weekId}", Json);
-        Assert.Equal(5, after!.Slots.Single(s => s.SlotType == "Evening").SeatsRemaining);
+        Assert.Equal(4, after!.Slots.Single(s => s.SlotType == "Morning").SeatsRemaining);
     }
 
     [Fact]
-    public async Task Admin_cannot_set_capacity_below_booked_seats()
+    public async Task Admin_cannot_set_capacity_below_booked_seats_or_above_max()
     {
         var weekId = (await WeeksAsync())[16].Id;
         var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
@@ -305,19 +379,24 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
 
         var admin = _factory.CreateClient();
         AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
-        var response = await admin.PutAsJsonAsync(
+        var below = await admin.PutAsJsonAsync(
             $"/api/admin/live/weeks/{weekId}/slots/Morning/capacity",
             new { seatCapacity = 0 });
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, below.StatusCode);
+
+        var above = await admin.PutAsJsonAsync(
+            $"/api/admin/live/weeks/{weekId}/slots/Morning/capacity",
+            new { seatCapacity = 8 });
+        Assert.Equal(HttpStatusCode.Conflict, above.StatusCode);
 
         var ok = await admin.PutAsJsonAsync(
             $"/api/admin/live/weeks/{weekId}/slots/Morning/capacity",
-            new { seatCapacity = 8 });
+            new { seatCapacity = 4 });
         Assert.Equal(HttpStatusCode.NoContent, ok.StatusCode);
 
         var weeks = await admin.GetFromJsonAsync<List<AdminLiveWeekResponse>>("/api/admin/live/weeks", Json);
         var week = weeks!.Single(w => w.Id == weekId);
-        Assert.Equal(8, week.Slots.Single(s => s.SlotType == "Morning").SeatCapacity);
+        Assert.Equal(4, week.Slots.Single(s => s.SlotType == "Morning").SeatCapacity);
     }
 
     private async Task<List<LiveWeekSummaryResponse>> WeeksAsync()

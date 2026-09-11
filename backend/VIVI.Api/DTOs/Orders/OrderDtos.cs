@@ -175,3 +175,9 @@ public sealed class UpdateDeliveryDateRequest
     public DateTime? DeliveryDateTo { get; set; }
     public string? Reason { get; set; }
 }
+
+public sealed class UpdateOrderStatusRequest
+{
+    public OrderStatus Status { get; set; }
+    public string? Note { get; set; }
+}

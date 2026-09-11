@@ -35,6 +35,49 @@ export async function unpublishCourse(id: string): Promise<Course> {
   return apiRequest<Course>(`/api/courses/${id}/unpublish`, { method: 'POST' });
 }
 
+export interface CourseThumbnailUploadUrlRequest {
+  fileName: string;
+  contentType: string;
+  fileSizeBytes: number;
+}
+
+export interface CourseThumbnailUploadUrlResponse {
+  uploadUrl: string;
+  expiresAt: string;
+  blobPath: string;
+  maxFileSizeBytes: number;
+}
+
+export interface CourseThumbnailUploadCompleteRequest {
+  blobPath: string;
+  fileSizeBytes: number;
+  contentType: string;
+}
+
+export async function requestCourseThumbnailUploadUrl(
+  id: string,
+  data: CourseThumbnailUploadUrlRequest,
+): Promise<CourseThumbnailUploadUrlResponse> {
+  return apiRequest<CourseThumbnailUploadUrlResponse>(`/api/courses/${id}/thumbnail-upload-url`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function completeCourseThumbnailUpload(
+  id: string,
+  data: CourseThumbnailUploadCompleteRequest,
+): Promise<Course> {
+  return apiRequest<Course>(`/api/courses/${id}/thumbnail-upload-complete`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCourseThumbnail(id: string): Promise<Course> {
+  return apiRequest<Course>(`/api/courses/${id}/thumbnail`, { method: 'DELETE' });
+}
+
 export async function listCategories(): Promise<Category[]> {
   return apiRequest<Category[]>('/api/categories');
 }

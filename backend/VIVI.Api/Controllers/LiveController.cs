@@ -39,11 +39,19 @@ public sealed class LiveController : ControllerBase
         await _calendar.EnsureSeasonAsync(cancellationToken);
         await _bookings.ReleaseExpiredReservationsAsync(cancellationToken);
 
+        var selectableStarts = _calendar.GetCustomerSelectableWeekStarts();
         var weeks = await _db.LiveWeeks
             .AsNoTracking()
             .Include(w => w.Slots)
             .OrderBy(w => w.WeekNumber)
             .ToListAsync(cancellationToken);
+
+        // In-memory filter so current+next always applies even if EF cannot translate Contains.
+        if (selectableStarts.Count > 0)
+        {
+            var allowed = selectableStarts.ToHashSet();
+            weeks = weeks.Where(w => allowed.Contains(w.StartDate)).ToList();
+        }
 
         return Ok(weeks.Select(MapSummary).ToList());
     }
@@ -168,6 +176,8 @@ public sealed class LiveController : ControllerBase
             IsBookable = summary.IsBookable,
             PackagePrice = summary.PackagePrice,
             Slots = summary.Slots,
+            WeeklyLiveHours = _calendar.WeeklyLiveHours,
+            HoursPerClassDay = _calendar.HoursPerClassDay,
             Days = _calendar.BuildDayPlan(week).Select(d => new LiveDayResponse
             {
                 Date = d.Date,
@@ -186,6 +196,7 @@ public sealed class LiveController : ControllerBase
         {
             SlotType = slot.SlotType.ToString(),
             Name = _calendar.SlotName(slot.SlotType),
+            Hours = _calendar.SlotHours(slot.SlotType),
             SeatCapacity = slot.SeatCapacity,
             SeatsBooked = slot.SeatsBooked,
             SeatsRemaining = remaining,
@@ -204,10 +215,12 @@ public sealed class LiveController : ControllerBase
             Status = booking.Status.ToString(),
             SlotType = booking.SlotType.ToString(),
             SlotName = _calendar.SlotName(booking.SlotType),
+            SlotHours = _calendar.SlotHours(booking.SlotType),
             WeekNumber = week.WeekNumber,
             StartDate = week.StartDate,
             EndDate = week.EndDate,
             PackagePrice = _calendar.PackagePrice,
+            WeeklyLiveHours = _calendar.WeeklyLiveHours,
             Days = _calendar.BuildDayPlan(week).Select(d => new LiveDayResponse
             {
                 Date = d.Date,

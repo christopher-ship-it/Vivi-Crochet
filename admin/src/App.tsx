@@ -5,7 +5,9 @@ import { AdminLayout } from './layouts/AdminLayout';
 import { CategoriesPage } from './pages/CategoriesPage';
 import { CourseDetailPage } from './pages/CourseDetailPage';
 import { CourseFormPage } from './pages/CourseFormPage';
+import { CourseOrdersPage } from './pages/CourseOrdersPage';
 import { CoursesPage } from './pages/CoursesPage';
+import { CustomersPage } from './pages/CustomersPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LiveBookingDetailPage } from './pages/LiveBookingDetailPage';
 import { LiveBookingsPage } from './pages/LiveBookingsPage';
@@ -30,6 +32,7 @@ export default function App() {
               <Route index element={<DashboardPage />} />
               <Route path="orders" element={<OrdersPage />} />
               <Route path="orders/:id" element={<OrderDetailPage />} />
+              <Route path="course-orders" element={<CourseOrdersPage />} />
               <Route path="live" element={<LiveBookingsPage />} />
               <Route path="live/bookings/:id" element={<LiveBookingDetailPage />} />
               <Route path="live/weeks" element={<LiveWeeksPage />} />
@@ -38,6 +41,7 @@ export default function App() {
               <Route path="courses/:id" element={<CourseDetailPage />} />
               <Route path="courses/:id/edit" element={<CourseFormPage />} />
               <Route path="categories" element={<CategoriesPage />} />
+              <Route path="customers" element={<CustomersPage />} />
               <Route path="products" element={<ProductsPage />} />
               <Route path="products/new" element={<ProductFormPage />} />
               <Route path="products/:id/edit" element={<ProductFormPage />} />

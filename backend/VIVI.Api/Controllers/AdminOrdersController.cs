@@ -111,6 +111,50 @@ public sealed class AdminOrdersController : ControllerBase
         return Ok(order.ToAdminDetail(_delivery));
     }
 
+    [HttpPut("{id:guid}/status")]
+    [ProducesResponseType(typeof(AdminOrderDetailResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminOrderDetailResponse>> UpdateStatus(
+        Guid id,
+        [FromBody] UpdateOrderStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var order = await LoadAdminOrderAsync(id, cancellationToken, tracking: true);
+        if (!order.Items.Any(i => i.ItemType == OrderItemType.Product))
+            throw ViviException.Conflict("NOT_A_PHYSICAL_ORDER", "Production status applies to physical product orders only.");
+
+        if (order.Status == request.Status)
+            return Ok(order.ToAdminDetail(_delivery));
+
+        if (!IsAllowedStatusTransition(order.Status, request.Status))
+        {
+            throw ViviException.Conflict(
+                "INVALID_STATUS_TRANSITION",
+                $"Cannot move order from {order.Status} to {request.Status}.");
+        }
+
+        order.Status = request.Status;
+        order.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync(cancellationToken);
+        order = await LoadAdminOrderAsync(id, cancellationToken);
+        return Ok(order.ToAdminDetail(_delivery));
+    }
+
+    /// <summary>
+    /// Forward-only fulfillment flow for handmade/resell product orders.
+    /// Shipped is the admin "Dispatched" step shown to customers.
+    /// </summary>
+    private static bool IsAllowedStatusTransition(OrderStatus from, OrderStatus to) =>
+        (from, to) switch
+        {
+            (OrderStatus.Confirmed, OrderStatus.InProduction) => true,
+            (OrderStatus.Confirmed, OrderStatus.Shipped) => true,
+            (OrderStatus.InProduction, OrderStatus.Shipped) => true,
+            (OrderStatus.InProduction, OrderStatus.Delivered) => true,
+            (OrderStatus.Shipped, OrderStatus.Delivered) => true,
+            _ => false
+        };
+
     private async Task<Order> LoadAdminOrderAsync(Guid id, CancellationToken cancellationToken, bool tracking = false)
     {
         var query = tracking ? _db.Orders.AsQueryable() : _db.Orders.AsNoTracking();

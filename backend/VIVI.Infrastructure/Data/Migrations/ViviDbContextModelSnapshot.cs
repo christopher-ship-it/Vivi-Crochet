@@ -147,6 +147,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<string>("ThumbnailUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
@@ -456,6 +460,129 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.ToTable("LaunchOfferCounters", (string)null);
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.LiveBooking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("LiveWeekId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ReservationExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SlotType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LiveWeekId");
+
+                    b.HasIndex("OrderId")
+                        .IsUnique();
+
+                    b.HasIndex("OrderItemId");
+
+                    b.HasIndex("CustomerId", "LiveWeekId", "SlotType");
+
+                    b.ToTable("LiveBookings", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.LiveWeek", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("BreakWeekday")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsBookable")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("SeasonYear")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WeekNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartDate");
+
+                    b.HasIndex("SeasonYear", "WeekNumber")
+                        .IsUnique();
+
+                    b.ToTable("LiveWeeks", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.LiveWeekSlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("LiveWeekId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SeatCapacity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SeatsBooked")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<int>("SlotType")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LiveWeekId", "SlotType")
+                        .IsUnique();
+
+                    b.ToTable("LiveWeekSlots", (string)null);
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.Order", b =>
                 {
                     b.Property<Guid>("Id")
@@ -665,6 +792,12 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<int>("ItemType")
                         .HasColumnType("int");
 
+                    b.Property<int?>("LiveSlotType")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("LiveWeekId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
 
@@ -685,6 +818,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CourseId");
+
+                    b.HasIndex("LiveWeekId");
 
                     b.HasIndex("OrderId");
 
@@ -1072,6 +1207,52 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Navigation("Course");
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.LiveBooking", b =>
+                {
+                    b.HasOne("VIVI.Core.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VIVI.Core.Entities.LiveWeek", "Week")
+                        .WithMany("Bookings")
+                        .HasForeignKey("LiveWeekId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VIVI.Core.Entities.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VIVI.Core.Entities.OrderItem", "OrderItem")
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("OrderItem");
+
+                    b.Navigation("Week");
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.LiveWeekSlot", b =>
+                {
+                    b.HasOne("VIVI.Core.Entities.LiveWeek", "Week")
+                        .WithMany("Slots")
+                        .HasForeignKey("LiveWeekId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Week");
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.Order", b =>
                 {
                     b.HasOne("VIVI.Core.Entities.Customer", "Customer")
@@ -1215,6 +1396,13 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Navigation("Enrollments");
 
                     b.Navigation("Orders");
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.LiveWeek", b =>
+                {
+                    b.Navigation("Bookings");
+
+                    b.Navigation("Slots");
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.Order", b =>

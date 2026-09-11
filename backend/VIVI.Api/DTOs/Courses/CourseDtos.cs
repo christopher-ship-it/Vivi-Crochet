@@ -34,6 +34,8 @@ public sealed class CourseResponse
     public int AccessDays { get; set; }
     public byte RenewalPercentage { get; set; }
     public string? Languages { get; set; }
+    /// <summary>Resolved read URL for the course cover thumbnail.</summary>
+    public string? ThumbnailUrl { get; set; }
     public CourseStatus Status { get; set; }
     public int VideoCount { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -58,6 +60,28 @@ public sealed class LaunchOfferAdminResponse
     public int LaunchLimit { get; set; }
     public int RegularPriceAfterLaunch { get; set; }
     public int Mrp { get; set; }
+}
+
+public sealed class CourseThumbnailUploadUrlRequest
+{
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public long FileSizeBytes { get; set; }
+}
+
+public sealed class CourseThumbnailUploadUrlResponse
+{
+    public string UploadUrl { get; set; } = string.Empty;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public string BlobPath { get; set; } = string.Empty;
+    public long MaxFileSizeBytes { get; set; }
+}
+
+public sealed class CourseThumbnailUploadCompleteRequest
+{
+    public string BlobPath { get; set; } = string.Empty;
+    public long FileSizeBytes { get; set; }
+    public string ContentType { get; set; } = string.Empty;
 }
 
 public sealed class CourseLessonResponse

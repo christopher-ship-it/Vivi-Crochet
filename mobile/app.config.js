@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Expo config. Cleartext HTTP is disabled unless EXPO_PUBLIC_ALLOW_HTTP=true (local dev only).
  * Production builds must set EXPO_PUBLIC_API_BASE_URL to an HTTPS API URL.
  *
@@ -25,8 +25,6 @@ module.exports = ({ config }) => {
     },
     updates: {
       url: 'https://u.expo.dev/4f86f1a4-7441-4b27-a794-d1bcc7b954da',
-      // Manual check via AppUpdateCard — avoid silent apply on next cold start.
-      checkAutomatically: 'NEVER',
     },
     androidStatusBar: {
       barStyle: 'dark-content',
@@ -36,9 +34,11 @@ module.exports = ({ config }) => {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'in.vivicrochet.app',
+      buildNumber: '3',
     },
     android: {
       package: 'in.vivicrochet.app',
+      versionCode: 3,
       adaptiveIcon: {
         backgroundColor: '#fff0f4',
         foregroundImage: './assets/android-icon-foreground.png',
@@ -46,6 +46,7 @@ module.exports = ({ config }) => {
         monochromeImage: './assets/android-icon-monochrome.png',
       },
       predictiveBackGestureEnabled: false,
+      softwareKeyboardLayoutMode: 'resize',
     },
     web: {
       favicon: './assets/favicon.png',
@@ -56,6 +57,13 @@ module.exports = ({ config }) => {
       'expo-secure-store',
       'expo-font',
       'expo-status-bar',
+      [
+        'expo-location',
+        {
+          locationWhenInUsePermission:
+            'Allow VIVI Crochet to use your location to fill your delivery address.',
+        },
+      ],
       [
         'expo-build-properties',
         {

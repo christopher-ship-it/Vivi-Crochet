@@ -60,6 +60,7 @@ export interface Course {
   accessDays: number;
   renewalPercentage: number;
   languages?: string | null;
+  thumbnailUrl?: string | null;
   status: CourseStatus;
   videoCount: number;
   createdAt: string;
@@ -375,5 +376,16 @@ export interface AdminLiveWeek {
   isBookable: boolean;
   packagePrice: number;
   slots: LiveSlotAvailability[];
+}
+
+export interface AdminCustomerListItem {
+  id: string;
+  fullName: string;
+  phoneNumber: string;
+  email: string;
+  isActive: boolean;
+  signedUpAt: string;
+  lastActiveAt: string;
+  orderCount: number;
 }
 

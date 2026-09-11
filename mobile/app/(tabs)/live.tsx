@@ -1,7 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
+  Dimensions,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,6 +12,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   createLiveBooking,
   getLiveWeek,
@@ -29,9 +33,36 @@ import {
 } from '../../src/components/RazorpayCheckoutModal';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
-import { colors, fonts, spacing } from '../../src/theme';
+import { colors, fonts, radii, spacing } from '../../src/theme';
 import { formatInr } from '../../src/utils/format';
 import { applyStatusBar } from '../../src/utils/statusBar';
+import { realCustomerName } from '../../src/utils/validation';
+
+const HERO_YARN = require('../../assets/live-hero-yarn.png');
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const SIDE_BY_SIDE = SCREEN_WIDTH >= 380;
+const HERO_IMAGE_SIZE = Math.min(168, Math.round(SCREEN_WIDTH * 0.42));
+
+/** Display copy — booking still uses API slot hours / seats. */
+const SLOT_META: Record<
+  LiveSlotType,
+  { eyebrow: string; title: string; time: string; icon: keyof typeof Ionicons.glyphMap }
+> = {
+  Morning: {
+    eyebrow: 'MORNING',
+    title: 'CROCHET CIRCLE',
+    time: '11:00 AM – 1:00 PM',
+    icon: 'sunny-outline',
+  },
+  Evening: {
+    eyebrow: 'EVENING',
+    title: 'CROCHET CIRCLE',
+    time: '6:00 PM – 8:00 PM',
+    icon: 'moon-outline',
+  },
+};
+
+const WEEKDAY_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI'] as const;
 
 function formatShortDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -41,39 +72,33 @@ function formatShortDate(iso: string): string {
     .toUpperCase();
 }
 
-function formatDayNumber(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return '';
-  return String(d.getDate());
-}
-
-function classScheduleLabel(days: LiveDay[]): string {
-  const hasReplacement = days.some((d) => d.kind === 'Replacement');
-  return hasReplacement ? 'Mon – Fri + Saturday replacement' : 'Mon – Fri';
+function slotMeta(slotType: string) {
+  if (slotType === 'Morning' || slotType === 'Evening') return SLOT_META[slotType];
+  return {
+    eyebrow: slotType.toUpperCase(),
+    title: 'CROCHET CIRCLE',
+    time: '',
+    icon: 'ellipse-outline' as keyof typeof Ionicons.glyphMap,
+  };
 }
 
 function slotAvailabilityLabel(slot: LiveSlotAvailability): string {
   if (slot.status === 'FullyBooked' || slot.seatsRemaining <= 0) return 'FULLY BOOKED';
-  return `${slot.seatsRemaining} SPOTS LEFT`;
+  if (slot.seatsRemaining === 1) return '1 spot left';
+  return `${slot.seatsRemaining} seats available`;
 }
 
-function dayKindStyle(kind: string) {
-  switch (kind) {
-    case 'Class':
-      return { dot: colors.pink, text: colors.ink };
-    case 'Replacement':
-      return { dot: colors.pinkDark, text: colors.ink };
-    case 'Break':
-      return { dot: colors.muted, text: colors.muted };
-    case 'Off':
-      return { dot: 'transparent', text: colors.muted };
-    default:
-      return { dot: colors.softBorder, text: colors.muted };
-  }
+function hoursPerClassDay(detail: LiveWeekDetail | null): number {
+  return detail?.hoursPerClassDay ?? 2;
+}
+
+function weeklyLiveHours(detail: LiveWeekDetail | null): number {
+  return detail?.weeklyLiveHours ?? 10;
 }
 
 export default function LiveScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const dockClearance = useTabDockClearance();
   const { isAuthenticated, user } = useShoppingSession();
 
@@ -165,6 +190,8 @@ export default function LiveScreen() {
   );
 
   const packagePrice = detail?.packagePrice ?? weeks[0]?.packagePrice;
+  const classHours = hoursPerClassDay(detail);
+  const weekHours = weeklyLiveHours(detail);
   const canBook =
     !!detail &&
     !!selectedSlotData &&
@@ -196,7 +223,7 @@ export default function LiveScreen() {
         currency: created.currency,
         name: 'VIVI Crochet',
         description: `${created.slotName} · Week ${created.weekNumber}`,
-        prefillName: user?.name ?? undefined,
+        prefillName: realCustomerName(user?.name) || undefined,
         prefillContact: user?.phone ?? undefined,
       });
     } catch (err) {
@@ -253,32 +280,53 @@ export default function LiveScreen() {
     if (selectedWeekId) void loadDetail(selectedWeekId);
   }
 
+  function onSlotCta(type: LiveSlotType, fully: boolean) {
+    if (fully || bookingBusy) return;
+    if (selectedSlot !== type) {
+      setSelectedSlot(type);
+      return;
+    }
+    void startBooking();
+  }
+
   if (loading && !refreshing) {
-    return <LoadingView message="Loading live weeks…" />;
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <LoadingView message="Loading live weeks…" />
+      </View>
+    );
   }
 
   if (error && weeks.length === 0) {
     return (
-      <ErrorView
-        title="Unable to load live availability."
-        message={error}
-        onAction={() => loadWeeks()}
-        actionLabel="Retry"
-      />
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <ErrorView
+          title="Unable to load live availability."
+          message={error}
+          onAction={() => loadWeeks()}
+          actionLabel="Retry"
+        />
+      </View>
     );
   }
 
   if (weeks.length === 0) {
     return (
-      <EmptyView
-        title="No upcoming live weeks"
-        message="Live Crochet Studio availability will appear here when the season opens."
-      />
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <EmptyView
+          title="No upcoming live weeks"
+          message="Live Crochet Studio availability will appear here when the season opens."
+        />
+      </View>
     );
   }
 
+  const weekdayDays: LiveDay[] | null =
+    detail?.days.filter((d) => WEEKDAY_ORDER.includes(d.weekday.toUpperCase() as (typeof WEEKDAY_ORDER)[number])) ??
+    null;
+
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: dockClearance + 28 }}
@@ -292,12 +340,40 @@ export default function LiveScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
-          <Text style={styles.eyebrow}>LIVE CROCHET STUDIO</Text>
-          <Text style={styles.subtitle}>Crochet with Vivi, live</Text>
-          {packagePrice != null ? (
-            <Text style={styles.price}>{formatInr(packagePrice)}/package</Text>
-          ) : null}
-          <Text style={styles.sundayNote}>Sunday is always OFF · never a class or replacement day</Text>
+          <View style={[styles.heroCopy, { paddingRight: HERO_IMAGE_SIZE + 8 }]}>
+            <Text style={styles.eyebrow}>LIVE CROCHET STUDIO</Text>
+            <Text style={styles.title}>Crochet with Vivi, live</Text>
+            <Text style={styles.subLearn}>Learn together.</Text>
+            <Text style={styles.subStitch}>Stitch by stitch.</Text>
+            {packagePrice != null ? (
+              <Text style={styles.price}>
+                {formatInr(packagePrice)}
+                <Text style={styles.priceUnit}> / package</Text>
+              </Text>
+            ) : null}
+          </View>
+          <View
+            style={[
+              styles.heroImageWrap,
+              { width: HERO_IMAGE_SIZE, height: HERO_IMAGE_SIZE },
+            ]}
+            pointerEvents="none"
+          >
+            <Image
+              source={HERO_YARN}
+              style={styles.heroImage}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
+            <View style={styles.heroImageFadeRail} pointerEvents="none">
+              {[0.72, 0.5, 0.32, 0.16, 0.06].map((opacity, index) => (
+                <View
+                  key={opacity}
+                  style={[styles.heroImageFadeStrip, { opacity, left: index * 10 }]}
+                />
+              ))}
+            </View>
+          </View>
         </View>
 
         <Text style={styles.sectionLabel}>SELECT WEEK</Text>
@@ -331,86 +407,163 @@ export default function LiveScreen() {
           </View>
         ) : detail ? (
           <>
-            <View style={styles.weekHeader}>
-              <Text style={styles.weekTitle}>WEEK {detail.weekNumber}</Text>
-              <Text style={styles.weekRange}>
-                {formatShortDate(detail.startDate)} — {formatShortDate(detail.endDate)}
-              </Text>
-              <Text style={styles.scheduleHint}>{classScheduleLabel(detail.days)}</Text>
-            </View>
+            <View style={[styles.slotGrid, !SIDE_BY_SIDE && styles.slotGridStack]}>
+              {detail.slots.map((slot) => {
+                const type = slot.slotType as LiveSlotType;
+                const meta = slotMeta(type);
+                const fully =
+                  slot.status === 'FullyBooked' || slot.seatsRemaining <= 0;
+                const selected = selectedSlot === type;
+                const ctaLabel = fully
+                  ? 'FULLY BOOKED'
+                  : selected
+                    ? bookingBusy
+                      ? 'PLEASE WAIT…'
+                      : `Book ${meta.eyebrow.charAt(0)}${meta.eyebrow.slice(1).toLowerCase()} →`
+                    : `Select ${meta.eyebrow.charAt(0)}${meta.eyebrow.slice(1).toLowerCase()} →`;
 
-            <View style={styles.calendarRow}>
-              {detail.days.map((day) => {
-                const look = dayKindStyle(day.kind);
                 return (
-                  <View key={day.date} style={styles.dayCell}>
-                    <Text style={styles.dayWeekday}>{day.weekday}</Text>
-                    <Text style={[styles.dayNumber, { color: look.text }]}>
-                      {formatDayNumber(day.date)}
-                    </Text>
-                    <View
+                  <Pressable
+                    key={slot.slotType}
+                    disabled={fully || bookingBusy}
+                    style={[
+                      styles.slotCard,
+                      SIDE_BY_SIDE && styles.slotCardHalf,
+                      selected && styles.slotCardSelected,
+                      fully && styles.slotCardDisabled,
+                    ]}
+                    onPress={() => {
+                      if (!fully) setSelectedSlot(type);
+                    }}
+                  >
+                    <View style={styles.slotHeader}>
+                      <Ionicons name={meta.icon} size={14} color={colors.pink} />
+                      <Text style={styles.slotEyebrow}>
+                        {meta.eyebrow}{' '}
+                        <Text style={styles.slotEyebrowRest}>{meta.title}</Text>
+                      </Text>
+                    </View>
+
+                    <View style={styles.slotMedia}>
+                      <Ionicons
+                        name={meta.icon}
+                        size={36}
+                        color={colors.pink}
+                        style={{ opacity: 0.35 }}
+                      />
+                    </View>
+
+                    <View style={styles.slotBody}>
+                      {(slot.hours || meta.time) ? (
+                        <View style={styles.slotRow}>
+                          <Ionicons name="time-outline" size={14} color={colors.muted} />
+                          <Text style={styles.slotTime}>{slot.hours || meta.time}</Text>
+                        </View>
+                      ) : null}
+                      <View style={styles.slotRow}>
+                        <Ionicons name="calendar-outline" size={14} color={colors.muted} />
+                        <Text style={styles.slotMeta}>
+                          Mon – Fri · {classHours} hours each day
+                        </Text>
+                      </View>
+                      <View style={styles.slotRow}>
+                        <Ionicons name="people-outline" size={14} color={colors.muted} />
+                        <Text
+                          style={[
+                            styles.slotSeats,
+                            fully && styles.slotSeatsFull,
+                          ]}
+                        >
+                          {slotAvailabilityLabel(slot)}
+                        </Text>
+                      </View>
+                      {selected && !fully ? (
+                        <Text style={styles.selectedMark}>✓ {meta.eyebrow} SELECTED</Text>
+                      ) : null}
+                    </View>
+
+                    <Pressable
                       style={[
-                        styles.dayDot,
-                        {
-                          backgroundColor: day.kind === 'Off' ? 'transparent' : look.dot,
-                          borderWidth: day.kind === 'Off' ? 1.5 : 0,
-                          borderColor: colors.softBorder,
-                        },
+                        styles.slotCta,
+                        selected && !fully && styles.slotCtaSelected,
+                        fully && styles.slotCtaDisabled,
+                        type === 'Evening' && !selected && !fully && styles.slotCtaGhost,
                       ]}
-                    />
-                    <Text style={[styles.dayLabel, { color: look.text }]} numberOfLines={1}>
-                      {day.label}
-                    </Text>
-                  </View>
+                      disabled={fully || bookingBusy || (selected && !canBook)}
+                      onPress={() => onSlotCta(type, fully)}
+                    >
+                      <Text
+                        style={[
+                          styles.slotCtaText,
+                          type === 'Evening' && !selected && !fully && styles.slotCtaTextGhost,
+                          fully && styles.slotCtaTextDisabled,
+                        ]}
+                      >
+                        {ctaLabel}
+                      </Text>
+                    </Pressable>
+                  </Pressable>
                 );
               })}
             </View>
 
-            <Text style={styles.sectionLabel}>SELECT CIRCLE</Text>
-            {detail.slots.map((slot) => {
-              const type = slot.slotType as LiveSlotType;
-              const fully =
-                slot.status === 'FullyBooked' || slot.seatsRemaining <= 0;
-              const selected = selectedSlot === type;
-              return (
-                <Pressable
-                  key={slot.slotType}
-                  disabled={fully}
-                  style={[
-                    styles.slotCard,
-                    selected && styles.slotCardSelected,
-                    fully && styles.slotCardDisabled,
-                  ]}
-                  onPress={() => setSelectedSlot(type)}
-                >
-                  <View style={styles.slotTextCol}>
-                    <Text style={styles.slotName}>{slot.name}</Text>
-                    <Text style={[styles.slotSpots, fully && styles.slotSpotsFull]}>
-                      {slotAvailabilityLabel(slot)}
-                    </Text>
-                  </View>
-                  <Text style={[styles.slotAction, fully && styles.slotActionDisabled]}>
-                    {fully ? 'Fully Booked' : selected ? 'Selected' : 'Select'}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            <View style={styles.weekSection}>
+              <View style={styles.weekSectionHead}>
+                <Text style={styles.sectionLabelInline}>YOUR WEEK</Text>
+                <Text style={styles.weekHoursHint}>
+                  {weekHours} hours of live crochet per week
+                </Text>
+              </View>
 
-            <Pressable
-              style={[styles.bookBtn, !canBook && styles.bookBtnDisabled]}
-              disabled={!canBook}
-              onPress={() => void startBooking()}
-            >
-              <Text style={styles.bookBtnText}>
-                {selectedSlotData &&
-                (selectedSlotData.status === 'FullyBooked' ||
-                  selectedSlotData.seatsRemaining <= 0)
-                  ? 'FULLY BOOKED'
-                  : bookingBusy
-                    ? 'PLEASE WAIT…'
-                    : 'BOOK THIS SLOT'}
+              <View style={styles.weekdayRow}>
+                {(weekdayDays && weekdayDays.length > 0
+                  ? weekdayDays
+                  : WEEKDAY_ORDER.map((weekday) => ({
+                      weekday,
+                      kind: 'Class',
+                      date: weekday,
+                      label: 'Class',
+                    }))
+                ).map((day) => (
+                  <View key={day.date} style={styles.weekdayBlock}>
+                    <Text style={styles.weekdayName}>{day.weekday.toUpperCase()}</Text>
+                    <Text style={styles.weekdayHours}>{classHours}h</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={styles.weekTotal}>
+                {weekHours} HOURS OF LIVE CROCHET / WEEK
               </Text>
-            </Pressable>
+
+              <View style={styles.weekendRow}>
+                <View style={styles.weekendCard}>
+                  <Ionicons name="calendar-outline" size={18} color={colors.pink} />
+                  <Text style={styles.weekendTitle}>SATURDAY Replacement Class</Text>
+                  <Text style={styles.weekendBody}>
+                    If you miss a weekday class, you can attend on Saturday.
+                  </Text>
+                </View>
+                <View style={styles.weekendCard}>
+                  <Ionicons name="cafe-outline" size={18} color={colors.pink} />
+                  <Text style={styles.weekendTitle}>SUNDAY Rest Day</Text>
+                  <Text style={styles.weekendBody}>
+                    No class and no worries. Take time to create!
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.quote}>
+              <Text style={styles.quoteMark}>“</Text>
+              <Text style={styles.quoteText}>
+                Better stitches, brighter days — together. — Vivi
+              </Text>
+            </View>
+
+            <Text style={styles.cancelNote}>
+              Bookings cannot be cancelled once confirmed.
+            </Text>
           </>
         ) : error ? (
           <ErrorView
@@ -439,64 +592,108 @@ export default function LiveScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.canvas,
   },
   scroll: {
     flex: 1,
   },
   hero: {
-    backgroundColor: colors.pinkSoft,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
+    position: 'relative',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+    minHeight: HERO_IMAGE_SIZE + 8,
+    overflow: 'hidden',
+  },
+  heroCopy: {
+    zIndex: 1,
+  },
+  heroImageWrap: {
+    position: 'absolute',
+    top: 0,
+    right: spacing.xl + spacing.sm,
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroImageFadeRail: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroImageFadeStrip: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 12,
+    backgroundColor: colors.canvas,
   },
   eyebrow: {
-    fontFamily: fonts.extraBold,
-    fontSize: 12,
-    letterSpacing: 2.4,
+    fontFamily: fonts.semiBold,
+    fontSize: 11,
+    letterSpacing: 1.6,
     color: colors.pink,
   },
-  subtitle: {
-    fontFamily: fonts.extraBold,
-    fontSize: 28,
+  title: {
+    fontFamily: fonts.heading,
+    fontSize: 36,
+    lineHeight: 44,
+    paddingBottom: 4,
     color: colors.ink,
-    marginTop: 10,
-    letterSpacing: -0.6,
+    marginTop: 8,
+  },
+  subLearn: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.muted,
+    marginTop: 6,
+  },
+  subStitch: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.muted,
+    marginTop: 0,
   },
   price: {
-    fontFamily: fonts.semiBold,
-    fontSize: 16,
-    color: colors.pinkDark,
+    fontFamily: fonts.extraBold,
+    fontSize: 26,
+    color: colors.pink,
     marginTop: 12,
   },
-  sundayNote: {
+  priceUnit: {
     fontFamily: fonts.regular,
-    fontSize: 12,
+    fontSize: 15,
     color: colors.muted,
-    marginTop: 10,
-    lineHeight: 18,
   },
   sectionLabel: {
-    fontFamily: fonts.extraBold,
+    fontFamily: fonts.semiBold,
     fontSize: 11,
-    letterSpacing: 2,
+    letterSpacing: 1.6,
     color: colors.pink,
-    marginTop: spacing.lg,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  sectionLabelInline: {
+    fontFamily: fonts.semiBold,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: colors.pink,
   },
   weekRail: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     gap: 8,
+    paddingBottom: spacing.lg,
   },
   weekChip: {
-    borderWidth: 2,
-    borderColor: colors.softBorder,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     backgroundColor: colors.white,
+    borderRadius: radii.md,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     minWidth: 118,
-    borderRadius: 14,
   },
   weekChipActive: {
     backgroundColor: colors.pink,
@@ -505,7 +702,6 @@ const styles = StyleSheet.create({
   weekChipTitle: {
     fontFamily: fonts.extraBold,
     fontSize: 12,
-    letterSpacing: 1.2,
     color: colors.ink,
   },
   weekChipTitleActive: {
@@ -515,143 +711,241 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 11,
     color: colors.muted,
-    marginTop: 4,
+    marginTop: 2,
   },
   weekChipDatesActive: {
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.88)',
   },
-  weekHeader: {
-    marginTop: spacing.lg,
-    marginHorizontal: spacing.lg,
+  detailLoading: {
+    minHeight: 160,
   },
-  weekTitle: {
-    fontFamily: fonts.extraBold,
-    fontSize: 22,
-    color: colors.ink,
-    letterSpacing: -0.4,
-  },
-  weekRange: {
-    fontFamily: fonts.semiBold,
-    fontSize: 14,
-    color: colors.muted,
-    marginTop: 4,
-  },
-  scheduleHint: {
-    fontFamily: fonts.regular,
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 6,
-  },
-  calendarRow: {
+  slotGrid: {
     flexDirection: 'row',
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.softBorder,
-    backgroundColor: colors.white,
-    borderRadius: 14,
-    overflow: 'hidden',
+    gap: 12,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
   },
-  dayCell: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 2,
-    borderRightWidth: 1,
-    borderRightColor: colors.softBorder,
-  },
-  dayWeekday: {
-    fontFamily: fonts.extraBold,
-    fontSize: 9,
-    letterSpacing: 0.6,
-    color: colors.muted,
-  },
-  dayNumber: {
-    fontFamily: fonts.extraBold,
-    fontSize: 16,
-    marginTop: 4,
-  },
-  dayDot: {
-    width: 8,
-    height: 8,
-    marginTop: 6,
-    borderRadius: 0,
-  },
-  dayLabel: {
-    fontFamily: fonts.semiBold,
-    fontSize: 8,
-    letterSpacing: 0.4,
-    marginTop: 6,
-    textAlign: 'center',
+  slotGridStack: {
+    flexDirection: 'column',
   },
   slotCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.softBorder,
+    flex: 1,
     backgroundColor: colors.white,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 14,
+    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  slotCardHalf: {
+    flexBasis: 0,
+    flexGrow: 1,
   },
   slotCardSelected: {
-    backgroundColor: colors.pinkSoft,
     borderColor: colors.pink,
+    borderWidth: 1.5,
   },
   slotCardDisabled: {
     opacity: 0.55,
   },
-  slotTextCol: {
-    flex: 1,
-    paddingRight: 12,
+  slotHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.pinkSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  slotName: {
-    fontFamily: fonts.extraBold,
-    fontSize: 16,
+  slotEyebrow: {
+    flex: 1,
+    fontFamily: fonts.semiBold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: colors.pink,
+  },
+  slotEyebrowRest: {
     color: colors.ink,
   },
-  slotSpots: {
+  slotMedia: {
+    height: 88,
+    backgroundColor: colors.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slotBody: {
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  slotRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  slotTime: {
+    flex: 1,
     fontFamily: fonts.semiBold,
     fontSize: 12,
-    letterSpacing: 1,
-    color: colors.pink,
-    marginTop: 6,
-  },
-  slotSpotsFull: {
-    color: colors.danger,
-  },
-  slotAction: {
-    fontFamily: fonts.extraBold,
-    fontSize: 11,
-    letterSpacing: 1,
     color: colors.ink,
-    textTransform: 'uppercase',
   },
-  slotActionDisabled: {
+  slotMeta: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    lineHeight: 15,
     color: colors.muted,
   },
-  bookBtn: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
+  slotSeats: {
+    flex: 1,
+    fontFamily: fonts.semiBold,
+    fontSize: 12,
+    color: colors.success,
+  },
+  slotSeatsFull: {
+    color: colors.danger,
+  },
+  selectedMark: {
+    fontFamily: fonts.semiBold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: colors.pink,
+    marginTop: 2,
+  },
+  slotCta: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+    marginTop: 4,
     backgroundColor: colors.pink,
-    borderWidth: 0,
-    paddingVertical: 16,
+    borderRadius: radii.sm,
+    paddingVertical: 12,
     alignItems: 'center',
-    borderRadius: 14,
   },
-  bookBtnDisabled: {
-    backgroundColor: colors.muted,
-    borderColor: colors.muted,
+  slotCtaSelected: {
+    backgroundColor: colors.pinkDark,
   },
-  bookBtnText: {
-    fontFamily: fonts.extraBold,
-    fontSize: 14,
-    letterSpacing: 1.4,
+  slotCtaGhost: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.pink,
+  },
+  slotCtaDisabled: {
+    backgroundColor: colors.softBorder,
+    borderWidth: 0,
+  },
+  slotCtaText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 12,
     color: colors.white,
   },
-  detailLoading: {
-    minHeight: 180,
+  slotCtaTextGhost: {
+    color: colors.pink,
+  },
+  slotCtaTextDisabled: {
+    color: colors.muted,
+  },
+  weekSection: {
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  weekSectionHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 12,
+  },
+  weekHoursHint: {
+    flexShrink: 1,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.muted,
+    textAlign: 'right',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  weekdayBlock: {
+    flex: 1,
+    backgroundColor: colors.pinkSoft,
+    borderRadius: radii.sm,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  weekdayName: {
+    fontFamily: fonts.semiBold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: colors.ink,
+  },
+  weekdayHours: {
+    fontFamily: fonts.extraBold,
+    fontSize: 14,
+    color: colors.ink,
+    marginTop: 4,
+  },
+  weekTotal: {
+    marginTop: 12,
+    fontFamily: fonts.semiBold,
+    fontSize: 10,
+    letterSpacing: 1,
+    color: colors.muted,
+    textAlign: 'center',
+  },
+  weekendRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  weekendCard: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    padding: 12,
+    gap: 6,
+  },
+  weekendTitle: {
+    fontFamily: fonts.semiBold,
+    fontSize: 12,
+    color: colors.ink,
+  },
+  weekendBody: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    lineHeight: 15,
+    color: colors.muted,
+  },
+  quote: {
+    marginHorizontal: spacing.md,
+    backgroundColor: colors.pinkSoft,
+    borderRadius: radii.md,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    marginBottom: spacing.md,
+  },
+  quoteMark: {
+    fontFamily: fonts.extraBold,
+    fontSize: 36,
+    lineHeight: 36,
+    color: colors.pink,
+    opacity: 0.7,
+  },
+  quoteText: {
+    fontFamily: fonts.regular,
+    fontStyle: 'italic',
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.ink,
+    marginTop: 4,
+  },
+  cancelNote: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.muted,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
 });

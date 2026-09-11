@@ -19,8 +19,26 @@ export function isValidEmail(input: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 }
 
+/** Backend default when OTP sign-in did not include a name. Treat as unset. */
+export const PLACEHOLDER_CUSTOMER_NAME = 'VIVI Customer';
+
+export function isPlaceholderCustomerName(input: string | null | undefined): boolean {
+  const trimmed = input?.trim() ?? '';
+  return !trimmed || trimmed.toLowerCase() === PLACEHOLDER_CUSTOMER_NAME.toLowerCase();
+}
+
+/** First usable customer name, skipping empty / placeholder values. */
+export function realCustomerName(...values: Array<string | null | undefined>): string {
+  for (const value of values) {
+    const trimmed = value?.trim() ?? '';
+    if (trimmed && !isPlaceholderCustomerName(trimmed)) return trimmed;
+  }
+  return '';
+}
+
 export function isValidName(input: string): boolean {
-  return input.trim().length >= 2;
+  const trimmed = input.trim();
+  return trimmed.length >= 2 && !isPlaceholderCustomerName(trimmed);
 }
 
 export function isValidPin(input: string): boolean {

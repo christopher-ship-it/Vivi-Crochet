@@ -10,7 +10,7 @@ describe('learnPromptTimer', () => {
     );
   });
 
-  test('shows after 30 seconds', () => {
+  test('shows after the prompt delay', () => {
     assert.equal(
       shouldShowLearnPrompt({
         hasLinkedCourse: true,

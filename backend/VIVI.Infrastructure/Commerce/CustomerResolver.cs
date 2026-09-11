@@ -3,6 +3,7 @@ using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
 using VIVI.Core.Interfaces;
+using VIVI.Infrastructure.Auth;
 using VIVI.Infrastructure.Data;
 
 namespace VIVI.Infrastructure.Commerce;
@@ -54,9 +55,9 @@ public sealed class CustomerResolver
     {
         var customer = await ResolveForUserAsync(userId, cancellationToken);
         var changed = false;
-        if (!string.IsNullOrWhiteSpace(fullName))
+        if (!CustomerAccountService.IsPlaceholderName(fullName))
         {
-            customer.FullName = fullName.Trim();
+            customer.FullName = fullName!.Trim();
             changed = true;
         }
 
@@ -79,6 +80,7 @@ public sealed class CustomerResolver
         if (changed)
         {
             customer.UpdatedAt = DateTime.UtcNow;
+            await SyncUserDisplayNameAsync(customer, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
         }
 
@@ -96,12 +98,17 @@ public sealed class CustomerResolver
 
         ApplyShippingAddress(customer, shipping);
         customer.UpdatedAt = DateTime.UtcNow;
+        await SyncUserDisplayNameAsync(customer, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
     }
 
     public static void ApplyShippingAddress(Customer customer, ShippingAddressInput shipping)
     {
-        customer.ShipFullName = shipping.FullName.Trim();
+        var shipName = shipping.FullName.Trim();
+        customer.ShipFullName = shipName;
+        // Keep account name in sync when it was never collected (OTP placeholder).
+        if (CustomerAccountService.IsPlaceholderName(customer.FullName) && !CustomerAccountService.IsPlaceholderName(shipName))
+            customer.FullName = shipName;
         customer.ShipPhone = shipping.PhoneNumber.Trim();
         customer.ShipAddressLine1 = shipping.AddressLine1.Trim();
         customer.ShipAddressLine2 = string.IsNullOrWhiteSpace(shipping.AddressLine2)
@@ -114,6 +121,22 @@ public sealed class CustomerResolver
         customer.ShipState = shipping.State.Trim();
         customer.ShipPinCode = shipping.PinCode.Trim();
         customer.ShipCountry = "India";
+    }
+
+    private async Task SyncUserDisplayNameAsync(Customer customer, CancellationToken cancellationToken)
+    {
+        if (CustomerAccountService.IsPlaceholderName(customer.FullName))
+            return;
+
+        var user = await _db.AdminUsers.SingleOrDefaultAsync(u => u.Id == customer.UserId, cancellationToken);
+        if (user is null)
+            return;
+
+        if (!string.Equals(user.Name, customer.FullName, StringComparison.Ordinal))
+        {
+            user.Name = customer.FullName;
+            user.UpdatedAt = DateTime.UtcNow;
+        }
     }
 
     private static string ExtractPhoneFromEmail(string email)
