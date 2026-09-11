@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Expo config. Cleartext HTTP is disabled unless EXPO_PUBLIC_ALLOW_HTTP=true (local dev only).
  * Production builds must set EXPO_PUBLIC_API_BASE_URL to an HTTPS API URL.
  *
@@ -16,7 +16,7 @@ module.exports = ({ config }) => {
     slug: 'vivi-crochet',
     owner: 'chris88navi',
     scheme: 'vivi',
-    version: '1.0.1',
+    version: '1.0.2',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
@@ -25,6 +25,8 @@ module.exports = ({ config }) => {
     },
     updates: {
       url: 'https://u.expo.dev/4f86f1a4-7441-4b27-a794-d1bcc7b954da',
+      // Manual check via AppUpdateCard — avoid silent apply on next cold start.
+      checkAutomatically: 'NEVER',
     },
     androidStatusBar: {
       barStyle: 'dark-content',

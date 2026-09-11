@@ -11,16 +11,24 @@ export function useAppUpdate() {
     if (__DEV__ || !Updates.isEnabled) return;
 
     try {
+      // Already downloaded (e.g. previous session) — prompt to apply.
+      if (Updates.isUpdatePending) {
+        setReady(true);
+        setDismissed(false);
+        return;
+      }
+
       const result = await Updates.checkForUpdateAsync();
       if (!result.isAvailable) return;
 
       const fetched = await Updates.fetchUpdateAsync();
-      if (fetched.isNew) {
+      if (fetched.isNew || Updates.isUpdatePending) {
         setReady(true);
         setDismissed(false);
       }
-    } catch {
-      // Silent: network / channel issues should not interrupt browsing.
+    } catch (err) {
+      // Network / channel / runtime mismatch — do not interrupt browsing.
+      console.warn('[updates] check failed', err);
     }
   }, []);
 
