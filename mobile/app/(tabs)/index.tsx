@@ -81,9 +81,17 @@ export default function HomeScreen() {
           <Text style={styles.headlineAccent}>choice.</Text>
         </Text>
         <View style={styles.choiceRow}>
-          <Text style={styles.choiceLabel}>SHOP</Text>
+          <Pressable onPress={() => router.push('/(tabs)/learn')} hitSlop={6}>
+            <Text style={styles.choiceLabel}>Learn</Text>
+          </Pressable>
           <Text style={styles.choiceDivider}>·</Text>
-          <Text style={styles.choiceLabel}>LEARN</Text>
+          <Pressable onPress={() => router.push('/(tabs)/shop')} hitSlop={6}>
+            <Text style={styles.choiceLabel}>Shop</Text>
+          </Pressable>
+          <Text style={styles.choiceDivider}>·</Text>
+          <Pressable onPress={() => router.push('/(tabs)/live')} hitSlop={6}>
+            <Text style={styles.choiceLabel}>Live</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -190,7 +198,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
     alignItems: 'flex-start',
     borderBottomWidth: 1,
     borderBottomColor: colors.softBorder,
@@ -221,13 +229,13 @@ const styles = StyleSheet.create({
   choiceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginTop: spacing.sm,
   },
   choiceLabel: {
     fontFamily: fonts.extraBold,
     fontSize: 11,
-    letterSpacing: 1.6,
+    letterSpacing: 1.2,
     color: colors.pink,
   },
   choiceDivider: {
@@ -278,7 +286,7 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: colors.pinkMist,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
   sectionEyebrow: {
