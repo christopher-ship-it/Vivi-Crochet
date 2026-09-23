@@ -68,11 +68,15 @@ export function resolveCollectionOwnership(
 }
 
 export function isCompleteCollectionBundle(
-  course: Pick<Course, 'id' | 'type'> | null | undefined,
+  course: Pick<Course, 'id' | 'type' | 'name'> | null | undefined,
 ): boolean {
   if (!course) return false;
-  if (course.type === 'Bundle') return true;
-  return sameId(course.id, COMPLETE_COLLECTION_BUNDLE_ID);
+  // API normally sends the string enum; tolerate numeric Bundle = 2 if ever serialized that way.
+  const type = course.type as string | number;
+  if (type === 'Bundle' || type === 2) return true;
+  if (sameId(course.id, COMPLETE_COLLECTION_BUNDLE_ID)) return true;
+  const name = (course.name ?? '').trim();
+  return /complete crochet collection|all-access crochet pass/i.test(name);
 }
 
 /** DatabaseSeeder.Catalog.ViralProjectsCategoryId */

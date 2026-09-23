@@ -113,7 +113,10 @@ export const TERMS_DOCUMENT: LegalDocument = {
     { type: 'paragraph', text: 'please contact us promptly at:' },
     {
       type: 'bullets',
-      items: ['Email: support@vivicrochet01.com', 'India Phone: +91 8438034181'],
+      items: [
+        'Email: support@vivicrochet01.com',
+        'India phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
+      ],
     },
     {
       type: 'paragraph',
@@ -360,7 +363,10 @@ export const TERMS_DOCUMENT: LegalDocument = {
     { type: 'subheading', text: 'Customers in India' },
     {
       type: 'bullets',
-      items: ['Phone: +91 8438034181', 'Email: support@vivicrochet01.com'],
+      items: [
+        'Phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
+        'Email: support@vivicrochet01.com',
+      ],
     },
     { type: 'subheading', text: 'Customers outside India' },
     { type: 'bullets', items: ['Email: support@vivicrochet01.com'] },
@@ -517,7 +523,10 @@ export const PRIVACY_DOCUMENT: LegalDocument = {
     { type: 'paragraph', text: 'For customers in India:' },
     {
       type: 'bullets',
-      items: ['Phone: +91 8438034181', 'Email: support@vivicrochet01.com'],
+      items: [
+        'Phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
+        'Email: support@vivicrochet01.com',
+      ],
     },
     { type: 'paragraph', text: 'For customers outside India:' },
     { type: 'bullets', items: ['Email: support@vivicrochet01.com'] },
@@ -724,13 +733,20 @@ export const PRIVACY_DOCUMENT: LegalDocument = {
     { type: 'paragraph', text: 'India customers:' },
     {
       type: 'bullets',
-      items: ['Phone: +91 8438034181', 'Email: support@vivicrochet01.com'],
+      items: [
+        'Phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
+        'Email: support@vivicrochet01.com',
+      ],
+    },
+    {
+      type: 'paragraph',
+      text: 'Please use +91 8438034181 as the official business contact number for both WhatsApp and phone calls.',
     },
     { type: 'paragraph', text: 'Customers outside India:' },
     { type: 'bullets', items: ['Email: support@vivicrochet01.com'] },
     {
       type: 'paragraph',
-      text: 'For privacy requests, account deletion requests, or questions about personal information, please contact us by email.',
+      text: 'For privacy requests, account deletion requests, or questions about personal information, please contact us by email or on the India phone / WhatsApp number above.',
     },
   ],
 };
