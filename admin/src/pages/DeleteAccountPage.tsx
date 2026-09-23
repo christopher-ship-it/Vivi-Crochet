@@ -84,7 +84,7 @@ export function DeleteAccountPage() {
             Email:{' '}
             <a href="mailto:support@vivicrochet01.com">support@vivicrochet01.com</a>
           </li>
-          <li>India phone: +91 8438034181</li>
+          <li>India phone: +91 8754112435</li>
         </ul>
       </article>
     </PublicLegalLayout>

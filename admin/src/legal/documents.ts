@@ -158,7 +158,7 @@ export const PRIVACY_DOCUMENT: LegalDocument = {
     {
       type: 'bullets',
       items: [
-        'Phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
+        'Phone / WhatsApp: +91 8754112435 (official business contact for WhatsApp and phone calls)',
         'Email: support@vivicrochet01.com',
       ],
     },
@@ -368,7 +368,7 @@ export const PRIVACY_DOCUMENT: LegalDocument = {
     {
       type: 'bullets',
       items: [
-        'Phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
+        'Phone / WhatsApp: +91 8754112435 (official business contact for WhatsApp and phone calls)',
         'Email: support@vivicrochet01.com',
       ],
     },
