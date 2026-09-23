@@ -115,7 +115,7 @@ export const TERMS_DOCUMENT: LegalDocument = {
       type: 'bullets',
       items: [
         'Email: support@vivicrochet01.com',
-        'India phone / WhatsApp: +91 8754112435 (official business contact for WhatsApp and phone calls)',
+        'India phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
       ],
     },
     {
@@ -364,7 +364,7 @@ export const TERMS_DOCUMENT: LegalDocument = {
     {
       type: 'bullets',
       items: [
-        'Phone / WhatsApp: +91 8754112435 (official business contact for WhatsApp and phone calls)',
+        'Phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
         'Email: support@vivicrochet01.com',
       ],
     },
@@ -524,7 +524,7 @@ export const PRIVACY_DOCUMENT: LegalDocument = {
     {
       type: 'bullets',
       items: [
-        'Phone / WhatsApp: +91 8754112435 (official business contact for WhatsApp and phone calls)',
+        'Phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
         'Email: support@vivicrochet01.com',
       ],
     },
@@ -734,13 +734,13 @@ export const PRIVACY_DOCUMENT: LegalDocument = {
     {
       type: 'bullets',
       items: [
-        'Phone / WhatsApp: +91 8754112435 (official business contact for WhatsApp and phone calls)',
+        'Phone / WhatsApp: +91 8438034181 (official business contact for WhatsApp and phone calls)',
         'Email: support@vivicrochet01.com',
       ],
     },
     {
       type: 'paragraph',
-      text: 'Please use +91 8754112435 as the official business contact number for both WhatsApp and phone calls.',
+      text: 'Please use +91 8438034181 as the official business contact number for both WhatsApp and phone calls.',
     },
     { type: 'paragraph', text: 'Customers outside India:' },
     { type: 'bullets', items: ['Email: support@vivicrochet01.com'] },
