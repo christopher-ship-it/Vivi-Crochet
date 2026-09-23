@@ -1,9 +1,19 @@
-import { Archivo_400Regular, Archivo_600SemiBold, Archivo_800ExtraBold, useFonts } from '@expo-google-fonts/archivo';
-import { Italianno_400Regular } from '@expo-google-fonts/italianno';
+import {
+  NotoSansDevanagari_400Regular,
+  NotoSansDevanagari_600SemiBold,
+  NotoSansDevanagari_700Bold,
+} from '@expo-google-fonts/noto-sans-devanagari';
+import {
+  NotoSansTamil_400Regular,
+  NotoSansTamil_600SemiBold,
+  NotoSansTamil_700Bold,
+} from '@expo-google-fonts/noto-sans-tamil';
 import { Niconne_400Regular } from '@expo-google-fonts/niconne';
-import { PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
+import { Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import { Tangerine_400Regular, Tangerine_700Bold } from '@expo-google-fonts/tangerine';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View } from 'react-native';
@@ -14,19 +24,121 @@ import { AppUpdateCard } from '../src/components/AppUpdateCard';
 import { BackButton } from '../src/components/BackButton';
 import { GradientBackground } from '../src/components/GradientBackground';
 import { HeaderBackground } from '../src/components/HeaderBackground';
+import { I18nProvider, useI18n } from '../src/i18n';
+import { uiFonts } from '../src/i18n/uiFonts';
+import { RememberRoute } from '../src/navigation/RememberRoute';
+import { addNotificationResponseListener } from '../src/notifications/push';
 import { colors } from '../src/theme';
 import { applyStatusBar } from '../src/utils/statusBar';
 
+// Keep the native splash up through font load so cold start never flashes white.
+void SplashScreen.preventAutoHideAsync();
+
+function PushNotificationNavigator() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const sub = addNotificationResponseListener((screen) => {
+      try {
+        router.push(screen as never);
+      } catch {
+        // Ignore invalid deep links from push payload.
+      }
+    });
+    return () => sub.remove();
+  }, [router]);
+
+  return null;
+}
+
+function AppStack() {
+  const { t, language } = useI18n();
+  const fonts = uiFonts(language);
+
+  return (
+    <Stack
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: 'transparent',
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 0,
+        },
+        headerBackground: () => <HeaderBackground />,
+        headerTintColor: colors.pink,
+        headerTitleAlign: 'center',
+        headerTitleStyle: {
+          fontFamily: fonts.extraBold,
+          color: colors.ink,
+        },
+        // Opaque card fill prevents previous-screen text showing through during push/pop.
+        contentStyle: { backgroundColor: colors.canvas },
+        animation: 'fade',
+        headerShadowVisible: false,
+        headerBackVisible: false,
+        headerLeft: ({ canGoBack }) =>
+          canGoBack ? (
+            <View style={{ marginLeft: 4 }}>
+              <BackButton />
+            </View>
+          ) : null,
+      }}
+    >
+      <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="language-onboarding" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="edit-address" options={{ title: t('headers.address') }} />
+      <Stack.Screen name="help-center" options={{ headerShown: false }} />
+      <Stack.Screen name="support-chat" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="cart"
+        options={{
+          title: t('headers.yourCart'),
+          headerLeft: () => (
+            <View style={{ marginLeft: 4 }}>
+              <BackButton fallbackHref="/(tabs)/shop" />
+            </View>
+          ),
+        }}
+      />
+      <Stack.Screen
+        name="checkout"
+        options={{
+          title: t('headers.checkout'),
+          headerLeft: () => (
+            <View style={{ marginLeft: 4 }}>
+              <BackButton fallbackHref="/cart" />
+            </View>
+          ),
+        }}
+      />
+      <Stack.Screen name="add-delivery-address" options={{ title: t('headers.addAddress') }} />
+      <Stack.Screen name="product/[id]" options={{ title: t('headers.product') }} />
+      <Stack.Screen name="order-confirmation" options={{ title: '', headerBackVisible: false }} />
+      <Stack.Screen name="live-booking-confirmation" options={{ title: '', headerBackVisible: false }} />
+      <Stack.Screen name="order/[id]" options={{ title: t('headers.orderTracking') }} />
+      <Stack.Screen name="course/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="lesson/[id]" options={{ title: t('headers.lesson') }} />
+      <Stack.Screen name="profile-settings" options={{ title: t('headers.profileSettings') }} />
+    </Stack>
+  );
+}
+
 export default function RootLayout() {
-  const [loaded] = useFonts({
-    Archivo_400Regular,
-    Archivo_600SemiBold,
-    Archivo_800ExtraBold,
-    PlayfairDisplay_700Bold,
-    Italianno_400Regular,
+  const [loaded, fontError] = useFonts({
+    Nunito_400Regular,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
     Niconne_400Regular,
     Tangerine_400Regular,
     Tangerine_700Bold,
+    NotoSansTamil_400Regular,
+    NotoSansTamil_600SemiBold,
+    NotoSansTamil_700Bold,
+    NotoSansDevanagari_400Regular,
+    NotoSansDevanagari_600SemiBold,
+    NotoSansDevanagari_700Bold,
   });
 
   useEffect(() => {
@@ -34,53 +146,30 @@ export default function RootLayout() {
     applyStatusBar('dark');
   }, []);
 
-  if (!loaded) return null;
+  useEffect(() => {
+    // Fonts failed — don't leave the native splash stuck forever.
+    if (fontError) {
+      void SplashScreen.hideAsync().catch(() => undefined);
+    }
+  }, [fontError]);
+
+  if (!loaded && !fontError) return null;
 
   return (
-    <SessionProvider>
-      <CartProvider>
-        <WishlistProvider>
-          <GradientBackground>
-            <StatusBar style="dark" />
-            <Stack
-              screenOptions={{
-                headerStyle: {
-                  backgroundColor: 'transparent',
-                  elevation: 0,
-                  shadowOpacity: 0,
-                  borderBottomWidth: 0,
-                },
-                headerBackground: () => <HeaderBackground />,
-                headerTintColor: colors.pink,
-                headerTitleStyle: { fontFamily: 'Archivo_800ExtraBold', color: colors.ink },
-                contentStyle: { backgroundColor: 'transparent' },
-                headerShadowVisible: false,
-                headerBackVisible: false,
-                headerLeft: ({ canGoBack }) =>
-                  canGoBack ? (
-                    <View style={{ marginLeft: 4 }}>
-                      <BackButton />
-                    </View>
-                  ) : null,
-              }}
-            >
-              <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
-              <Stack.Screen name="edit-address" options={{ title: 'Saved address' }} />
-              <Stack.Screen name="cart" options={{ title: 'Your cart' }} />
-              <Stack.Screen name="checkout" options={{ title: 'VIVI CROCHET' }} />
-              <Stack.Screen name="product/[id]" options={{ title: 'Product' }} />
-              <Stack.Screen name="order-confirmation" options={{ title: '', headerBackVisible: false }} />
-              <Stack.Screen name="live-booking-confirmation" options={{ title: '', headerBackVisible: false }} />
-              <Stack.Screen name="order/[id]" options={{ title: 'Order tracking' }} />
-              <Stack.Screen name="course/[id]" options={{ title: 'Course' }} />
-              <Stack.Screen name="lesson/[id]" options={{ title: 'Lesson' }} />
-            </Stack>
-            <AppUpdateCard />
-          </GradientBackground>
-        </WishlistProvider>
-      </CartProvider>
-    </SessionProvider>
+    <I18nProvider>
+      <SessionProvider>
+        <CartProvider>
+          <WishlistProvider>
+            <GradientBackground>
+              <StatusBar style="dark" translucent backgroundColor="transparent" />
+              <PushNotificationNavigator />
+              <RememberRoute />
+              <AppStack />
+              <AppUpdateCard />
+            </GradientBackground>
+          </WishlistProvider>
+        </CartProvider>
+      </SessionProvider>
+    </I18nProvider>
   );
 }

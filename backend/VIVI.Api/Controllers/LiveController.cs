@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VIVI.Api.DTOs.Live;
 using VIVI.Api.Extensions;
+using VIVI.Api.Services;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
+using VIVI.Core.Interfaces;
 using VIVI.Infrastructure.Commerce;
 using VIVI.Infrastructure.Data;
 
@@ -18,17 +20,20 @@ public sealed class LiveController : ControllerBase
     private readonly LiveCalendarService _calendar;
     private readonly LiveBookingService _bookings;
     private readonly CustomerResolver _customers;
+    private readonly IBlobStorageService _blob;
 
     public LiveController(
         ViviDbContext db,
         LiveCalendarService calendar,
         LiveBookingService bookings,
-        CustomerResolver customers)
+        CustomerResolver customers,
+        IBlobStorageService blob)
     {
         _db = db;
         _calendar = calendar;
         _bookings = bookings;
         _customers = customers;
+        _blob = blob;
     }
 
     [HttpGet("weeks")]
@@ -43,7 +48,8 @@ public sealed class LiveController : ControllerBase
         var weeks = await _db.LiveWeeks
             .AsNoTracking()
             .Include(w => w.Slots)
-            .OrderBy(w => w.WeekNumber)
+            .OrderBy(w => w.StartDate)
+            .ThenBy(w => w.WeekNumber)
             .ToListAsync(cancellationToken);
 
         // In-memory filter so current+next always applies even if EF cannot translate Contains.
@@ -52,8 +58,18 @@ public sealed class LiveController : ControllerBase
             var allowed = selectableStarts.ToHashSet();
             weeks = weeks.Where(w => allowed.Contains(w.StartDate)).ToList();
         }
+        else
+        {
+            // Full-season mode (tests): primary configured season only.
+            // Production (count=2) uses the branch above and can span into the next season.
+            var primaryYear = _calendar.PrimarySeasonYear;
+            weeks = weeks.Where(w => w.SeasonYear == primaryYear).ToList();
+        }
 
-        return Ok(weeks.Select(MapSummary).ToList());
+        var mapped = new List<LiveWeekSummaryResponse>(weeks.Count);
+        foreach (var week in weeks)
+            mapped.Add(await MapSummaryAsync(week, cancellationToken));
+        return Ok(mapped);
     }
 
     [HttpGet("weeks/{weekId:guid}")]
@@ -70,7 +86,7 @@ public sealed class LiveController : ControllerBase
             .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
             ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
 
-        return Ok(MapDetail(week));
+        return Ok(await MapDetailAsync(week, cancellationToken));
     }
 
     [HttpGet("weeks/{weekId:guid}/availability")]
@@ -139,33 +155,52 @@ public sealed class LiveController : ControllerBase
         var customer = await _customers.ResolveForUserAsync(User.GetUserId(), cancellationToken);
         await _bookings.ReleaseExpiredReservationsAsync(cancellationToken);
 
+        var today = _calendar.GetIndiaToday();
         var bookings = await _db.LiveBookings
             .AsNoTracking()
             .Include(b => b.Week!)
             .ThenInclude(w => w.Slots)
             .Include(b => b.Order)
-            .Where(b => b.CustomerId == customer.Id && b.Status == LiveBookingStatus.Confirmed)
-            .OrderByDescending(b => b.ConfirmedAt)
+            .Where(b =>
+                b.CustomerId == customer.Id
+                && b.Status == LiveBookingStatus.Confirmed
+                && b.Week != null
+                && b.Week.EndDate >= today)
+            .OrderBy(b => b.Week!.StartDate)
+            .ThenByDescending(b => b.ConfirmedAt)
             .ToListAsync(cancellationToken);
 
         return Ok(bookings.Select(MapBooking).ToList());
     }
 
-    private LiveWeekSummaryResponse MapSummary(Core.Entities.LiveWeek week) => new()
+    private async Task<LiveWeekSummaryResponse> MapSummaryAsync(
+        Core.Entities.LiveWeek week,
+        CancellationToken cancellationToken)
     {
-        Id = week.Id,
-        WeekNumber = week.WeekNumber,
-        SeasonYear = week.SeasonYear,
-        StartDate = week.StartDate,
-        EndDate = week.EndDate,
-        IsBookable = week.IsBookable,
-        PackagePrice = _calendar.PackagePrice,
-        Slots = week.Slots.OrderBy(s => s.SlotType).Select(MapSlot).ToList()
-    };
+        var tutorPhotoUrl = await ProductImageResolver.ResolveAsync(
+            week.TutorPhotoBlobPath,
+            _blob,
+            cancellationToken);
+        return new LiveWeekSummaryResponse
+        {
+            Id = week.Id,
+            WeekNumber = week.WeekNumber,
+            SeasonYear = week.SeasonYear,
+            StartDate = week.StartDate,
+            EndDate = week.EndDate,
+            IsBookable = week.IsBookable,
+            PackagePrice = _calendar.PackagePrice,
+            TutorName = string.IsNullOrWhiteSpace(week.TutorName) ? "SRI" : week.TutorName.Trim(),
+            TutorPhotoUrl = tutorPhotoUrl,
+            Slots = week.Slots.OrderBy(s => s.SlotType).Select(MapSlot).ToList()
+        };
+    }
 
-    private LiveWeekDetailResponse MapDetail(Core.Entities.LiveWeek week)
+    private async Task<LiveWeekDetailResponse> MapDetailAsync(
+        Core.Entities.LiveWeek week,
+        CancellationToken cancellationToken)
     {
-        var summary = MapSummary(week);
+        var summary = await MapSummaryAsync(week, cancellationToken);
         return new LiveWeekDetailResponse
         {
             Id = summary.Id,
@@ -175,6 +210,8 @@ public sealed class LiveController : ControllerBase
             EndDate = summary.EndDate,
             IsBookable = summary.IsBookable,
             PackagePrice = summary.PackagePrice,
+            TutorName = summary.TutorName,
+            TutorPhotoUrl = summary.TutorPhotoUrl,
             Slots = summary.Slots,
             WeeklyLiveHours = _calendar.WeeklyLiveHours,
             HoursPerClassDay = _calendar.HoursPerClassDay,
@@ -191,7 +228,11 @@ public sealed class LiveController : ControllerBase
     private LiveSlotAvailabilityResponse MapSlot(Core.Entities.LiveWeekSlot slot)
     {
         var remaining = Math.Max(0, slot.SeatCapacity - slot.SeatsBooked);
-        var fullyBooked = remaining == 0;
+        var status = slot.IsBlocked
+            ? "Blocked"
+            : remaining == 0
+                ? "FullyBooked"
+                : "Available";
         return new LiveSlotAvailabilityResponse
         {
             SlotType = slot.SlotType.ToString(),
@@ -199,8 +240,9 @@ public sealed class LiveController : ControllerBase
             Hours = _calendar.SlotHours(slot.SlotType),
             SeatCapacity = slot.SeatCapacity,
             SeatsBooked = slot.SeatsBooked,
-            SeatsRemaining = remaining,
-            Status = fullyBooked ? "FullyBooked" : "Available"
+            SeatsRemaining = slot.IsBlocked ? 0 : remaining,
+            IsBlocked = slot.IsBlocked,
+            Status = status
         };
     }
 

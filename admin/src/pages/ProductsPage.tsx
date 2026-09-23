@@ -8,20 +8,43 @@ import {
 } from '../api/products';
 import { ApiClientError } from '../api/client';
 import { RowActionsMenu } from '../components/RowActionsMenu';
-import type { Product } from '../types';
+import type { Product, ProductType } from '../types';
 import { formatDate, formatInr } from '../utils/format';
 
+const ROOM_OPTIONS: { id: ProductType; label: string; subtitle: string; emptyHint: string }[] = [
+  {
+    id: 'Handmade',
+    label: 'Handmade Collection',
+    subtitle: 'Shop handmade pieces made by VIVI',
+    emptyHint: 'Create your first handmade shop product with name, description, and price.',
+  },
+  {
+    id: 'Resell',
+    label: 'Crochet Essentials',
+    subtitle: 'Yarn, hooks, bag rings, handles, accessories, and other materials we stock',
+    emptyHint: 'Add yarn, hooks, bag rings, handles, accessories, or other crochet materials.',
+  },
+];
+
+function productTypeLabel(type: ProductType | undefined): string {
+  return type === 'Resell' ? 'Crochet Essentials' : 'Handmade Collection';
+}
+
 export function ProductsPage() {
+  const [room, setRoom] = useState<ProductType>('Handmade');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
-  async function loadProducts() {
+  const activeRoom = ROOM_OPTIONS.find((r) => r.id === room) ?? ROOM_OPTIONS[0];
+  const newProductHref = `/products/new?type=${room}`;
+
+  async function loadProducts(productType: ProductType = room) {
     setLoading(true);
     setError(null);
     try {
-      setProducts(await listProducts());
+      setProducts(await listProducts(productType));
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to load products.');
     } finally {
@@ -30,8 +53,9 @@ export function ProductsPage() {
   }
 
   useEffect(() => {
-    loadProducts();
-  }, []);
+    void loadProducts(room);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when room changes
+  }, [room]);
 
   async function handleDelete(product: Product) {
     if (!window.confirm(`Delete "${product.name}"? This cannot be undone.`)) return;
@@ -67,12 +91,29 @@ export function ProductsPage() {
       <header className="page-header">
         <div>
           <h1 className="page-header__title">Shop products</h1>
-          <p className="page-header__subtitle">Add products with description, price, and photos for the mobile shop</p>
+          <p className="page-header__subtitle">{activeRoom.subtitle}</p>
         </div>
         <div className="page-header__actions">
-          <Link to="/products/new" className="btn btn--primary">New product</Link>
+          <Link to={newProductHref} className="btn btn--primary">New product</Link>
         </div>
       </header>
+
+      <div className="page-toolbar">
+        <div className="live-view-switch" role="tablist" aria-label="Product room">
+          {ROOM_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="tab"
+              aria-selected={room === option.id}
+              className={`live-view-switch__btn${room === option.id ? ' live-view-switch__btn--active' : ''}`}
+              onClick={() => setRoom(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {loading && (
         <div className="loading-state">
@@ -84,15 +125,15 @@ export function ProductsPage() {
         <div className="error-state">
           <h3>Could not load products</h3>
           <p>{error}</p>
-          <button type="button" className="btn" onClick={loadProducts}>Retry</button>
+          <button type="button" className="btn" onClick={() => void loadProducts()}>Retry</button>
         </div>
       )}
 
       {!loading && !error && products.length === 0 && (
         <div className="empty-state">
-          <h3>No products yet</h3>
-          <p>Create your first shop product with name, description, and price.</p>
-          <Link to="/products/new" className="btn btn--primary">Add your first product</Link>
+          <h3>No {activeRoom.label.toLowerCase()} products yet</h3>
+          <p>{activeRoom.emptyHint}</p>
+          <Link to={newProductHref} className="btn btn--primary">Add your first product</Link>
         </div>
       )}
 
@@ -141,7 +182,7 @@ export function ProductsPage() {
                       <span style={{ fontWeight: 600 }}>{product.name}</span>
                     </div>
                   </td>
-                  <td>{product.productType ?? 'Handmade'}</td>
+                  <td>{productTypeLabel(product.productType)}</td>
                   <td>{product.category}</td>
                   <td>{formatInr(product.price)}</td>
                   <td>

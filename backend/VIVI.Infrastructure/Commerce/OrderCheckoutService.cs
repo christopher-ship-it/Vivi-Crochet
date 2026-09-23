@@ -111,7 +111,7 @@ public sealed class OrderCheckoutService
 
         foreach (var line in items)
         {
-            var (orderItem, productType) = await BuildOrderItemAsync(line, cancellationToken);
+            var (orderItem, productType) = await BuildOrderItemAsync(line, customerId, cancellationToken);
             orderItem.OrderId = order.Id;
             order.Items.Add(orderItem);
             subtotal += orderItem.UnitPrice * orderItem.Quantity;
@@ -146,7 +146,7 @@ public sealed class OrderCheckoutService
                 var customer = await _db.Customers.SingleOrDefaultAsync(c => c.Id == customerId, cancellationToken);
                 if (customer is not null)
                 {
-                    CustomerResolver.ApplyShippingAddress(customer, shipping);
+                    CustomerResolver.ApplyShippingAddress(customer, shipping, shipping.Country);
                     customer.UpdatedAt = now;
                 }
             }
@@ -244,20 +244,46 @@ public sealed class OrderCheckoutService
         }
     }
 
-    public static void ValidateShipping(ShippingAddressInput shipping)
+    public static void ValidateShipping(ShippingAddressInput shipping, string? country = null)
     {
         if (string.IsNullOrWhiteSpace(shipping.FullName))
             throw ViviException.Conflict("INVALID_ADDRESS", "Enter the recipient's full name.");
-        if (!Regex.IsMatch(shipping.PhoneNumber ?? string.Empty, @"^\d{10}$"))
-            throw ViviException.Conflict("INVALID_PHONE", "Enter a 10-digit Indian mobile number.");
+
+        var resolvedCountry = string.IsNullOrWhiteSpace(country) ? shipping.Country : country;
+        var requireIndian =
+            string.IsNullOrWhiteSpace(resolvedCountry)
+            || resolvedCountry.Trim().Equals("India", StringComparison.OrdinalIgnoreCase);
+
+        var phoneDigits = new string((shipping.PhoneNumber ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (requireIndian)
+        {
+            if (!Regex.IsMatch(phoneDigits, @"^\d{10}$"))
+                throw ViviException.Conflict("INVALID_PHONE", "Enter a 10-digit Indian mobile number.");
+        }
+        else if (phoneDigits.Length is < 8 or > 15)
+        {
+            throw ViviException.Conflict(
+                "INVALID_PHONE",
+                "Enter a valid phone number with country code.");
+        }
+
         if (string.IsNullOrWhiteSpace(shipping.AddressLine1))
             throw ViviException.Conflict("INVALID_ADDRESS", "Enter address line 1.");
         if (string.IsNullOrWhiteSpace(shipping.City))
             throw ViviException.Conflict("INVALID_ADDRESS", "Enter the delivery city.");
         if (string.IsNullOrWhiteSpace(shipping.State))
             throw ViviException.Conflict("INVALID_ADDRESS", "Enter the delivery state.");
-        if (!Regex.IsMatch(shipping.PinCode ?? string.Empty, @"^[1-9][0-9]{5}$"))
-            throw ViviException.Conflict("INVALID_PIN", "Enter a valid 6-digit PIN code.");
+
+        var pin = (shipping.PinCode ?? string.Empty).Trim();
+        if (requireIndian)
+        {
+            if (!Regex.IsMatch(pin, @"^[1-9][0-9]{5}$"))
+                throw ViviException.Conflict("INVALID_PIN", "Enter a valid 6-digit PIN code.");
+        }
+        else if (pin.Length is < 3 or > 12)
+        {
+            throw ViviException.Conflict("INVALID_PIN", "Enter a valid postal code.");
+        }
     }
 
     private static void ApplyShipping(Order order, ShippingAddressInput shipping)
@@ -270,18 +296,19 @@ public sealed class OrderCheckoutService
         order.ShipCity = shipping.City.Trim();
         order.ShipState = shipping.State.Trim();
         order.ShipPinCode = shipping.PinCode.Trim();
-        order.ShipCountry = "India";
+        order.ShipCountry = string.IsNullOrWhiteSpace(shipping.Country) ? "India" : shipping.Country.Trim();
     }
 
     private async Task<(OrderItem Item, ProductType? ProductType)> BuildOrderItemAsync(
         CheckoutLineInput line,
+        Guid customerId,
         CancellationToken cancellationToken)
     {
         return line.ItemType switch
         {
             OrderItemType.Product => await BuildProductItemAsync(line, cancellationToken),
-            OrderItemType.Course => (await BuildCourseItemAsync(line, OrderItemType.Course, cancellationToken), null),
-            OrderItemType.CourseBundle => (await BuildCourseItemAsync(line, OrderItemType.CourseBundle, cancellationToken), null),
+            OrderItemType.Course => (await BuildCourseItemAsync(line, OrderItemType.Course, customerId, cancellationToken), null),
+            OrderItemType.CourseBundle => (await BuildCourseItemAsync(line, OrderItemType.CourseBundle, customerId, cancellationToken), null),
             OrderItemType.LivePackage => throw ViviException.Conflict(
                 "USE_LIVE_BOOKING_API",
                 "Book live packages via POST /api/live/bookings."),
@@ -328,6 +355,7 @@ public sealed class OrderCheckoutService
     private async Task<OrderItem> BuildCourseItemAsync(
         CheckoutLineInput line,
         OrderItemType itemType,
+        Guid customerId,
         CancellationToken cancellationToken)
     {
         if (!line.CourseId.HasValue)
@@ -339,6 +367,7 @@ public sealed class OrderCheckoutService
         var course = await _db.Courses
             .AsNoTracking()
             .Include(c => c.LaunchOffer)
+            .Include(c => c.BundleItems)
             .SingleOrDefaultAsync(c => c.Id == line.CourseId && c.Status == CourseStatus.Published, cancellationToken)
             ?? throw ViviException.NotFound("COURSE_NOT_FOUND", "Course was not found or is not published.");
 
@@ -348,8 +377,13 @@ public sealed class OrderCheckoutService
         if (itemType == OrderItemType.Course && course.Type == CourseType.Bundle)
             itemType = OrderItemType.CourseBundle;
 
-        var unitPrice = await _pricing.ResolveUnitPriceAsync(course, cancellationToken);
-        var discount = course.Mrp.HasValue && course.Mrp > unitPrice ? course.Mrp.Value - unitPrice : 0;
+        var (unitPrice, isRenewal, basePrice, _) = await _pricing.ResolveCheckoutUnitPriceAsync(
+            course,
+            customerId,
+            cancellationToken);
+
+        var listForDiscount = course.Mrp ?? (isRenewal ? basePrice : unitPrice);
+        var discount = listForDiscount > unitPrice ? listForDiscount - unitPrice : 0;
 
         return new OrderItem
         {
@@ -360,7 +394,7 @@ public sealed class OrderCheckoutService
             UnitPrice = unitPrice,
             DiscountAmount = discount,
             TotalAmount = unitPrice,
-            ItemNameSnapshot = course.Name
+            ItemNameSnapshot = isRenewal ? $"{course.Name} (renewal)" : course.Name
         };
     }
 

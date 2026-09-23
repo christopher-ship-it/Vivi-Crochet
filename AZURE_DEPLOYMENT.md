@@ -172,7 +172,7 @@ Configure CORS on the **storage account** (not the API). Allow only admin origin
 az storage cors add `
   --services b `
   --methods PUT OPTIONS HEAD GET `
-  --origins https://admin.vivicrochet.in `
+  --origins https://admin.vivicrochet01.com `
   --allowed-headers "Content-Type,x-ms-blob-type,x-ms-blob-content-type,x-ms-version" `
   --exposed-headers "x-ms-request-id,x-ms-version" `
   --max-age 3600 `
@@ -213,10 +213,10 @@ az webapp config appsettings set --resource-group $RG --name $API_APP --settings
   Blob__ContainerName=videos `
   Database__AutoMigrate=false `
   Database__AutoSeed=true `
-  Seed__AdminEmail=admin@vivicrochet.in `
+  Seed__AdminEmail=admin@vivicrochet01.com `
   Seed__AdminPassword="REPLACE_ON_FIRST_DEPLOY_ONLY" `
   Seed__AdminName="Vivi Priya" `
-  Cors__AllowedOrigins__0="https://YOUR-ADMIN-URL" `
+  Cors__AllowedOrigins__0="https://admin.vivicrochet01.com" `
   APPLICATIONINSIGHTS_CONNECTION_STRING=$AI_CONNECTION
 ```
 
@@ -242,6 +242,33 @@ App Service provides TLS termination. The API enables:
 - `UseHttpsRedirection()`
 - `UseHsts()` in Production
 - `UseForwardedHeaders()` for correct scheme behind the load balancer
+
+### Custom domains (`vivicrochet01.com`)
+
+Production hostnames:
+
+| Role | Hostname | Azure app |
+| --- | --- | --- |
+| Admin SPA | `https://admin.vivicrochet01.com` | `vivi-admin` |
+| API | `https://api.vivicrochet01.com` | `app-vivi-api` |
+
+Wire CORS + (after DNS) hostname/TLS binding:
+
+```powershell
+.\scripts\wire-custom-domains.ps1
+# After CNAME records resolve:
+.\scripts\wire-custom-domains.ps1 -BindHostnames -SkipCors
+.\scripts\deploy-admin-azure.ps1
+```
+
+DNS at your registrar (keep apex `vivicrochet01.com` on the marketing site):
+
+| Type | Host | Value |
+| --- | --- | --- |
+| CNAME | `admin` | `vivi-admin-….azurewebsites.net` |
+| CNAME | `api` | `app-vivi-api-….azurewebsites.net` |
+
+Exact targets are printed by the script.
 
 ### Swagger
 
@@ -306,7 +333,7 @@ Configured via `Cors__AllowedOrigins__0`, `__1`, etc.
 | Environment | Example origins |
 | --- | --- |
 | Development | `http://localhost:5173` |
-| Production | `https://admin.vivicrochet.in` |
+| Production | `https://admin.vivicrochet01.com` |
 
 Mobile apps call the API directly (not browser CORS). Only the Admin SPA needs API CORS.
 
@@ -320,7 +347,7 @@ Unauthorized browser origins are rejected by ASP.NET Core CORS middleware.
 
 ```powershell
 cd admin
-$env:VITE_API_BASE_URL = "https://app-vivi-api.azurewebsites.net"
+$env:VITE_API_BASE_URL = "https://api.vivicrochet01.com"
 npm ci
 npm run build
 ```
@@ -357,7 +384,7 @@ Upload `dist/` contents to an App Service static site or blob `$web` container w
 Create `mobile/.env.production` (not committed):
 
 ```text
-EXPO_PUBLIC_API_BASE_URL=https://app-vivi-api.azurewebsites.net
+EXPO_PUBLIC_API_BASE_URL=https://api.vivicrochet01.com
 EXPO_PUBLIC_ALLOW_HTTP=false
 ```
 

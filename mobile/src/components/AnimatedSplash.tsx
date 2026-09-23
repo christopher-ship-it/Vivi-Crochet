@@ -7,10 +7,12 @@ const LOGO = require('../../assets/vivi-splash-logo.png');
 
 const SUBTITLE = 'Handmade with Love';
 const CHARS = SUBTITLE.split('');
-const FADE_IN_MS = 450;
 const STITCH_GAP_MS = 28;
 const STITCH_IN_MS = 70;
-const HEART_FLIGHT_MS = 3500;
+const AFTER_SUBTITLE_MS = 420;
+const HEART_POP_MS = 200;
+const HEART_HOLD_MS = 280;
+const HEART_FLIGHT_MS = 2800;
 const FADE_OUT_MS = 350;
 const DARK_PINK = colors.pinkDark;
 const HEART_RED = '#e0214a';
@@ -29,24 +31,25 @@ function logoSize(screenW: number, screenH: number, bottomPad: number) {
   return { width, height };
 }
 
+/** Small hearts that rise from the screen bottom after the subtitle. */
 const HEARTS = [
-  { xRatio: 0.08, size: 28, delay: 0, drift: -22 },
-  { xRatio: 0.22, size: 20, delay: 50, drift: 14 },
-  { xRatio: 0.38, size: 32, delay: 25, drift: -10 },
-  { xRatio: 0.52, size: 22, delay: 70, drift: 18 },
-  { xRatio: 0.66, size: 26, delay: 40, drift: -16 },
-  { xRatio: 0.78, size: 18, delay: 90, drift: 12 },
-  { xRatio: 0.14, size: 16, delay: 110, drift: 8 },
-  { xRatio: 0.88, size: 24, delay: 60, drift: -20 },
-  { xRatio: 0.44, size: 14, delay: 100, drift: 6 },
-  { xRatio: 0.72, size: 19, delay: 120, drift: -12 },
+  { xRatio: 0.1, size: 11, delay: 0, drift: -14 },
+  { xRatio: 0.24, size: 9, delay: 80, drift: 10 },
+  { xRatio: 0.38, size: 12, delay: 40, drift: -8 },
+  { xRatio: 0.52, size: 10, delay: 120, drift: 12 },
+  { xRatio: 0.66, size: 11, delay: 60, drift: -10 },
+  { xRatio: 0.8, size: 9, delay: 100, drift: 8 },
+  { xRatio: 0.18, size: 8, delay: 160, drift: 6 },
+  { xRatio: 0.72, size: 10, delay: 140, drift: -12 },
 ] as const;
 
 interface AnimatedSplashProps {
+  /** Fired once the branded frame is painted (safe to hide the native splash). */
+  onReady?: () => void;
   onFinish: () => void;
 }
 
-export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
+export function AnimatedSplash({ onReady, onFinish }: AnimatedSplashProps) {
   const insets = useSafeAreaInsets();
   const screen = Dimensions.get('window');
   const { width: logoW, height: logoH } = logoSize(
@@ -55,7 +58,8 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
     insets.bottom + insets.top,
   );
 
-  const logoOpacity = useRef(new Animated.Value(0)).current;
+  // Start visible so the handoff from the native splash never flashes blank white.
+  const logoOpacity = useRef(new Animated.Value(1)).current;
   const screenOpacity = useRef(new Animated.Value(1)).current;
   const charAnims = useRef(
     CHARS.map(() => ({
@@ -74,6 +78,11 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
   ).current;
 
   useEffect(() => {
+    // Let the first paint land with the logo already visible, then drop the native splash.
+    const readyId = requestAnimationFrame(() => {
+      onReady?.();
+    });
+
     const onFinishRef = onFinish;
     const flightDistance = -(screen.height + 120);
 
@@ -133,31 +142,31 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
       }
     });
 
+    // Appear at the very bottom, pause, then rise past the logo and fade out.
     const heartsFly = Animated.parallel(
       heartAnims.map((heart, index) => {
         const cfg = HEARTS[index];
         return Animated.sequence([
           Animated.delay(cfg.delay),
-          // Pop in at bottom
           Animated.parallel([
             Animated.timing(heart.opacity, {
               toValue: 1,
-              duration: 180,
+              duration: HEART_POP_MS,
               useNativeDriver: true,
             }),
             Animated.timing(heart.scale, {
               toValue: 1,
-              duration: 220,
+              duration: HEART_POP_MS,
               easing: Easing.out(Easing.cubic),
               useNativeDriver: true,
             }),
           ]),
-          // Fly to top (keep fully visible most of the way)
+          Animated.delay(HEART_HOLD_MS),
           Animated.parallel([
             Animated.timing(heart.translateY, {
               toValue: flightDistance,
               duration: HEART_FLIGHT_MS,
-              easing: Easing.out(Easing.cubic),
+              easing: Easing.inOut(Easing.quad),
               useNativeDriver: true,
             }),
             Animated.timing(heart.translateX, {
@@ -167,10 +176,10 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
               useNativeDriver: true,
             }),
             Animated.sequence([
-              Animated.delay(HEART_FLIGHT_MS * 0.72),
+              Animated.delay(HEART_FLIGHT_MS * 0.65),
               Animated.timing(heart.opacity, {
                 toValue: 0,
-                duration: HEART_FLIGHT_MS * 0.28,
+                duration: HEART_FLIGHT_MS * 0.35,
                 easing: Easing.in(Easing.quad),
                 useNativeDriver: true,
               }),
@@ -181,15 +190,9 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
     );
 
     const animation = Animated.sequence([
-      Animated.timing(logoOpacity, {
-        toValue: 1,
-        duration: FADE_IN_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
       Animated.delay(120),
       Animated.sequence(stitchSteps),
-      Animated.delay(100),
+      Animated.delay(AFTER_SUBTITLE_MS),
       heartsFly,
       Animated.delay(80),
       Animated.timing(screenOpacity, {
@@ -204,7 +207,10 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
       if (finished) onFinishRef();
     });
 
-    return () => animation.stop();
+    return () => {
+      cancelAnimationFrame(readyId);
+      animation.stop();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -251,7 +257,7 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
         </View>
       </View>
 
-      {/* Render last so hearts always paint above the logo. */}
+      {/* Absolute bottom layer — hearts start here, then fly upward. */}
       <View style={styles.heartsLayer} pointerEvents="none">
         {HEARTS.map((heart, index) => (
           <Animated.View
@@ -260,7 +266,7 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
               styles.heartWrap,
               {
                 left: screen.width * heart.xRatio,
-                bottom: 12 + insets.bottom,
+                bottom: Math.max(insets.bottom, 8) + 20,
                 opacity: heartAnims[index].opacity,
                 transform: [
                   { translateY: heartAnims[index].translateY },
@@ -295,9 +301,9 @@ const styles = StyleSheet.create({
   heart: {
     color: HEART_RED,
     fontWeight: '700',
-    textShadowColor: 'rgba(224, 33, 74, 0.35)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    textShadowColor: 'rgba(224, 33, 74, 0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   center: {
     flex: 1,
@@ -309,7 +315,7 @@ const styles = StyleSheet.create({
   subtitleBlock: {
     marginTop: 16,
     alignItems: 'center',
-    minHeight: 36,
+    minHeight: 42,
   },
   subtitleRow: {
     flexDirection: 'row',
@@ -323,9 +329,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   subtitleChar: {
-    fontFamily: fonts.extraBold,
-    fontSize: 17,
-    letterSpacing: 1.2,
+    fontFamily: fonts.heading,
+    fontSize: 26,
+    letterSpacing: 0.4,
     color: DARK_PINK,
   },
 });

@@ -1,9 +1,14 @@
 import { Tabs } from 'expo-router';
 import { PremiumTabBar, type PremiumTabBarProps } from '../../src/components/PremiumTabBar';
 import { HeaderBackground } from '../../src/components/HeaderBackground';
-import { colors, fonts } from '../../src/theme';
+import { useI18n } from '../../src/i18n';
+import { uiFonts } from '../../src/i18n/uiFonts';
+import { colors } from '../../src/theme';
 
 export default function TabLayout() {
+  const { t, language } = useI18n();
+  const fonts = uiFonts(language);
+
   return (
     <Tabs
       tabBar={(props) => (
@@ -22,43 +27,53 @@ export default function TabLayout() {
         },
         headerBackground: () => <HeaderBackground />,
         headerTitleStyle: { fontFamily: fonts.extraBold, fontSize: 16, color: colors.ink },
+        headerTitleAlign: 'center',
         headerTintColor: colors.pink,
         headerShadowVisible: false,
         tabBarShowLabel: false,
+        sceneContainerStyle: { backgroundColor: 'transparent' },
+        freezeOnBlur: true,
       }}
     >
       <Tabs.Screen
+        name="offers"
+        options={{
+          title: t('tabs.offers'),
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: t('tabs.home'),
           headerShown: false,
         }}
       />
       <Tabs.Screen
         name="shop"
         options={{
-          title: 'Shop',
+          title: t('tabs.shop'),
           headerShown: false,
         }}
       />
       <Tabs.Screen
         name="learn"
         options={{
-          title: 'Learn & Loop',
+          title: t('learn.title'),
           headerShown: false,
         }}
       />
       <Tabs.Screen
         name="live"
         options={{
-          title: 'Live',
+          title: t('tabs.live'),
           headerShown: false,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'My VIVI',
+          title: t('tabs.profile'),
           headerShown: false,
         }}
       />

@@ -1,26 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Alert, Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
+import { Alert, Dimensions, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { isOutOfStock } from '../cart/stock';
+import { useI18n } from '../i18n';
+import { uiFonts, type UiFonts } from '../i18n/uiFonts';
 import type { Product } from '../types';
-import { colors, fonts, radii, spacing } from '../theme';
+import { colors, spacing } from '../theme';
 import { formatInr } from '../utils/format';
 import { useWishlist } from '../wishlist/WishlistContext';
+import { ProductImageFrame } from './ProductImageFrame';
+import { InStockLabel } from './InStockLabel';
 
-const LOW_STOCK_THRESHOLD = 5;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-/** Shared width for horizontal product rails (Home). Wider than before so
- * rail cards read as compact tiles instead of tall, narrow strips. */
+/** Shared width for horizontal product rails (Home). */
 export const RAIL_CARD_WIDTH = Math.min(120, Math.round(SCREEN_WIDTH * 0.3));
 
 /** Gap between cards — use on parent lists, not per-card margins. */
 export const PRODUCT_CARD_GAP = spacing.md;
 
-/** Portrait image well (4:5, width:height) for the Shop grid's 2-column cards. */
-const IMAGE_ASPECT_RATIO = 4 / 5;
-
-/** Near-square image well for the Home rail — its cards are narrower, so a
- * tall portrait ratio there reads as stretched; square keeps them compact. */
+/** Square image well — matches product photo normalize (1200×1200). */
+const IMAGE_ASPECT_RATIO = 1;
 const RAIL_IMAGE_ASPECT_RATIO = 1;
 
 function imageHeightForWidth(width: number, ratio: number): number {
@@ -33,12 +35,8 @@ interface ProductCardProps {
   onPress: () => void;
   variant?: 'grid' | 'rail';
   showStock?: boolean;
-}
-
-function getStockLabel(stock: number): string | null {
-  if (isOutOfStock(stock)) return 'OUT OF STOCK';
-  if (stock <= LOW_STOCK_THRESHOLD) return 'Few stocks left';
-  return null;
+  /** Shorter grid card — used for crochet essentials. */
+  compact?: boolean;
 }
 
 export function ProductCard({
@@ -47,313 +45,369 @@ export function ProductCard({
   onPress,
   variant = 'grid',
   showStock = false,
+  compact = false,
 }: ProductCardProps) {
+  const router = useRouter();
+  const { t, language } = useI18n();
+  const fonts = uiFonts(language);
+  const styles = useMemo(() => createStyles(fonts), [language]);
+
   const discount =
     product.mrp && product.mrp > product.price
       ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
       : null;
   const isRail = variant === 'rail';
-  // Rail cards (Home's horizontal carousel) need a pixel width up front since
-  // they scroll freely. Grid cards (Shop's 2-column list) size from the
-  // column's own layout instead of a precomputed screen-width fraction —
-  // that JS math was the source of cards coming out stretched/uneven, since
-  // it could drift from the FlatList's actual column width. `aspectRatio`
-  // lets the image well take whatever width the column gives it and derive
-  // a consistent portrait height from that, so it can never look flat.
   const imageHeight = isRail ? imageHeightForWidth(RAIL_CARD_WIDTH, RAIL_IMAGE_ASPECT_RATIO) : null;
   const stock = product.availableStock ?? 0;
-  const stockLabel = showStock ? getStockLabel(stock) : null;
   const outOfStock = isOutOfStock(stock);
+  const showInStock = showStock && !outOfStock;
   const { isWishlisted, toggleWishlist } = useWishlist();
   const wishlisted = isWishlisted(product.id);
+  const courseId = product.linkedCourse?.id;
 
   async function handleWishlistPress() {
     const added = await toggleWishlist(product.id);
     if (added && outOfStock) {
-      Alert.alert(
-        'Saved to wishlist',
-        'We will let you know when this product is available.',
-      );
+      Alert.alert(t('product.savedWishlist'), t('product.savedWishlistBody'));
     }
   }
 
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.card,
-        isRail ? styles.cardRail : styles.cardGrid,
-        pressed && styles.cardPressed,
+  function handleLearnPress() {
+    if (!courseId) return;
+    router.push(`/course/${courseId}`);
+  }
+
+  const imageBlock = (
+    <ProductImageFrame
+      uri={product.imageUrl}
+      style={[
+        styles.imageWell,
+        isRail
+          ? { width: RAIL_CARD_WIDTH, height: imageHeight ?? undefined }
+          : compact
+            ? styles.imageWellCompact
+            : styles.imageWellGrid,
       ]}
-      onPress={onPress}
+      imageStyle={styles.imageFill}
+      contentFit="contain"
+      contentPadding={isRail ? 6 : compact ? 6 : 10}
+      dimmed={outOfStock}
+      recyclingKey={product.id}
+      priority={isRail ? 'normal' : 'high'}
+      accessibilityLabel={product.name}
     >
+      {outOfStock && (
+        <View style={styles.oosOverlay} pointerEvents="none">
+          <Text style={styles.oosText}>{t('productCard.soldOut')}</Text>
+        </View>
+      )}
+      <Pressable
+        style={[styles.wishBtn, isRail && styles.wishBtnRail, compact && styles.wishBtnCompact]}
+        onPress={() => {
+          void handleWishlistPress();
+        }}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={
+          wishlisted ? t('productCard.removeWishlist') : t('productCard.addWishlist')
+        }
+      >
+        <Ionicons
+          name={wishlisted ? 'heart' : 'heart-outline'}
+          size={isRail || compact ? 14 : 16}
+          color={wishlisted ? colors.pink : colors.ink}
+        />
+      </Pressable>
+      {courseId && !compact ? (
+        <Pressable
+          style={styles.learnBadge}
+          onPress={handleLearnPress}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={t('productCard.learn')}
+        >
+          <Text style={styles.learnBadgeText}>{t('productCard.learn').toUpperCase()}</Text>
+        </Pressable>
+      ) : null}
+    </ProductImageFrame>
+  );
+
+  const infoBlock = (
+    <View style={[styles.body, isRail && styles.bodyRail, compact && styles.bodyCompact]}>
+      {!isRail && !compact && (
+        <Text style={styles.category} numberOfLines={1}>
+          {product.category.toUpperCase()}
+        </Text>
+      )}
+      <Text
+        style={[styles.name, isRail && styles.nameRail, compact && styles.nameCompact]}
+        numberOfLines={isRail || compact ? 2 : 3}
+      >
+        {product.name}
+      </Text>
       <View
         style={[
-          styles.imageWell,
-          isRail
-            ? { width: RAIL_CARD_WIDTH, height: imageHeight ?? undefined }
-            : styles.imageWellGrid,
+          styles.priceRow,
+          isRail && styles.priceRowRail,
+          compact && styles.priceRowCompact,
         ]}
       >
-        {product.imageUrl ? (
-          <Image
-            source={{ uri: product.imageUrl }}
-            style={[
-              isRail ? { width: RAIL_CARD_WIDTH, height: imageHeight ?? undefined } : styles.imageFillGrid,
-              outOfStock && styles.imageDimmed,
-            ]}
-            resizeMode="contain"
-            accessibilityLabel={product.name}
-          />
-        ) : (
-          <View style={[styles.placeholder, outOfStock && styles.imageDimmed]}>
-            <Text style={styles.placeholderMark}>VIVI</Text>
-          </View>
-        )}
-        {outOfStock && (
-          <View style={styles.oosOverlay} pointerEvents="none">
-            <Text style={styles.oosText}>SOLD OUT</Text>
-          </View>
-        )}
-        <Pressable
-          style={[styles.wishBtn, isRail && styles.wishBtnRail]}
-          onPress={(event) => {
-            // Prevent opening the product when tapping the heart.
-            event.stopPropagation?.();
-            void handleWishlistPress();
-          }}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-        >
-          <Ionicons
-            name={wishlisted ? 'heart' : 'heart-outline'}
-            size={isRail ? 14 : 18}
-            color={wishlisted ? colors.pink : colors.ink}
-          />
-        </Pressable>
-        {product.linkedCourse && (
-          <View style={styles.learnBadge}>
-            <Text style={styles.learnBadgeText}>Learn</Text>
-          </View>
-        )}
-        {!isRail && discount !== null && (
-          <View style={styles.discountBadge}>
-            <Text style={styles.discountText}>{discount}% OFF</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={[styles.body, isRail && styles.bodyRail]}>
-        {!isRail && (
-          <Text style={styles.category} numberOfLines={1}>
-            {product.category.toUpperCase()}
-          </Text>
-        )}
-        <Text style={[styles.name, isRail && styles.nameRail]} numberOfLines={isRail ? 1 : 2}>
-          {product.name}
+        <Text style={[styles.price, isRail && styles.priceRail, compact && styles.priceCompact]}>
+          {formatInr(product.price)}
         </Text>
-        <View style={[styles.priceRow, isRail && styles.priceRowRail]}>
-          <Text style={[styles.price, isRail && styles.priceRail]}>{formatInr(product.price)}</Text>
-          {product.mrp && product.mrp > product.price && (
-            <Text style={[styles.mrp, isRail && styles.mrpRail]}>{formatInr(product.mrp)}</Text>
-          )}
-        </View>
-        {stockLabel && !outOfStock && !isRail && (
-          <Text style={styles.stockLabel}>{stockLabel}</Text>
-        )}
+        {product.mrp && product.mrp > product.price ? (
+          <Text style={[styles.mrp, isRail && styles.mrpRail]}>{formatInr(product.mrp)}</Text>
+        ) : null}
+        {!isRail && discount !== null ? (
+          <Text style={styles.discountInline}>
+            {t('productCard.percentOff', { percent: discount })}
+          </Text>
+        ) : null}
       </View>
+      {showInStock && !isRail ? <InStockLabel style={compact ? styles.inStockCompact : undefined} /> : null}
+    </View>
+  );
+
+  const cardInner = (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [pressed && styles.cardPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={product.name}
+    >
+      {imageBlock}
+      {infoBlock}
     </Pressable>
+  );
+
+  const glassCard =
+    Platform.OS === 'ios' ? (
+      <BlurView
+        intensity={28}
+        tint="light"
+        style={[styles.cardGlass, isRail ? styles.cardRail : styles.cardGridFill]}
+      >
+        {cardInner}
+      </BlurView>
+    ) : (
+      <View
+        style={[
+          styles.cardGlass,
+          styles.cardGlassAndroid,
+          isRail ? styles.cardRail : styles.cardGridFill,
+        ]}
+      >
+        {cardInner}
+      </View>
+    );
+
+  return (
+    <View style={isRail ? styles.cardRailOuter : styles.cardGridOuter}>{glassCard}</View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-  },
-  cardGrid: {
-    // A percentage width inside a `justifyContent: 'space-between'` row
-    // (see the Shop screen's columnWrapperStyle) always fits the column
-    // exactly, whatever the device's real width turns out to be — no
-    // Dimensions-based math to drift out of sync with the actual layout.
-    width: '48%',
-    alignSelf: 'stretch',
-  },
-  cardRail: {
-    width: RAIL_CARD_WIDTH,
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  cardPressed: {
-    opacity: 0.92,
-  },
-  imageWell: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    backgroundColor: colors.mediaWash,
-  },
-  imageWellGrid: {
-    width: '100%',
-    aspectRatio: IMAGE_ASPECT_RATIO,
-  },
-  imageFillGrid: {
-    width: '100%',
-    height: '100%',
-  },
-  imageDimmed: {
-    opacity: 0.55,
-  },
-  placeholder: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.mediaWash,
-  },
-  placeholderMark: {
-    fontFamily: fonts.extraBold,
-    fontSize: 12,
-    letterSpacing: 2.4,
-    color: colors.muted,
-    opacity: 0.45,
-  },
-  oosOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(18, 14, 16, 0.42)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  oosText: {
-    fontFamily: fonts.extraBold,
-    fontSize: 11,
-    letterSpacing: 1.6,
-    color: colors.white,
-  },
-  learnBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: colors.white,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.softBorder,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  learnBadgeText: {
-    fontFamily: fonts.semiBold,
-    fontSize: 9,
-    letterSpacing: 0.4,
-    color: colors.pink,
-  },
-  wishBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.softBorder,
-    zIndex: 2,
-  },
-  wishBtnRail: {
-    top: 5,
-    right: 5,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-  },
-  discountBadge: {
-    position: 'absolute',
-    left: 8,
-    bottom: 8,
-    top: undefined,
-    backgroundColor: colors.pink,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  discountText: {
-    fontFamily: fonts.extraBold,
-    fontSize: 9,
-    letterSpacing: 0.3,
-    color: colors.white,
-  },
-  body: {
-    paddingTop: 8,
-    paddingBottom: 10,
-    paddingHorizontal: 10,
-  },
-  bodyRail: {
-    paddingTop: 5,
-    paddingBottom: 6,
-    paddingHorizontal: 6,
-  },
-  category: {
-    fontFamily: fonts.semiBold,
-    fontSize: 9,
-    letterSpacing: 1,
-    lineHeight: 12,
-    color: colors.muted,
-    marginBottom: 4,
-  },
-  name: {
-    fontFamily: fonts.semiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    // Reserve 2 lines so paired grid cards share one height without the old 3-line gap.
-    minHeight: 38,
-    color: colors.ink,
-  },
-  nameRail: {
-    fontSize: 11,
-    lineHeight: 14,
-    minHeight: 14,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 6,
-    minHeight: 20,
-  },
-  priceRowRail: {
-    gap: 4,
-    marginTop: 3,
-    minHeight: 14,
-  },
-  price: {
-    fontFamily: fonts.extraBold,
-    fontSize: 15,
-    color: colors.pink,
-  },
-  priceRail: {
-    fontSize: 12,
-  },
-  mrp: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    color: colors.muted,
-    textDecorationLine: 'line-through',
-  },
-  mrpRail: {
-    fontSize: 10,
-  },
-  stockLabel: {
-    fontFamily: fonts.semiBold,
-    fontSize: 9,
-    letterSpacing: 0.4,
-    marginTop: 6,
-    minHeight: 12,
-    color: colors.pinkDark,
-  },
-});
+function createStyles(fonts: UiFonts) {
+  return StyleSheet.create({
+    cardGridOuter: {
+      flex: 1,
+      maxWidth: '50%',
+      alignSelf: 'stretch',
+      borderRadius: 14,
+      overflow: 'hidden',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255, 255, 255, 0.62)',
+      shadowColor: colors.pink,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      elevation: 3,
+    },
+    cardGridFill: {
+      flex: 1,
+      alignSelf: 'stretch',
+    },
+    cardGlass: {
+      backgroundColor: 'rgba(255, 255, 255, 0.28)',
+      overflow: 'hidden',
+    },
+    cardGlassAndroid: {
+      backgroundColor: 'rgba(255, 248, 250, 0.82)',
+    },
+    cardRailOuter: {
+      width: RAIL_CARD_WIDTH,
+      flexGrow: 0,
+      flexShrink: 0,
+      borderRadius: 14,
+      overflow: 'hidden',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255, 255, 255, 0.55)',
+    },
+    cardRail: {
+      width: RAIL_CARD_WIDTH,
+      flexGrow: 0,
+      flexShrink: 0,
+    },
+    cardPressed: {
+      opacity: 0.94,
+      transform: [{ scale: 0.985 }],
+    },
+    imageWell: {
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    imageWellGrid: {
+      width: '100%',
+      aspectRatio: IMAGE_ASPECT_RATIO,
+    },
+    imageWellCompact: {
+      width: '100%',
+      aspectRatio: 1.22,
+    },
+    imageFill: {
+      width: '100%',
+      height: '100%',
+    },
+    oosOverlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(18, 14, 16, 0.42)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    oosText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 11,
+      letterSpacing: 1.6,
+      color: colors.white,
+    },
+    learnBadge: {
+      position: 'absolute',
+      bottom: 8,
+      left: 8,
+      backgroundColor: 'rgba(255,255,255,0.72)',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255, 255, 255, 0.85)',
+      borderRadius: 10,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      zIndex: 2,
+      overflow: 'hidden',
+    },
+    learnBadgeText: {
+      fontFamily: fonts.semiBold,
+      fontSize: 9,
+      letterSpacing: 0.8,
+      color: colors.pink,
+    },
+    wishBtn: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: 'rgba(255,255,255,0.72)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255, 255, 255, 0.85)',
+      zIndex: 2,
+    },
+    wishBtnRail: {
+      top: 5,
+      right: 5,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+    },
+    wishBtnCompact: {
+      top: 6,
+      right: 6,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+    },
+    body: {
+      paddingTop: 10,
+      paddingBottom: 12,
+      paddingHorizontal: 10,
+      gap: 0,
+    },
+    bodyRail: {
+      paddingTop: 5,
+      paddingBottom: 6,
+      paddingHorizontal: 6,
+    },
+    bodyCompact: {
+      paddingTop: 6,
+      paddingBottom: 8,
+      paddingHorizontal: 8,
+    },
+    category: {
+      fontFamily: fonts.semiBold,
+      fontSize: 9,
+      letterSpacing: 1,
+      lineHeight: 12,
+      color: colors.muted,
+      marginBottom: 4,
+    },
+    name: {
+      fontFamily: fonts.semiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: colors.ink,
+    },
+    nameRail: {
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    nameCompact: {
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    priceRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginTop: 8,
+    },
+    priceRowRail: {
+      gap: 4,
+      marginTop: 3,
+    },
+    priceRowCompact: {
+      marginTop: 4,
+      gap: 5,
+    },
+    price: {
+      fontFamily: fonts.extraBold,
+      fontSize: 15,
+      color: colors.ink,
+    },
+    priceRail: {
+      fontSize: 12,
+      color: colors.pink,
+    },
+    priceCompact: {
+      fontSize: 14,
+    },
+    mrp: {
+      fontFamily: fonts.regular,
+      fontSize: 12,
+      color: colors.muted,
+      textDecorationLine: 'line-through',
+    },
+    mrpRail: {
+      fontSize: 10,
+    },
+    discountInline: {
+      fontFamily: fonts.semiBold,
+      fontSize: 10,
+      letterSpacing: 0.3,
+      color: colors.pink,
+    },
+    inStockCompact: {
+      marginTop: 4,
+    },
+  });
+}

@@ -44,12 +44,15 @@ public sealed class ExceptionHandlingMiddleware
                 "This record changed while you were editing it. Reload the page and try again."),
             DbUpdateException => (
                 409,
-                "DELETE_FAILED",
-                "This record could not be deleted because it is still referenced elsewhere."),
+                "SAVE_FAILED",
+                "Could not save this change. Check the details and try again."),
             _ => (500, "UNEXPECTED_ERROR", "An unexpected error occurred.")
         };
 
-        if (status >= 500)
+        // Concurrency is a DbUpdateException subclass — keep its dedicated info log.
+        if (exception is DbUpdateException && exception is not DbUpdateConcurrencyException)
+            _logger.LogWarning(exception, "Database save failed ({Code}): {Detail}", code, exception.InnerException?.Message ?? exception.Message);
+        else if (status >= 500)
             _logger.LogError(exception, "Unhandled exception");
         else
             _logger.LogInformation(exception, "Request failed with {Code}", code);

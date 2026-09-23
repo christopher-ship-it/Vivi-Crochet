@@ -51,7 +51,8 @@ public sealed record ShippingAddressInput(
     string? Landmark,
     string City,
     string State,
-    string PinCode);
+    string PinCode,
+    string? Country = null);
 
 /// <summary>
 /// Server-side delivery estimation. Calendar dates are IST days counted from

@@ -1,11 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
-import * as Location from 'expo-location';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator,
   Alert,
-  Image,
+  BackHandler,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -20,28 +18,44 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createOrder, quoteDelivery, type DeliveryQuote } from '../src/api/orders';
-import { getMyProfile, updateMyProfile } from '../src/api/me';
+import { AppImage } from '../src/components/AppImage';
+import {
+  confirmEmailVerification,
+  getMyProfile,
+  requestEmailVerification,
+  updateMyProfile,
+} from '../src/api/me';
 import { verifyRazorpayPayment } from '../src/api/payments';
 import { ApiClientError } from '../src/api/client';
 import { useLearningCustomer, useSession, useShoppingSession } from '../src/auth/SessionContext';
+import {
+  beginCheckoutAddressEdit,
+  consumeCheckoutAddress,
+} from '../src/checkout/checkoutAddressDraft';
 import { useCart } from '../src/cart/CartContext';
 import { lineTotal } from '../src/cart/calculations';
 import type { CartLineItem } from '../src/cart/types';
+import { BackButton } from '../src/components/BackButton';
 import {
   RazorpayCheckoutModal,
   type RazorpayCheckoutPayload,
   type RazorpaySuccessPayload,
 } from '../src/components/RazorpayCheckoutModal';
 import { EmptyView, LoadingView } from '../src/components/StateViews';
-import { colors, fonts, spacing } from '../src/theme';
+import { useI18n } from '../src/i18n';
+import { uiFonts, type UiFonts } from '../src/i18n/uiFonts';
+import { colors, spacing } from '../src/theme';
 import { formatInr } from '../src/utils/format';
 import { formatDeliveryRange } from '../src/utils/orders';
 import {
   getShippingAddressError,
+  isIndiaAccount,
   isValidEmail,
   isValidName,
   normalizePhone,
   normalizePin,
+  normalizePostalCode,
+  phoneFromCustomerLoginEmail,
   realCustomerName,
 } from '../src/utils/validation';
 
@@ -50,19 +64,25 @@ const FIELD_BG = '#fffdfd';
 const PANEL_BORDER = '#eadfe3';
 const ACCENT_SOFT = '#fff0f4';
 const CARD_BG = '#ffffff';
-const PAGE_BG = 'transparent';
+const PAGE_BG = colors.canvas;
 
 function Field({
   label,
   optional,
   style,
+  styles,
   ...props
-}: TextInputProps & { label: string; optional?: boolean }) {
+}: TextInputProps & {
+  label: string;
+  optional?: boolean;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const { t } = useI18n();
   return (
     <View style={[styles.field, style]}>
       <Text style={styles.fieldLabel}>
         {label}
-        {optional ? <Text style={styles.optional}>  optional</Text> : null}
+        {optional ? <Text style={styles.optional}>  {t('checkout.optional')}</Text> : null}
       </Text>
       <TextInput
         {...props}
@@ -79,12 +99,14 @@ function Section({
   subtitle,
   badge,
   children,
+  styles,
 }: {
   step?: string;
   title: string;
   subtitle?: string;
   badge?: string;
   children: ReactNode;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.section}>
@@ -111,20 +133,29 @@ function Section({
   );
 }
 
-function SummaryLine({ item, index }: { item: CartLineItem; index: number }) {
+function SummaryLine({
+  item,
+  index,
+  styles,
+}: {
+  item: CartLineItem;
+  index: number;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const { t } = useI18n();
   const fallback = ['#ffe3ec', '#fff0f4', '#ffeaf1', '#ffffff'][index % 4];
   return (
     <View style={styles.summaryLine}>
       <View style={[styles.summaryThumb, !item.imageUrl && { backgroundColor: fallback }]}>
         {item.imageUrl ? (
-          <Image source={{ uri: item.imageUrl }} style={styles.summaryThumbImage} resizeMode="contain" />
+          <AppImage uri={item.imageUrl} style={styles.summaryThumbImage} contentFit="contain" />
         ) : (
           <Text style={styles.summaryThumbInitial}>{item.name.charAt(0)}</Text>
         )}
       </View>
       <View style={styles.summaryLineBody}>
         <Text style={styles.summaryLineName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.summaryLineMeta}>Qty: {item.quantity}</Text>
+        <Text style={styles.summaryLineMeta}>{t('checkout.qtyShort', { count: item.quantity })}</Text>
       </View>
       <Text style={styles.summaryLinePrice}>{formatInr(lineTotal(item))}</Text>
     </View>
@@ -149,10 +180,15 @@ function isUsableCheckoutEmail(value: string): boolean {
   return isValidEmail(value) && !isSyntheticEmail(value);
 }
 
-function formatPhoneDisplay(phone: string): string {
-  const digits = normalizePhone(phone);
-  if (digits.length !== 10) return digits ? `+91 ${digits}` : 'Add phone number';
-  return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+function formatPhoneDisplay(phone: string, addPhoneLabel: string, indiaAccount: boolean): string {
+  const digits = (phone ?? '').replace(/\D/g, '');
+  if (!digits) return addPhoneLabel;
+  if (indiaAccount) {
+    const local = normalizePhone(digits);
+    if (local.length !== 10) return local ? `+91 ${local}` : addPhoneLabel;
+    return `+91 ${local.slice(0, 5)} ${local.slice(5)}`;
+  }
+  return `+${digits}`;
 }
 
 function buildAddressDisplayLines(input: {
@@ -188,6 +224,9 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string {
 }
 
 export default function CheckoutScreen() {
+  const { t, language } = useI18n();
+  const fonts = uiFonts(language);
+  const styles = useMemo(() => createStyles(fonts), [language]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isAuthenticated, user } = useShoppingSession();
@@ -200,7 +239,7 @@ export default function CheckoutScreen() {
   );
   const [email, setEmail] = useState(learningProfile?.email ?? '');
   const [phone, setPhone] = useState(() =>
-    normalizePhone(firstNonEmpty(learningProfile?.phone, user?.phone)),
+    firstNonEmpty(learningProfile?.phone, user?.phone).replace(/\D/g, ''),
   );
   const [address1, setAddress1] = useState('');
   const [address2, setAddress2] = useState('');
@@ -209,10 +248,9 @@ export default function CheckoutScreen() {
   const [state, setState] = useState('');
   const [pinCode, setPinCode] = useState('');
   const [saveAddress, setSaveAddress] = useState(true);
+  const [indiaAccount, setIndiaAccount] = useState(true);
+  const [accountCountry, setAccountCountry] = useState('India');
   const [editingEmail, setEditingEmail] = useState(false);
-  const [editingDelivery, setEditingDelivery] = useState(false);
-  const [showAddAddressOptions, setShowAddAddressOptions] = useState(false);
-  const [locatingAddress, setLocatingAddress] = useState(false);
   const [quote, setQuote] = useState<DeliveryQuote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState(false);
@@ -221,12 +259,28 @@ export default function CheckoutScreen() {
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [verifiedEmail, setVerifiedEmail] = useState('');
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [confirmingCode, setConfirmingCode] = useState(false);
+  const [emailSheetError, setEmailSheetError] = useState<string | null>(null);
+  const [emailSheetInfo, setEmailSheetInfo] = useState<string | null>(null);
+  const sendCodeInFlight = useRef(false);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardVisible(true);
+      setKeyboardHeight(e.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
     return () => {
       showSub.remove();
       hideSub.remove();
@@ -240,6 +294,24 @@ export default function CheckoutScreen() {
     }
   }, [items.length, cartLoading, authLoading, router]);
 
+  const leaveCheckout = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/cart');
+  }, [router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        leaveCheckout();
+        return true;
+      });
+      return () => sub.remove();
+    }, [leaveCheckout]),
+  );
+
   useEffect(() => {
     const accountName = realCustomerName(learningProfile?.fullName, user?.name);
     if (accountName) {
@@ -250,9 +322,16 @@ export default function CheckoutScreen() {
         isUsableCheckoutEmail(current) ? current : learningProfile.email,
       );
     }
-    const accountPhone = normalizePhone(firstNonEmpty(learningProfile?.phone, user?.phone));
+    const accountPhone = firstNonEmpty(
+      learningProfile?.phone,
+      user?.phone,
+      phoneFromCustomerLoginEmail(user?.email),
+    );
     if (accountPhone) {
-      setPhone((current) => normalizePhone(current) || accountPhone);
+      setPhone((current) => {
+        if ((current ?? '').replace(/\D/g, '')) return current;
+        return accountPhone;
+      });
     }
   }, [learningProfile, user?.name, user?.phone]);
 
@@ -263,15 +342,46 @@ export default function CheckoutScreen() {
       try {
         const profile = await getMyProfile();
         if (cancelled) return;
+        const india = isIndiaAccount({
+          authMethod: profile.authMethod,
+          country: profile.country,
+        });
+        setIndiaAccount(india);
+        setAccountCountry(
+          india
+            ? 'India'
+            : (profile.country?.trim() || profile.shippingAddress?.country?.trim() || 'International'),
+        );
         const profileEmail = profile.email?.trim() ?? '';
-        if (isUsableCheckoutEmail(profileEmail)) {
+        const profileVerified = Boolean(profile.isEmailVerified) && isUsableCheckoutEmail(profileEmail);
+        if (profileVerified) {
+          setEmail(profileEmail);
+          setVerifiedEmail(profileEmail);
+          setIsEmailVerified(true);
+          setEditingEmail(false);
+        } else if (isUsableCheckoutEmail(profileEmail)) {
           setEmail((current) => (isUsableCheckoutEmail(current) ? current : profileEmail));
+          setVerifiedEmail('');
+          setIsEmailVerified(false);
           setEditingEmail(false);
         } else {
           setEmail((current) => (isUsableCheckoutEmail(current) ? current : ''));
+          setVerifiedEmail('');
+          setIsEmailVerified(false);
           setEditingEmail(false);
         }
-        setPhone((current) => normalizePhone(current) || normalizePhone(profile.phoneNumber));
+        setCodeSent(false);
+        setVerificationCode('');
+        setPhone((current) => {
+          const existing = (current ?? '').replace(/\D/g, '');
+          if (existing) return current;
+          return firstNonEmpty(
+            profile.phoneNumber,
+            learningProfile?.phone,
+            user?.phone,
+            phoneFromCustomerLoginEmail(user?.email),
+          );
+        });
 
         const saved = profile.shippingAddress;
         setFullName((current) =>
@@ -279,18 +389,20 @@ export default function CheckoutScreen() {
         );
         if (saved) {
           setSaveAddress(true);
-          setPhone((current) => normalizePhone(current) || normalizePhone(saved.phoneNumber));
+          setPhone((current) => {
+            const existing = (current ?? '').replace(/\D/g, '');
+            if (existing) return current;
+            return saved.phoneNumber || '';
+          });
           setAddress1((current) => current.trim() || saved.addressLine1);
           setAddress2((current) => current.trim() || saved.addressLine2 || '');
           setLandmark((current) => current.trim() || saved.landmark || '');
           setCity((current) => current.trim() || saved.city);
           setState((current) => current.trim() || saved.state);
-          setPinCode((current) => normalizePin(current) || normalizePin(saved.pinCode));
-          setEditingDelivery(false);
-          setShowAddAddressOptions(false);
-        } else {
-          setEditingDelivery(false);
-          setShowAddAddressOptions(false);
+          setPinCode((current) =>
+            current.trim()
+            || (india ? normalizePin(saved.pinCode) : normalizePostalCode(saved.pinCode)),
+          );
         }
       } catch {
         // Prefill is best-effort; checkout still works with manual entry.
@@ -299,10 +411,56 @@ export default function CheckoutScreen() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, user?.name]);
+  }, [isAuthenticated, user?.name, user?.phone, user?.email, learningProfile?.phone]);
 
-  const effectivePhone = normalizePhone(
-    firstNonEmpty(phone, learningProfile?.phone, user?.phone),
+  const effectivePhone = indiaAccount
+    ? normalizePhone(firstNonEmpty(phone, learningProfile?.phone, user?.phone))
+    : firstNonEmpty(phone, learningProfile?.phone, user?.phone).replace(/\D/g, '');
+
+  const navigateToAddDeliveryAddress = useCallback(() => {
+    beginCheckoutAddressEdit({
+      fullName,
+      phone: effectivePhone,
+      address1,
+      address2,
+      landmark,
+      city,
+      state,
+      pinCode,
+      saveAddress,
+    });
+    router.push('/add-delivery-address');
+  }, [
+    address1,
+    address2,
+    city,
+    effectivePhone,
+    fullName,
+    landmark,
+    pinCode,
+    router,
+    saveAddress,
+    state,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const draft = consumeCheckoutAddress();
+      if (!draft) return;
+      try {
+        setFullName(draft.fullName ?? '');
+        setPhone((draft.phone ?? '').replace(/\D/g, ''));
+        setAddress1(draft.address1 ?? '');
+        setAddress2(draft.address2 ?? '');
+        setLandmark(draft.landmark ?? '');
+        setCity(draft.city ?? '');
+        setState(draft.state ?? '');
+        setPinCode(draft.pinCode ?? '');
+        setSaveAddress(Boolean(draft.saveAddress));
+      } catch {
+        // Ignore malformed drafts — checkout remains usable.
+      }
+    }, []),
   );
 
   const shippingAddressError = isAuthenticated
@@ -313,11 +471,17 @@ export default function CheckoutScreen() {
         city,
         state,
         pinCode,
+        requireIndianPhone: indiaAccount,
+        requireIndianPin: indiaAccount,
       })
     : null;
 
   const shippingReady = shippingAddressError === null;
-  const emailReady = isUsableCheckoutEmail(email);
+  const emailNormalized = email.trim().toLowerCase();
+  const emailNeedsVerification =
+    isUsableCheckoutEmail(email)
+    && (!isEmailVerified || emailNormalized !== verifiedEmail.trim().toLowerCase());
+  const emailReady = isUsableCheckoutEmail(email) && !emailNeedsVerification;
   const checkoutReady = shippingReady && emailReady;
   const hasDeliveryAddress = address1.trim().length > 0;
 
@@ -329,92 +493,112 @@ export default function CheckoutScreen() {
     state,
     pinCode,
   });
-  const phoneDisplay = formatPhoneDisplay(effectivePhone);
-  const emailDisplay = emailReady ? email.trim() : 'Add your email';
+  const phoneDisplay = formatPhoneDisplay(effectivePhone, t('checkout.addPhone'), indiaAccount);
+  const emailDisplay = emailReady
+    ? email.trim()
+    : isUsableCheckoutEmail(email)
+      ? t('checkout.verifyEmailContinue')
+      : t('checkout.addAndVerifyEmail');
+
+  function onCheckoutEmailChange(value: string) {
+    setEmail(value);
+    setCodeSent(false);
+    setVerificationCode('');
+    setEmailSheetError(null);
+    if (emailSheetInfo?.startsWith(t('emailVerify.codeSentPrefix'))) setEmailSheetInfo(null);
+  }
+
+  async function handleSendEmailCode() {
+    if (sendCodeInFlight.current || sendingCode) return;
+    const nextEmail = email.trim();
+    if (!isUsableCheckoutEmail(nextEmail)) {
+      setEmailSheetError(t('checkout.emailValidForUpdates'));
+      return;
+    }
+
+    sendCodeInFlight.current = true;
+    setSendingCode(true);
+    setEmailSheetError(null);
+    setEmailSheetInfo(null);
+    try {
+      const response = await requestEmailVerification(nextEmail);
+      setCodeSent(true);
+      setEmailSheetInfo(response.message || t('checkout.codeSentDefault'));
+    } catch (err) {
+      setEmailSheetError(
+        err instanceof ApiClientError ? err.message : t('checkout.sendCodeFailed'),
+      );
+    } finally {
+      sendCodeInFlight.current = false;
+      setSendingCode(false);
+    }
+  }
+
+  async function handleConfirmCheckoutEmail() {
+    const nextEmail = email.trim();
+    const code = verificationCode.trim();
+    if (!isUsableCheckoutEmail(nextEmail)) {
+      setEmailSheetError(t('checkout.emailValidForUpdates'));
+      return;
+    }
+    if (!/^\d{6}$/.test(code)) {
+      setEmailSheetError(t('validation.otp'));
+      return;
+    }
+
+    setConfirmingCode(true);
+    setEmailSheetError(null);
+    setEmailSheetInfo(null);
+    try {
+      const updated = await confirmEmailVerification({ email: nextEmail, code });
+      const saved = isSyntheticEmail(updated.email) ? '' : updated.email.trim();
+      setEmail(saved);
+      setVerifiedEmail(updated.isEmailVerified ? saved : '');
+      setIsEmailVerified(Boolean(updated.isEmailVerified));
+      setCodeSent(false);
+      setVerificationCode('');
+      setEmailSheetInfo(t('checkout.emailVerifiedPayment'));
+      await saveProfile({
+        fullName: updated.fullName,
+        phone: updated.phoneNumber || effectivePhone || learningProfile?.phone || user?.phone || '',
+        email: saved,
+      });
+      setEditingEmail(false);
+    } catch (err) {
+      setEmailSheetError(
+        err instanceof ApiClientError ? err.message : t('emailVerify.verifyEmailFailed'),
+      );
+    } finally {
+      setConfirmingCode(false);
+    }
+  }
 
   function buildShippingAddress() {
     return {
       fullName: fullName.trim(),
-      phoneNumber: normalizePhone(effectivePhone),
+      phoneNumber: indiaAccount
+        ? normalizePhone(effectivePhone)
+        : effectivePhone.replace(/\D/g, ''),
       addressLine1: address1.trim(),
       addressLine2: address2.trim() || undefined,
       landmark: landmark.trim() || undefined,
       city: city.trim(),
       state: state.trim(),
-      pinCode: normalizePin(pinCode),
-      country: 'India' as const,
+      pinCode: indiaAccount ? normalizePin(pinCode) : normalizePostalCode(pinCode).trim(),
+      country: indiaAccount ? 'India' : (accountCountry.trim() || 'International'),
     };
-  }
-
-  function openAddAddress() {
-    setEditingDelivery(false);
-    setShowAddAddressOptions(true);
-  }
-
-  function openManualAddress() {
-    setShowAddAddressOptions(false);
-    setEditingDelivery(true);
-  }
-
-  async function fillFromCurrentLocation() {
-    setLocatingAddress(true);
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') {
-        Alert.alert(
-          'Location needed',
-          'Allow location access to fill your address, or enter it manually.',
-        );
-        return;
-      }
-
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const places = await Location.reverseGeocodeAsync({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
-      const place = places[0];
-      if (!place) {
-        Alert.alert('Could not find address', 'Try entering your address manually.');
-        openManualAddress();
-        return;
-      }
-
-      const streetParts = [place.streetNumber, place.street]
-        .map((part) => part?.trim())
-        .filter(Boolean);
-      const street =
-        streetParts.join(' ')
-        || (place.name && place.name !== place.city ? place.name : '')
-        || place.district
-        || '';
-      const area = [place.district, place.subregion]
-        .map((part) => part?.trim())
-        .filter((part): part is string => Boolean(part) && part !== place.city && part !== street)
-        .filter((part, index, all) => all.indexOf(part) === index)
-        .join(', ');
-
-      setAddress1(street);
-      setAddress2(area);
-      setCity(place.city || place.subregion || place.district || '');
-      setState(place.region || '');
-      setPinCode(normalizePin(place.postalCode || ''));
-      setSaveAddress(true);
-      setShowAddAddressOptions(false);
-      setEditingDelivery(true);
-    } catch {
-      Alert.alert('Location failed', 'Could not read your location. Enter the address manually.');
-      openManualAddress();
-    } finally {
-      setLocatingAddress(false);
-    }
   }
 
   useEffect(() => {
     if (!isAuthenticated || !shippingReady || items.length === 0) {
       setQuote(null);
+      return;
+    }
+
+    // International orders: no local delivery ETA — notify after confirmation.
+    if (!indiaAccount) {
+      setQuote(null);
+      setQuoteError(null);
       return;
     }
 
@@ -450,6 +634,7 @@ export default function CheckoutScreen() {
   }, [
     isAuthenticated,
     shippingReady,
+    indiaAccount,
     items,
     fullName,
     effectivePhone,
@@ -459,6 +644,7 @@ export default function CheckoutScreen() {
     city,
     state,
     pinCode,
+    accountCountry,
   ]);
 
   async function syncProfileForEmail() {
@@ -472,7 +658,6 @@ export default function CheckoutScreen() {
     const shippingAddress = buildShippingAddress();
     await updateMyProfile({
       fullName: fullName.trim(),
-      email: email.trim().toLowerCase(),
       ...(saveAddress
         ? {
             shippingAddress: {
@@ -505,8 +690,12 @@ export default function CheckoutScreen() {
 
     if (!isUsableCheckoutEmail(email)) {
       setEditingEmail(true);
-      setStatus('Enter a valid email for order updates.');
-      Alert.alert('Email required', 'Enter a valid email for order updates.');
+      setStatus(t('checkout.emailValidForUpdates'));
+      return;
+    }
+    if (emailNeedsVerification) {
+      setEditingEmail(true);
+      setStatus(t('checkout.verifyBeforePayStatus'));
       return;
     }
 
@@ -517,12 +706,13 @@ export default function CheckoutScreen() {
       city,
       state,
       pinCode,
+      requireIndianPhone: indiaAccount,
+      requireIndianPin: indiaAccount,
     });
     if (addressError) {
-      setEditingDelivery(hasDeliveryAddress);
-      setShowAddAddressOptions(!hasDeliveryAddress);
+      navigateToAddDeliveryAddress();
       setStatus(addressError);
-      Alert.alert('Delivery details incomplete', addressError);
+      Alert.alert(t('checkout.deliveryIncomplete'), addressError);
       return;
     }
 
@@ -566,9 +756,9 @@ export default function CheckoutScreen() {
         ? err.message
         : err instanceof Error
           ? err.message
-          : 'Could not start checkout.';
+          : t('checkout.couldNotStartCheckout');
       setStatus(message);
-      Alert.alert('Checkout failed', message);
+      Alert.alert(t('checkout.checkoutFailed'), message);
     } finally {
       setPurchasing(false);
     }
@@ -594,9 +784,9 @@ export default function CheckoutScreen() {
     } catch (err) {
       const message = err instanceof ApiClientError
         ? err.message
-        : 'Payment received but confirmation failed. Contact support with your payment details.';
+        : t('checkout.paymentConfirmFailed');
       setStatus(message);
-      Alert.alert('Verification failed', message);
+      Alert.alert(t('checkout.verificationFailed'), message);
     } finally {
       setPurchasing(false);
       setPendingOrderId(null);
@@ -604,14 +794,14 @@ export default function CheckoutScreen() {
   }
 
   if (cartLoading || authLoading) {
-    return <LoadingView message="Preparing checkout…" />;
+    return <LoadingView message={t('checkout.preparing')} />;
   }
 
   if (items.length === 0) {
     return (
       <EmptyView
-        title="Nothing to checkout"
-        message="Your cart is empty. Add products from the shop first."
+        title={t('checkout.emptyTitle')}
+        message={t('checkout.emptyMessage')}
       />
     );
   }
@@ -620,11 +810,10 @@ export default function CheckoutScreen() {
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          title: 'VIVI CROCHET',
-          headerRight: () => (
-            <View style={styles.secureHeader}>
-              <Text style={styles.secureLock}>🔒</Text>
-              <Text style={styles.secureHeaderText}>Secure Payment</Text>
+          title: t('headers.checkout'),
+          headerLeft: () => (
+            <View style={{ marginLeft: 4 }}>
+              <BackButton fallbackHref="/cart" onPress={leaveCheckout} />
             </View>
           ),
         }}
@@ -637,34 +826,33 @@ export default function CheckoutScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.pageHeader}>
-          <Text style={styles.pageTitle}>Checkout</Text>
-          <Text style={styles.pageSubtitle}>
-            Almost there! Review your details and place your order.
-          </Text>
+          <Text style={styles.pageTitle}>{t('checkout.title')}</Text>
+          <Text style={styles.pageSubtitle}>{t('checkout.pageSubtitle')}</Text>
         </View>
 
         {!isAuthenticated ? (
           <View style={styles.authPanel}>
-            <Text style={styles.authTitle}>Almost there</Text>
-            <Text style={styles.authBody}>
-              Verify your mobile number to place the order. You’ll be notified once payment is done.
-            </Text>
+            <Text style={styles.authTitle}>{t('checkout.almostThere')}</Text>
+            <Text style={styles.authBody}>{t('checkout.guestVerifyBody')}</Text>
           </View>
         ) : (
           <>
             <Section
               step="1"
-              title="Order updates"
-              subtitle="We'll email your booking confirmation here."
+              title={t('checkout.orderUpdates')}
+              subtitle={t('checkout.orderUpdatesSub')}
+              styles={styles}
             >
               <View style={styles.card}>
                 <View style={styles.cardTopRow}>
                   <View style={styles.cardIcon}>
                     <Ionicons name="mail-outline" size={18} color={colors.pink} />
                   </View>
-                  <Text style={styles.cardHeading}>Email</Text>
+                  <Text style={styles.cardHeading}>{t('checkout.email')}</Text>
                   <Pressable onPress={() => setEditingEmail(true)} hitSlop={8}>
-                    <Text style={styles.editLink}>{emailReady ? 'Edit' : 'Add'}</Text>
+                    <Text style={styles.editLink}>
+                      {emailReady ? t('checkout.edit') : t('checkout.add')}
+                    </Text>
                   </Pressable>
                 </View>
                 <Pressable onPress={() => setEditingEmail(true)}>
@@ -678,69 +866,33 @@ export default function CheckoutScreen() {
               </View>
             </Section>
 
-            <Section step="2" title="Delivery" badge="Ships across India">
+            <Section step="2" title={t('checkout.deliveryTitle')} styles={styles}>
               <View style={styles.cardStack}>
                 <View style={styles.card}>
                   <View style={styles.cardTopRow}>
                     <View style={styles.cardIcon}>
                       <Ionicons name="location-outline" size={18} color={colors.pink} />
                     </View>
-                    <Text style={styles.cardHeading}>Delivery address</Text>
-                    {hasDeliveryAddress ? (
-                      <Pressable
-                        onPress={() => {
-                          setShowAddAddressOptions(false);
-                          setEditingDelivery(true);
-                        }}
-                        hitSlop={8}
-                      >
-                        <Text style={styles.editLink}>Edit</Text>
-                      </Pressable>
-                    ) : showAddAddressOptions ? null : (
-                      <Pressable onPress={openAddAddress} hitSlop={8}>
-                        <Text style={styles.editLink}>Add</Text>
-                      </Pressable>
-                    )}
+                    <Text style={styles.cardHeading}>{t('checkout.deliveryAddress')}</Text>
+                    <Pressable onPress={navigateToAddDeliveryAddress} hitSlop={8}>
+                      <Text style={styles.editLink}>
+                        {hasDeliveryAddress ? t('checkout.edit') : t('checkout.add')}
+                      </Text>
+                    </Pressable>
                   </View>
 
                   {!hasDeliveryAddress ? (
-                    showAddAddressOptions || locatingAddress ? (
-                      <View style={styles.addOptions}>
-                        <Pressable
-                          style={[styles.addOptionBtn, locatingAddress && styles.addOptionDisabled]}
-                          onPress={() => void fillFromCurrentLocation()}
-                          disabled={locatingAddress}
-                        >
-                          {locatingAddress ? (
-                            <ActivityIndicator color={colors.pink} />
-                          ) : (
-                            <Text style={styles.addOptionText}>Use current location</Text>
-                          )}
-                        </Pressable>
-                        <Pressable
-                          style={[styles.addOptionBtn, locatingAddress && styles.addOptionDisabled]}
-                          onPress={openManualAddress}
-                          disabled={locatingAddress}
-                        >
-                          <Text style={styles.addOptionText}>Enter address manually</Text>
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <Pressable onPress={openAddAddress}>
-                        <Text style={styles.cardMetaPlaceholder}>
-                          Add where we should deliver your order.
-                        </Text>
-                      </Pressable>
-                    )
+                    <Pressable onPress={navigateToAddDeliveryAddress}>
+                      <Text style={styles.cardMetaPlaceholder}>
+                        {t('checkout.addDeliveryHint')}
+                      </Text>
+                    </Pressable>
                   ) : (
                     <>
-                      <Pressable
-                        onPress={() => {
-                          setShowAddAddressOptions(false);
-                          setEditingDelivery(true);
-                        }}
-                      >
-                        <Text style={styles.cardValue}>{fullName || 'Add recipient name'}</Text>
+                      <Pressable onPress={navigateToAddDeliveryAddress}>
+                        <Text style={styles.cardValue}>
+                          {fullName || t('checkout.addRecipientName')}
+                        </Text>
                         <Text style={styles.cardMeta}>{phoneDisplay}</Text>
                         {addressLines.length > 0 ? (
                           <View style={styles.addressLines}>
@@ -752,7 +904,7 @@ export default function CheckoutScreen() {
                           </View>
                         ) : (
                           <Text style={[styles.cardMeta, styles.cardPlaceholder]}>
-                            House / street, Area, City, State – Pincode
+                            {t('checkout.addressPlaceholder')}
                           </Text>
                         )}
                       </Pressable>
@@ -765,7 +917,7 @@ export default function CheckoutScreen() {
                         <View style={[styles.saveCheck, saveAddress && styles.saveCheckOn]}>
                           {saveAddress ? <Text style={styles.saveCheckMark}>✓</Text> : null}
                         </View>
-                        <Text style={styles.saveTitle}>Save this address for next time</Text>
+                        <Text style={styles.saveTitle}>{t('checkout.saveAddress')}</Text>
                       </Pressable>
                     </>
                   )}
@@ -774,41 +926,47 @@ export default function CheckoutScreen() {
                 <View style={styles.estimateCard}>
                   <Text style={styles.estimateIcon}>🚚</Text>
                   <View style={styles.estimateCopy}>
-                    <Text style={styles.estimateLabel}>Estimated delivery</Text>
+                    <Text style={styles.estimateLabel}>{t('checkout.estimatedDelivery')}</Text>
                     <Text style={styles.estimateDetail}>
-                      {quoteError && !quote
-                        ? quoteError
-                        : 'Coimbatore typically arrives faster'}
+                      {!indiaAccount
+                        ? t('checkout.intlDeliveryNotify')
+                        : quoteError && !quote
+                          ? quoteError
+                          : t('checkout.coimbatoreFaster')}
                     </Text>
                   </View>
                   <Text style={styles.estimateRange}>
-                    {quote
-                      ? estimateLabel(quote)
-                      : shippingReady
-                        ? '…'
-                        : '—'}
+                    {!indiaAccount
+                      ? t('checkout.intlDeliveryRange')
+                      : quote
+                        ? estimateLabel(quote)
+                        : shippingReady
+                          ? '…'
+                          : '—'}
                   </Text>
                   <Text style={styles.estimateChevron}>›</Text>
                 </View>
               </View>
             </Section>
 
-            <Section step="3" title="Order summary">
+            <Section step="3" title={t('checkout.orderSummary')} styles={styles}>
               <View style={styles.card}>
                 {items.map((item, index) => (
-                  <SummaryLine key={item.productId} item={item} index={index} />
+                  <SummaryLine key={item.productId} item={item} index={index} styles={styles} />
                 ))}
                 <View style={styles.breakdown}>
                   <View style={styles.orderSummaryRow}>
-                    <Text style={styles.orderSummaryKey}>Items ({itemCount})</Text>
+                    <Text style={styles.orderSummaryKey}>
+                      {t('checkout.itemsCount', { count: itemCount })}
+                    </Text>
                     <Text style={styles.orderSummaryVal}>{formatInr(subtotal)}</Text>
                   </View>
                   <View style={styles.orderSummaryRow}>
-                    <Text style={styles.orderSummaryKey}>Delivery</Text>
-                    <Text style={styles.orderSummaryMuted}>Calculated at next step</Text>
+                    <Text style={styles.orderSummaryKey}>{t('cart.delivery')}</Text>
+                    <Text style={styles.orderSummaryMuted}>{t('checkout.deliveryCalcNext')}</Text>
                   </View>
                   <View style={[styles.orderSummaryRow, styles.orderSummaryTotal]}>
-                    <Text style={styles.orderSummaryTotalKey}>Total Amount</Text>
+                    <Text style={styles.orderSummaryTotalKey}>{t('checkout.totalAmount')}</Text>
                     <Text style={styles.orderSummaryTotalVal}>{formatInr(subtotal)}</Text>
                   </View>
                 </View>
@@ -829,24 +987,25 @@ export default function CheckoutScreen() {
           <View style={styles.trustBanner}>
             <Text style={styles.trustIcon}>🛡</Text>
             <View style={styles.trustCopy}>
-              <Text style={styles.trustTitle}>Secure & Safe Payments</Text>
-              <Text style={styles.trustBody}>Your payment information is always protected.</Text>
+              <Text style={styles.trustTitle}>{t('checkout.secureTitle')}</Text>
+              <Text style={styles.trustBody}>{t('checkout.secureBody')}</Text>
             </View>
           </View>
           <Pressable
             style={[styles.proceedBtn, purchasing && styles.btnDisabled]}
             onPress={() => {
-              if (isAuthenticated && !emailReady) {
+              // Open the email sheet only — do not stack Alert.alert on top of it.
+              if (isAuthenticated && !isUsableCheckoutEmail(email)) {
                 setEditingEmail(true);
-                Alert.alert('Email required', 'Add your email for order updates.');
+                return;
+              }
+              if (isAuthenticated && emailNeedsVerification) {
+                setEditingEmail(true);
                 return;
               }
               if (isAuthenticated && !shippingReady) {
-                if (hasDeliveryAddress) {
-                  setEditingDelivery(true);
-                } else {
-                  openAddAddress();
-                }
+                navigateToAddDeliveryAddress();
+                return;
               }
               void handlePay();
             }}
@@ -854,12 +1013,14 @@ export default function CheckoutScreen() {
           >
             <Text style={styles.proceedBtnText}>
               {!isAuthenticated
-                ? 'Continue · Verify mobile →'
+                ? t('checkout.continueVerifyMobile')
                 : purchasing
-                  ? 'Starting payment…'
-                  : !checkoutReady
-                    ? 'Complete delivery to pay →'
-                    : 'Pay online →'}
+                  ? t('checkout.startingPayment')
+                  : emailNeedsVerification
+                    ? t('checkout.verifyEmailToPay')
+                    : !checkoutReady
+                      ? t('checkout.completeDeliveryToPay')
+                      : t('checkout.payOnline')}
             </Text>
           </Pressable>
         </View>
@@ -872,168 +1033,122 @@ export default function CheckoutScreen() {
         onRequestClose={() => setEditingEmail(false)}
       >
         <KeyboardAvoidingView
-          style={styles.sheetRoot}
+          style={[
+            styles.sheetRoot,
+            {
+              // Keep the sheet lower on screen (esp. when keyboard opens with autoFocus).
+              paddingTop: insets.top + (keyboardVisible ? 72 : 40),
+            },
+          ]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <Pressable style={styles.sheetBackdrop} onPress={() => setEditingEmail(false)} />
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
+          <View
+            style={[
+              styles.sheet,
+              {
+                marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+                paddingBottom: Math.max(insets.bottom, 12),
+                maxHeight: keyboardVisible ? '72%' : '88%',
+              },
+            ]}
+          >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>
-                {emailReady ? 'Edit email' : 'Add email'}
+                {emailReady ? t('checkout.editEmail') : t('checkout.addEmailShort')}
               </Text>
               <Pressable onPress={() => setEditingEmail(false)} hitSlop={8}>
-                <Text style={styles.sheetClose}>Close</Text>
+                <Text style={styles.sheetClose}>{t('common.close')}</Text>
               </Pressable>
             </View>
-            <View style={styles.sheetScroll}>
+            <ScrollView
+              style={styles.sheetScroll}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              automaticallyAdjustKeyboardInsets
+              contentContainerStyle={[
+                styles.emailSheetContent,
+                {
+                  paddingBottom: Math.max(insets.bottom, 12) + 48,
+                },
+              ]}
+            >
               <Field
-                label="Email"
+                label={t('checkout.email')}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={onCheckoutEmailChange}
                 placeholder="you@email.com"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoFocus
+                styles={styles}
               />
-            </View>
-            <Pressable
-              style={styles.sheetSaveBtn}
-              onPress={() => {
-                if (!isUsableCheckoutEmail(email)) {
-                  Alert.alert('Email required', 'Enter a valid email for order updates.');
-                  return;
-                }
-                setEditingEmail(false);
-              }}
-            >
-              <Text style={styles.sheetSaveBtnText}>
-                {emailReady ? 'Save email' : 'Add email'}
-              </Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal
-        visible={editingDelivery}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditingDelivery(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.sheetRoot}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <Pressable style={styles.sheetBackdrop} onPress={() => setEditingDelivery(false)} />
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>
-                {hasDeliveryAddress ? 'Edit delivery address' : 'Add delivery address'}
-              </Text>
-              <Pressable onPress={() => setEditingDelivery(false)} hitSlop={8}>
-                <Text style={styles.sheetClose}>Close</Text>
-              </Pressable>
-            </View>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.sheetScroll}
-            >
-              <Field
-                label="Recipient name"
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="Full name"
-                autoCapitalize="words"
-              />
-              <Field
-                label="Phone"
-                value={phone}
-                onChangeText={(value) => setPhone(normalizePhone(value))}
-                placeholder="10-digit mobile"
-                keyboardType="phone-pad"
-                maxLength={10}
-              />
-              <Field
-                label="Address line 1"
-                value={address1}
-                onChangeText={(value) => {
-                  setAddress1(value);
-                  if (value.trim().length > 0) setSaveAddress(true);
-                }}
-                placeholder="House / street"
-              />
-              <Pressable
-                style={styles.saveRow}
-                onPress={() => setSaveAddress((value) => !value)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: saveAddress }}
-              >
-                <View style={[styles.saveCheck, saveAddress && styles.saveCheckOn]}>
-                  {saveAddress ? <Text style={styles.saveCheckMark}>✓</Text> : null}
-                </View>
-                <Text style={styles.saveTitle}>Save this address for next time</Text>
-              </Pressable>
-              <Field
-                label="Address line 2"
-                optional
-                value={address2}
-                onChangeText={setAddress2}
-                placeholder="Apartment, floor"
-              />
-              <Field
-                label="Landmark"
-                optional
-                value={landmark}
-                onChangeText={setLandmark}
-                placeholder="Near…"
-              />
-              <View style={styles.fieldRow}>
-                <Field
-                  label="City"
-                  style={styles.fieldHalf}
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder="Coimbatore"
-                  autoCapitalize="words"
-                />
-                <Field
-                  label="PIN"
-                  style={styles.fieldHalf}
-                  value={pinCode}
-                  onChangeText={(value) => setPinCode(normalizePin(value))}
-                  placeholder="641001"
-                  keyboardType="number-pad"
-                  maxLength={6}
-                />
-              </View>
-              <Field
-                label="State"
-                value={state}
-                onChangeText={setState}
-                placeholder="Tamil Nadu"
-                autoCapitalize="words"
-              />
-              {shippingAddressError ? (
-                <Text style={styles.fieldHint}>{shippingAddressError}</Text>
+              {emailReady ? (
+                <Text style={styles.emailVerifiedHint}>{t('checkout.verifiedHint')}</Text>
+              ) : (
+                <Text style={styles.emailVerifyHint}>{t('checkout.verifyEmailPayBody')}</Text>
+              )}
+              {emailSheetError ? (
+                <Text style={styles.emailSheetError}>{emailSheetError}</Text>
               ) : null}
+              {emailSheetInfo ? (
+                <Text style={styles.emailSheetInfo}>{emailSheetInfo}</Text>
+              ) : null}
+              {emailNeedsVerification ? (
+                <>
+                  <Pressable
+                    style={[
+                      styles.emailCodeBtn,
+                      (sendingCode || confirmingCode) && styles.btnDisabled,
+                    ]}
+                    onPress={() => void handleSendEmailCode()}
+                    disabled={sendingCode || confirmingCode}
+                  >
+                    <Text style={styles.emailCodeBtnText}>
+                      {sendingCode
+                        ? t('emailVerify.sendingCode')
+                        : codeSent
+                          ? t('emailVerify.resendCode')
+                          : t('checkout.sendVerificationCode')}
+                    </Text>
+                  </Pressable>
+                  {codeSent ? (
+                    <>
+                      <Field
+                        label={t('checkout.verificationCode')}
+                        value={verificationCode}
+                        onChangeText={setVerificationCode}
+                        placeholder={t('auth.sixDigit')}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        styles={styles}
+                      />
+                      <Pressable
+                        style={[
+                          styles.sheetSaveBtn,
+                          confirmingCode && styles.btnDisabled,
+                        ]}
+                        onPress={() => void handleConfirmCheckoutEmail()}
+                        disabled={confirmingCode}
+                      >
+                        <Text style={styles.sheetSaveBtnText}>
+                          {confirmingCode ? t('emailVerify.verifying') : t('checkout.confirmEmail')}
+                        </Text>
+                      </Pressable>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <Pressable
+                  style={styles.sheetSaveBtn}
+                  onPress={() => setEditingEmail(false)}
+                >
+                  <Text style={styles.sheetSaveBtnText}>{t('common.done')}</Text>
+                </Pressable>
+              )}
             </ScrollView>
-            <Pressable
-              style={styles.sheetSaveBtn}
-              onPress={() => {
-                if (shippingAddressError) {
-                  Alert.alert('Delivery details incomplete', shippingAddressError);
-                  return;
-                }
-                setShowAddAddressOptions(false);
-                setEditingDelivery(false);
-              }}
-            >
-              <Text style={styles.sheetSaveBtnText}>Save address</Text>
-            </Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1046,21 +1161,22 @@ export default function CheckoutScreen() {
           setCheckoutVisible(false);
           setCheckoutPayload(null);
           setPendingOrderId(null);
-          setStatus('Payment cancelled. Your cart is still saved.');
+          setStatus(t('checkout.paymentCancelled'));
         }}
         onError={(message) => {
           setCheckoutVisible(false);
           setCheckoutPayload(null);
           setPendingOrderId(null);
           setStatus(message);
-          Alert.alert('Payment failed', message);
+          Alert.alert(t('checkout.paymentFailed'), message);
         }}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(fonts: UiFonts) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: PAGE_BG,
@@ -1070,29 +1186,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
   },
-  secureHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginRight: 4,
-  },
-  secureLock: {
-    fontSize: 11,
-  },
-  secureHeaderText: {
-    fontFamily: fonts.semiBold,
-    fontSize: 11,
-    color: colors.muted,
-  },
   pageHeader: {
     marginBottom: spacing.lg,
     paddingTop: 4,
+    alignItems: 'center',
   },
   pageTitle: {
     fontFamily: fonts.extraBold,
     fontSize: 28,
     color: colors.ink,
     letterSpacing: -0.5,
+    textAlign: 'center',
   },
   pageSubtitle: {
     fontFamily: fonts.regular,
@@ -1100,6 +1204,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 6,
     lineHeight: 20,
+    textAlign: 'center',
   },
   section: {
     marginBottom: spacing.lg,
@@ -1237,27 +1342,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
     fontSize: 13,
     color: colors.pink,
-  },
-  addOptions: {
-    gap: 8,
-    marginTop: 4,
-  },
-  addOptionBtn: {
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: ACCENT_SOFT,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-  },
-  addOptionDisabled: {
-    opacity: 0.7,
-  },
-  addOptionText: {
-    fontFamily: fonts.semiBold,
-    fontSize: 14,
-    color: colors.ink,
   },
   cardMetaPlaceholder: {
     fontFamily: fonts.regular,
@@ -1582,7 +1666,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
-    maxHeight: '92%',
+    maxHeight: '88%',
     paddingHorizontal: spacing.md,
     paddingTop: 10,
   },
@@ -1614,8 +1698,47 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   sheetScroll: {
+    flexGrow: 0,
+  },
+  emailSheetContent: {
     gap: 12,
-    paddingBottom: spacing.md,
+    flexGrow: 1,
+  },
+  emailVerifyHint: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  emailVerifiedHint: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.success,
+  },
+  emailSheetError: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.danger,
+    lineHeight: 18,
+  },
+  emailSheetInfo: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.ink,
+    lineHeight: 18,
+  },
+  emailCodeBtn: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: colors.pink,
+    marginTop: spacing.sm,
+  },
+  emailCodeBtnText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 14,
+    color: colors.white,
   },
   sheetSaveBtn: {
     backgroundColor: colors.pink,
@@ -1629,4 +1752,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.white,
   },
-});
+  });
+}

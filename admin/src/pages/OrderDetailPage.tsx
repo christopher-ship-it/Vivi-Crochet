@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { getAdminOrder, updateOrderDeliveryDate, updateOrderStatus } from '../api/orders';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { deleteAdminOrder, getAdminOrder, updateOrderDeliveryDate, updateOrderStatus } from '../api/orders';
 import { ApiClientError } from '../api/client';
 import type { AdminOrderDetail, OrderStatus } from '../types';
 import { formatDate, formatDay, formatInr } from '../utils/format';
@@ -40,6 +40,7 @@ function nextStatuses(current: OrderStatus): OrderStatus[] {
 
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [order, setOrder] = useState<AdminOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export function OrderDetailPage() {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [nextStatus, setNextStatus] = useState<OrderStatus | ''>('');
 
   async function load() {
@@ -142,6 +144,24 @@ export function OrderDetailPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!id || !order) return;
+    const ok = window.confirm(
+      `Delete order ${order.orderNumber}?\n\nThis permanently removes the order, payments, and any linked course access or live bookings. Product stock is restored when it was deducted. This cannot be undone.`,
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteAdminOrder(id);
+      navigate(order.items.some((item) => item.itemType === 'Product') ? '/orders' : '/course-orders');
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not delete order.');
+      setDeleting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="loading-state">
@@ -176,6 +196,15 @@ export function OrderDetailPage() {
           </p>
         </div>
         <div className="page-header__actions">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            style={{ color: 'var(--vivi-danger, #b42318)' }}
+            disabled={deleting}
+            onClick={() => void handleDelete()}
+          >
+            {deleting ? 'Deleting…' : 'Delete order'}
+          </button>
           <Link to={backTo} className="btn btn--ghost">{backLabel}</Link>
         </div>
       </header>

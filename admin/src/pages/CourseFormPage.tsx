@@ -21,16 +21,39 @@ const COURSE_TYPES: { value: CourseType; label: string }[] = [
   { value: 'Bundle', label: 'Bundle' },
 ];
 
-const emptyForm: CourseRequest = {
+type NumberDraft = number | '';
+
+type CourseFormState = Omit<
+  CourseRequest,
+  'price' | 'sortOrder' | 'launchPrice' | 'launchLimit' | 'regularPriceAfterLaunch' | 'accessDays' | 'renewalPercentage'
+> & {
+  price: NumberDraft;
+  sortOrder: NumberDraft;
+  launchPrice: NumberDraft;
+  launchLimit: NumberDraft;
+  regularPriceAfterLaunch: NumberDraft;
+  accessDays: NumberDraft;
+  renewalPercentage: NumberDraft;
+};
+
+function parseNumberDraft(raw: string): NumberDraft {
+  if (raw.trim() === '') return '';
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : '';
+}
+
+const emptyForm: CourseFormState = {
   name: '',
   categoryId: null,
   type: 'DigitalCourse',
   level: '',
+  description: '',
   about: '',
-  price: 299,
+  price: '',
   mrp: null,
   accessDays: 30,
   renewalPercentage: 50,
+  sortOrder: 0,
   includedCourseIds: [],
   launchPrice: 999,
   launchLimit: 100,
@@ -42,7 +65,7 @@ export function CourseFormPage() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
 
-  const [form, setForm] = useState<CourseRequest>(emptyForm);
+  const [form, setForm] = useState<CourseFormState>(emptyForm);
   const [selectedLangs, setSelectedLangs] = useState<string[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [catalog, setCatalog] = useState<Course[]>([]);
@@ -76,12 +99,14 @@ export function CourseFormPage() {
           categoryId: course.categoryId ?? null,
           type: course.type,
           level: course.level ?? '',
+          description: course.description ?? '',
           about: course.about ?? '',
           price: course.price,
           mrp: course.mrp ?? null,
           accessDays: course.accessDays,
           renewalPercentage: course.renewalPercentage,
           languages: course.languages ?? '',
+          sortOrder: course.sortOrder ?? 0,
           includedCourseIds: course.includedCourses?.map((c) => c.id) ?? [],
           launchPrice: course.launchOffer?.launchPrice ?? 999,
           launchLimit: course.launchOffer?.launchLimit ?? 100,
@@ -111,18 +136,37 @@ export function CourseFormPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (form.price === '' || form.price < 0) {
+      setError('Enter a valid price (₹).');
+      return;
+    }
+    if (form.accessDays === '' || form.accessDays < 1) {
+      setError('Enter access days (1 or more).');
+      return;
+    }
     setSaving(true);
     setError(null);
     const payload: CourseRequest = {
       ...form,
+      price: form.price,
+      accessDays: form.accessDays,
+      renewalPercentage: form.renewalPercentage === '' ? 50 : form.renewalPercentage,
+      sortOrder: form.sortOrder === '' ? 0 : form.sortOrder,
       languages: selectedLangs.join(', ') || null,
       level: form.level || null,
+      description: form.description || null,
       about: form.about || null,
       mrp: form.mrp || null,
       includedCourseIds: form.type === 'Bundle' ? (form.includedCourseIds ?? []) : [],
-      launchPrice: form.type === 'Bundle' ? form.launchPrice ?? 999 : null,
-      launchLimit: form.type === 'Bundle' ? form.launchLimit ?? 100 : null,
-      regularPriceAfterLaunch: form.type === 'Bundle' ? form.regularPriceAfterLaunch ?? form.price : null,
+      launchPrice: form.type === 'Bundle'
+        ? (form.launchPrice === '' ? 999 : form.launchPrice)
+        : null,
+      launchLimit: form.type === 'Bundle'
+        ? (form.launchLimit === '' ? 100 : form.launchLimit)
+        : null,
+      regularPriceAfterLaunch: form.type === 'Bundle'
+        ? (form.regularPriceAfterLaunch === '' ? form.price : form.regularPriceAfterLaunch)
+        : null,
     };
     try {
       if (isEdit && id) {
@@ -260,6 +304,25 @@ export function CourseFormPage() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <p className="form-hint">
+              Use <strong>Viral projects</strong> or <strong>Trending Tutorials</strong> to show
+              this on Home / Learn. Publish to make it active; Draft hides it from the app.
+            </p>
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="sortOrder">Display order</label>
+            <input
+              id="sortOrder"
+              type="number"
+              min={0}
+              max={10000}
+              value={form.sortOrder}
+              onChange={(e) =>
+                setForm({ ...form, sortOrder: parseNumberDraft(e.target.value) })
+              }
+            />
+            <p className="form-hint">Lower numbers appear first (0 = top).</p>
           </div>
 
           <div className="form-field">
@@ -279,7 +342,7 @@ export function CourseFormPage() {
               type="number"
               min={0}
               value={form.price}
-              onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
+              onChange={(e) => setForm({ ...form, price: parseNumberDraft(e.target.value) })}
               required
             />
           </div>
@@ -304,7 +367,7 @@ export function CourseFormPage() {
               type="number"
               min={1}
               value={form.accessDays}
-              onChange={(e) => setForm({ ...form, accessDays: Number(e.target.value) })}
+              onChange={(e) => setForm({ ...form, accessDays: parseNumberDraft(e.target.value) })}
               required
             />
           </div>
@@ -317,7 +380,7 @@ export function CourseFormPage() {
               min={0}
               max={100}
               value={form.renewalPercentage}
-              onChange={(e) => setForm({ ...form, renewalPercentage: Number(e.target.value) })}
+              onChange={(e) => setForm({ ...form, renewalPercentage: parseNumberDraft(e.target.value) })}
               required
             />
           </div>
@@ -339,6 +402,21 @@ export function CourseFormPage() {
           </div>
 
           <div className="form-field form-grid--full">
+            <label htmlFor="description">Description</label>
+            <textarea
+              id="description"
+              value={form.description ?? ''}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              maxLength={400}
+              rows={3}
+              placeholder="Short text for the Home Viral / Trending slides"
+            />
+            <p className="form-hint">
+              Shown on the Home hero for Viral projects and Trending Tutorials (max 400 characters).
+            </p>
+          </div>
+
+          <div className="form-field form-grid--full">
             <label htmlFor="about">About</label>
             <textarea
               id="about"
@@ -346,6 +424,7 @@ export function CourseFormPage() {
               onChange={(e) => setForm({ ...form, about: e.target.value })}
               maxLength={2000}
             />
+            <p className="form-hint">Longer course details shown on the course page.</p>
           </div>
         </div>
 
@@ -389,11 +468,14 @@ export function CourseFormPage() {
                 type="number"
                 min={0}
                 value={form.price}
-                onChange={(e) => setForm({
-                  ...form,
-                  price: Number(e.target.value),
-                  regularPriceAfterLaunch: Number(e.target.value),
-                })}
+                onChange={(e) => {
+                  const next = parseNumberDraft(e.target.value);
+                  setForm({
+                    ...form,
+                    price: next,
+                    regularPriceAfterLaunch: next,
+                  });
+                }}
               />
             </div>
             <div className="form-field">
@@ -402,8 +484,8 @@ export function CourseFormPage() {
                 id="launchPrice"
                 type="number"
                 min={0}
-                value={form.launchPrice ?? 999}
-                onChange={(e) => setForm({ ...form, launchPrice: Number(e.target.value) })}
+                value={form.launchPrice}
+                onChange={(e) => setForm({ ...form, launchPrice: parseNumberDraft(e.target.value) })}
               />
             </div>
             <div className="form-field">
@@ -412,8 +494,8 @@ export function CourseFormPage() {
                 id="launchLimit"
                 type="number"
                 min={1}
-                value={form.launchLimit ?? 100}
-                onChange={(e) => setForm({ ...form, launchLimit: Number(e.target.value) })}
+                value={form.launchLimit}
+                onChange={(e) => setForm({ ...form, launchLimit: parseNumberDraft(e.target.value) })}
               />
             </div>
           </div>

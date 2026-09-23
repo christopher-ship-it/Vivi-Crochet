@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Orders;
 using VIVI.Api.Extensions;
 using VIVI.Api.Mapping;
@@ -8,6 +9,7 @@ using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
 using VIVI.Core.Interfaces;
+using VIVI.Infrastructure.Commerce;
 using VIVI.Infrastructure.Data;
 using VIVI.Infrastructure.Email;
 
@@ -15,21 +17,24 @@ namespace VIVI.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/orders")]
-[Authorize(Roles = nameof(UserRole.Admin))]
+[Authorize(Roles = AuthRoles.Console)]
 public sealed class AdminOrdersController : ControllerBase
 {
     private readonly ViviDbContext _db;
     private readonly IDeliveryEstimateService _delivery;
     private readonly TransactionalEmailService _emails;
+    private readonly AdminDataCleanupService _cleanup;
 
     public AdminOrdersController(
         ViviDbContext db,
         IDeliveryEstimateService delivery,
-        TransactionalEmailService emails)
+        TransactionalEmailService emails,
+        AdminDataCleanupService cleanup)
     {
         _db = db;
         _delivery = delivery;
         _emails = emails;
+        _cleanup = cleanup;
     }
 
     [HttpGet]
@@ -138,6 +143,18 @@ public sealed class AdminOrdersController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
         order = await LoadAdminOrderAsync(id, cancellationToken);
         return Ok(order.ToAdminDetail(_delivery));
+    }
+
+    /// <summary>
+    /// Permanently deletes an order and related payments, enrollments, live bookings, and email records.
+    /// Restores product stock when inventory was deducted for the order.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        await _cleanup.DeleteOrderAsync(id, cancellationToken);
+        return NoContent();
     }
 
     /// <summary>

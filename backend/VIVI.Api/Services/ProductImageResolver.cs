@@ -64,5 +64,23 @@ public static class ProductImageResolver
         dto.Images = resolved;
         if (string.IsNullOrWhiteSpace(dto.ImageUrl))
             dto.ImageUrl = resolved.FirstOrDefault(i => i.IsMain)?.Url ?? resolved.FirstOrDefault()?.Url;
+
+        if (dto.RecommendedEssentials.Count == 0)
+            return;
+
+        var essentials = await Task.WhenAll(dto.RecommendedEssentials.Select(async item =>
+        {
+            var url = await ResolveAsync(item.ImageUrl, blob, cancellationToken, verifyExists: false);
+            return new RecommendedEssentialSummary
+            {
+                Id = item.Id,
+                Name = item.Name,
+                Category = item.Category,
+                Price = item.Price,
+                ImageUrl = url ?? item.ImageUrl,
+                AvailableStock = item.AvailableStock
+            };
+        }));
+        dto.RecommendedEssentials = essentials;
     }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listAdminOrders } from '../api/orders';
+import { deleteAdminOrder, listAdminOrders } from '../api/orders';
 import { ApiClientError } from '../api/client';
 import type { AdminOrderListItem } from '../types';
 import { formatInr } from '../utils/format';
@@ -17,11 +17,16 @@ interface OrderListProps {
   loadErrorMessage: string;
 }
 
+function displayOrDash(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim();
+  return trimmed.length > 0 ? trimmed : '—';
+}
+
 /**
  * Shared table for the two order-tracking pages (product orders, course &
  * video orders). Both pull from the same admin order list and split it
- * client-side using `hasPhysicalItems` — there's no separate API per
- * order type, so this keeps the two pages' fetch/render logic in sync.
+ * client-side — there's no separate API per order type, so this keeps the
+ * two pages' fetch/render logic in sync.
  */
 export function OrderList({
   title,
@@ -35,6 +40,7 @@ export function OrderList({
   const [orders, setOrders] = useState<AdminOrderListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,8 +59,28 @@ export function OrderList({
       }
     }
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [loadErrorMessage]);
+
+  async function handleDelete(order: AdminOrderListItem) {
+    const ok = window.confirm(
+      `Delete order ${order.orderNumber}?\n\nThis permanently removes the order, payments, and any linked course access or live bookings. Product stock is restored when it was deducted. This cannot be undone.`,
+    );
+    if (!ok) return;
+
+    setDeletingId(order.id);
+    setError(null);
+    try {
+      await deleteAdminOrder(order.id);
+      setOrders((prev) => prev.filter((o) => o.id !== order.id));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to delete order.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const visibleOrders = orders.filter(filter);
 
@@ -87,51 +113,98 @@ export function OrderList({
         </div>
       )}
 
-      {!loading && !error && visibleOrders.length > 0 && (
+      {!loading && visibleOrders.length > 0 && (
         <div className="table-wrap">
-          <table className="data-table">
+          <table className={`data-table data-table--orders${showDelivery ? ' data-table--orders-delivery' : ''}`}>
+            <colgroup>
+              <col className="col-order" />
+              <col className="col-customer" />
+              <col className="col-email" />
+              <col className="col-phone" />
+              <col className="col-title" />
+              <col className="col-amount" />
+              <col className="col-payment" />
+              <col className="col-status" />
+              {showDelivery && <col className="col-delivery" />}
+              <col className="col-actions" />
+            </colgroup>
             <thead>
               <tr>
-                <th>Order</th>
-                <th>Customer</th>
-                <th>Phone</th>
-                <th>Amount</th>
-                <th>Payment</th>
-                <th>Status</th>
-                {showDelivery && <th>Delivery</th>}
-                <th aria-label="Actions" />
+                <th className="col-order">Order</th>
+                <th className="col-customer">Customer</th>
+                <th className="col-email">Email</th>
+                <th className="col-phone">Phone</th>
+                <th className="col-title">Title</th>
+                <th className="col-amount">Amount</th>
+                <th className="col-payment">Payment</th>
+                <th className="col-status">Status</th>
+                {showDelivery && <th className="col-delivery">Delivery</th>}
+                <th className="col-actions" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {visibleOrders.map((order) => (
-                <tr key={order.id}>
-                  <td style={{ fontWeight: 600 }}>{order.orderNumber}</td>
-                  <td>{order.customerName || '—'}</td>
-                  <td>{order.customerPhone || '—'}</td>
-                  <td>{formatInr(order.totalAmount)}</td>
-                  <td>{order.paymentStatus ?? '—'}</td>
-                  <td>
-                    <span className={`badge badge--${order.status.toLowerCase()}`}>
-                      {order.status === 'Shipped' ? 'Dispatched' : order.status === 'InProduction' ? 'In production' : order.status}
-                    </span>
-                  </td>
-                  {showDelivery && (
-                    <td>
-                      {order.hasPhysicalItems
-                        ? (order.deliveryDateOverridden ? `Overridden · ${order.deliveryLabel ?? ''}` : (order.deliveryLabel ?? '—'))
-                        : 'Digital'}
+              {visibleOrders.map((order) => {
+                const titleText = displayOrDash(order.titleSummary);
+                const emailText = displayOrDash(order.customerEmail);
+                const phoneText = displayOrDash(order.customerPhone);
+                return (
+                  <tr key={order.id}>
+                    <td className="col-order col-clip" style={{ fontWeight: 600 }} title={order.orderNumber}>
+                      {order.orderNumber}
                     </td>
-                  )}
-                  <td>
-                    <div className="data-table__actions">
-                      <RowActionsMenu
-                        label={`Actions for order ${order.orderNumber}`}
-                        items={[{ id: 'view', label: 'View order', to: `/orders/${order.id}` }]}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    <td className="col-customer col-clip" title={displayOrDash(order.customerName)}>
+                      {displayOrDash(order.customerName)}
+                    </td>
+                    <td className="col-email col-clip" title={emailText === '—' ? undefined : emailText}>
+                      {emailText}
+                    </td>
+                    <td className="col-phone col-clip" title={phoneText === '—' ? undefined : phoneText}>
+                      {phoneText}
+                    </td>
+                    <td className="col-title col-clip" title={titleText === '—' ? undefined : titleText}>
+                      {titleText}
+                    </td>
+                    <td className="col-amount">{formatInr(order.totalAmount)}</td>
+                    <td className="col-payment">{order.paymentStatus ?? '—'}</td>
+                    <td className="col-status">
+                      <span className={`badge badge--${order.status.toLowerCase()}`}>
+                        {order.status === 'Shipped'
+                          ? 'Dispatched'
+                          : order.status === 'InProduction'
+                            ? 'In production'
+                            : order.status}
+                      </span>
+                    </td>
+                    {showDelivery && (
+                      <td className="col-delivery col-clip">
+                        {order.hasPhysicalItems
+                          ? order.deliveryDateOverridden
+                            ? `Overridden · ${order.deliveryLabel ?? ''}`
+                            : (order.deliveryLabel ?? '—')
+                          : 'Digital'}
+                      </td>
+                    )}
+                    <td className="col-actions">
+                      <div className="data-table__actions">
+                        <RowActionsMenu
+                          label={`Actions for order ${order.orderNumber}`}
+                          disabled={deletingId === order.id}
+                          items={[
+                            { id: 'view', label: 'View order', to: `/orders/${order.id}` },
+                            {
+                              id: 'delete',
+                              label: deletingId === order.id ? 'Deleting…' : 'Delete order',
+                              danger: true,
+                              disabled: deletingId === order.id,
+                              onClick: () => void handleDelete(order),
+                            },
+                          ]}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

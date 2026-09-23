@@ -84,6 +84,37 @@ public sealed class AzureBlobStorageService : IBlobStorageService
         _logger.LogInformation("Deleted blob {BlobPath}", blobPath);
     }
 
+    public async Task DownloadToFileAsync(
+        string blobPath,
+        string localFilePath,
+        CancellationToken cancellationToken = default)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(localFilePath)!);
+        var blob = _container.GetBlobClient(blobPath);
+        await blob.DownloadToAsync(localFilePath, cancellationToken);
+    }
+
+    public async Task UploadFromFileAsync(
+        string blobPath,
+        string localFilePath,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        await _container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+        var blob = _container.GetBlobClient(blobPath);
+        await using var stream = File.OpenRead(localFilePath);
+        await blob.UploadAsync(
+            stream,
+            new Azure.Storage.Blobs.Models.BlobUploadOptions
+            {
+                HttpHeaders = new Azure.Storage.Blobs.Models.BlobHttpHeaders
+                {
+                    ContentType = contentType
+                }
+            },
+            cancellationToken);
+    }
+
     private string BuildSas(BlobClient blob, DateTimeOffset expiresOn, BlobSasPermissions permissions)
     {
         if (_sharedKey is not null)

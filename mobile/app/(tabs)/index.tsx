@@ -1,7 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,24 +15,42 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { listCourses } from '../../src/api/courses';
 import { listProducts } from '../../src/api/products';
 import {
+  formatLiveClassWeekRange,
   listLiveWeeks,
+  listMyLiveBookings,
+  type LiveBooking,
   type LiveSlotAvailability,
+  type LiveSlotType,
   type LiveWeekSummary,
 } from '../../src/api/live';
 import { ApiClientError } from '../../src/api/client';
+import { useShoppingSession } from '../../src/auth/SessionContext';
+import { useCart } from '../../src/cart/CartContext';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { CourseCard, COURSE_RAIL_WIDTH } from '../../src/components/CourseCard';
-import { HeroGradient } from '../../src/components/HeroGradient';
+import {
+  HomeHeroCarousel,
+  pickTrendingHeroCourse,
+  pickViralHeroCourse,
+} from '../../src/components/HomeHeroCarousel';
+import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
 import { ProductAutoScrollRail } from '../../src/components/ProductAutoScrollRail';
 import { LoadingView, ErrorView, EmptyView } from '../../src/components/StateViews';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
 import type { Course, Product } from '../../src/types';
-import { colors, fonts, radii, spacing } from '../../src/theme';
+import { useI18n, type TranslationKey } from '../../src/i18n';
+import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
+import { colors, spacing } from '../../src/theme';
 import { applyStatusBar } from '../../src/utils/statusBar';
+import { prefetchImages } from '../../src/components/AppImage';
+import {
+  selectMainCourses,
+  selectProductLinkedCourses,
+} from '../../src/utils/mainCourses';
 
 /** Display times aligned with Live tab UI copy when API hours are absent. */
 const SLOT_FALLBACK_HOURS: Record<string, string> = {
-  Morning: '11:00 AM – 1:00 PM',
+  Morning: '10:00 AM – 12:00 PM',
   Evening: '6:00 PM – 8:00 PM',
 };
 
@@ -39,19 +60,21 @@ function SectionHeader({
   title,
   linkLabel,
   onLinkPress,
+  styles,
 }: {
   number: string;
   eyebrow: string;
   title: string;
   linkLabel: string;
   onLinkPress: () => void;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionNum}>{number}</Text>
       <View style={styles.sectionHeaderCopy}>
         <Text style={styles.sectionEyebrow}>{eyebrow}</Text>
-        <Text style={styles.sectionTitle} numberOfLines={1}>
+        <Text style={styles.sectionTitle} numberOfLines={2}>
           {title}
         </Text>
       </View>
@@ -63,15 +86,21 @@ function SectionHeader({
         accessibilityLabel={linkLabel}
       >
         <Text style={styles.viewAllText}>{linkLabel}</Text>
+        <View style={styles.viewAllArrow}>
+          <Ionicons name="arrow-forward" size={14} color={colors.white} />
+        </View>
       </Pressable>
     </View>
   );
 }
 
-function seatsLabel(slot: LiveSlotAvailability): string {
-  if (slot.status === 'FullyBooked' || slot.seatsRemaining <= 0) return 'Fully booked';
-  if (slot.seatsRemaining === 1) return '1 seat available';
-  return `${slot.seatsRemaining} seats available`;
+function seatsLabel(
+  slot: LiveSlotAvailability,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string,
+): string {
+  if (slot.status === 'FullyBooked' || slot.seatsRemaining <= 0) return t('home.fullyBooked');
+  if (slot.seatsRemaining === 1) return t('home.seatAvailableOne');
+  return t('home.seatsAvailable', { count: slot.seatsRemaining });
 }
 
 function slotHours(slot: LiveSlotAvailability): string {
@@ -79,34 +108,72 @@ function slotHours(slot: LiveSlotAvailability): string {
   return SLOT_FALLBACK_HOURS[slot.slotType] ?? '';
 }
 
-function LiveSlotPreviewCard({ slot }: { slot: LiveSlotAvailability }) {
+function LiveSlotPreviewCard({
+  slot,
+  styles,
+  t,
+}: {
+  slot: LiveSlotAvailability;
+  styles: ReturnType<typeof createStyles>;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+}) {
   const isMorning = slot.slotType === 'Morning';
   const hours = slotHours(slot);
-  const available = slot.status !== 'FullyBooked' && slot.seatsRemaining > 0;
-  const label =
-    slot.slotType === 'Morning' || slot.slotType === 'Evening'
-      ? slot.slotType
+  const available =
+    slot.status !== 'FullyBooked' &&
+    slot.status !== 'Blocked' &&
+    slot.seatsRemaining > 0;
+  const label = isMorning
+    ? t('home.morningCircle')
+    : slot.slotType === 'Evening'
+      ? t('home.eveningCircle')
       : slot.name || slot.slotType;
 
   return (
-    <View style={styles.liveSlotCard}>
-      <View style={styles.liveSlotTop}>
-        <Ionicons
-          name={isMorning ? 'sunny-outline' : 'moon-outline'}
-          size={16}
-          color={colors.pink}
-        />
-        <Text style={styles.liveSlotLabel}>{label}</Text>
-      </View>
-      <Text style={styles.liveSlotName}>Crochet Circle</Text>
-      {hours ? (
-        <Text style={styles.liveSlotHours} numberOfLines={1}>
-          {hours}
-        </Text>
-      ) : null}
-      <Text style={[styles.liveSeatsText, !available && styles.liveSeatsMuted]} numberOfLines={1}>
-        {seatsLabel(slot)}
-      </Text>
+    <View style={[styles.liveSlotOuter, !available && styles.liveSlotCardMuted]}>
+      {Platform.OS === 'ios' ? (
+        <BlurView intensity={26} tint="light" style={styles.liveSlotCard}>
+          <View style={styles.liveSlotTop}>
+            <Ionicons
+              name={isMorning ? 'sunny-outline' : 'moon-outline'}
+              size={16}
+              color={colors.pink}
+            />
+            <Text style={styles.liveSlotLabel} numberOfLines={1}>
+              {label}
+            </Text>
+          </View>
+          {hours ? (
+            <Text style={styles.liveSlotHours} numberOfLines={1}>
+              {hours}
+            </Text>
+          ) : null}
+          <Text style={[styles.liveSeatsText, !available && styles.liveSeatsMuted]} numberOfLines={1}>
+            {seatsLabel(slot, t)}
+          </Text>
+        </BlurView>
+      ) : (
+        <View style={[styles.liveSlotCard, styles.liveSlotCardAndroid]}>
+          <View style={styles.liveSlotTop}>
+            <Ionicons
+              name={isMorning ? 'sunny-outline' : 'moon-outline'}
+              size={16}
+              color={colors.pink}
+            />
+            <Text style={styles.liveSlotLabel} numberOfLines={1}>
+              {label}
+            </Text>
+          </View>
+          {hours ? (
+            <Text style={styles.liveSlotHours} numberOfLines={1}>
+              {hours}
+            </Text>
+          ) : null}
+          <Text style={[styles.liveSeatsText, !available && styles.liveSeatsMuted]} numberOfLines={1}>
+            {seatsLabel(slot, t)}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -114,6 +181,11 @@ function LiveSlotPreviewCard({ slot }: { slot: LiveSlotAvailability }) {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t, language } = useI18n();
+  const fonts = uiFonts(language);
+  const styles = useMemo(() => createStyles(fonts, language !== 'en'), [language, fonts]);
+  const { itemCount } = useCart();
+  const { isAuthenticated } = useShoppingSession();
   const dockClearance = useTabDockClearance();
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
@@ -124,17 +196,25 @@ export default function HomeScreen() {
   const [liveWeek, setLiveWeek] = useState<LiveWeekSummary | null>(null);
   const [liveLoading, setLiveLoading] = useState(true);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [myLiveBooking, setMyLiveBooking] = useState<LiveBooking | null>(null);
   const [productRailActive, setProductRailActive] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       setProductRailActive(true);
       applyStatusBar('dark');
+      if (isAuthenticated) {
+        void listMyLiveBookings()
+          .then((bookings) => setMyLiveBooking(bookings[0] ?? null))
+          .catch(() => setMyLiveBooking(null));
+      } else {
+        setMyLiveBooking(null);
+      }
       return () => {
         setProductRailActive(false);
         applyStatusBar('dark');
       };
-    }, []),
+    }, [isAuthenticated]),
   );
 
   const loadProducts = useCallback(async () => {
@@ -143,46 +223,131 @@ export default function HomeScreen() {
     try {
       const data = await listProducts();
       setProducts(data);
+      prefetchImages(data.map((p) => p.imageUrl));
     } catch (err) {
-      setProductsError(err instanceof ApiClientError ? err.message : 'Failed to load products.');
+      setProductsError(err instanceof ApiClientError ? err.message : t('home.failedProducts'));
     } finally {
       setProductsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadCourses = useCallback(async () => {
     setCoursesLoading(true);
     setCoursesError(null);
     try {
       const data = await listCourses();
-      setCourses(data.slice(0, 4));
+      setCourses(data);
+      prefetchImages(data.slice(0, 8).map((c) => c.thumbnailUrl));
     } catch (err) {
-      setCoursesError(err instanceof ApiClientError ? err.message : 'Failed to load courses.');
+      setCoursesError(err instanceof ApiClientError ? err.message : t('home.failedCourses'));
     } finally {
       setCoursesLoading(false);
     }
-  }, []);
+  }, [t]);
 
   // Reuses the same live-weeks endpoint already powering the Live tab —
-  // just a compact preview of the current/next bookable week here.
+  // just a compact preview of the next upcoming bookable week here.
   const loadLive = useCallback(async () => {
     setLiveLoading(true);
     setLiveError(null);
     try {
       const data = await listLiveWeeks();
       setLiveWeek(data.find((w) => w.isBookable) ?? data[0] ?? null);
+      if (isAuthenticated) {
+        const bookings = await listMyLiveBookings().catch(() => [] as LiveBooking[]);
+        setMyLiveBooking(bookings[0] ?? null);
+      } else {
+        setMyLiveBooking(null);
+      }
     } catch (err) {
-      setLiveError(err instanceof ApiClientError ? err.message : 'Failed to load live weeks.');
+      setLiveError(err instanceof ApiClientError ? err.message : t('home.failedLive'));
     } finally {
       setLiveLoading(false);
     }
-  }, []);
+  }, [isAuthenticated, t]);
+
+  const liveWeekRange = useMemo(
+    () => (liveWeek ? formatLiveClassWeekRange(liveWeek.startDate) : ''),
+    [liveWeek],
+  );
+
+  const bookedRange = useMemo(
+    () => (myLiveBooking ? formatLiveClassWeekRange(myLiveBooking.startDate) : ''),
+    [myLiveBooking],
+  );
+
+  const openLiveWithSlot = useCallback(
+    (slot: LiveSlotType) => {
+      if (!liveWeek) {
+        router.push('/(tabs)/live');
+        return;
+      }
+      router.push({
+        pathname: '/(tabs)/live',
+        params: { weekId: liveWeek.id, slot },
+      });
+    },
+    [liveWeek, router],
+  );
+
+  const onPreBookLive = useCallback(() => {
+    if (myLiveBooking) {
+      router.push({
+        pathname: '/live-booking-confirmation',
+        params: { bookingId: myLiveBooking.id },
+      });
+      return;
+    }
+    if (!liveWeek) {
+      router.push('/(tabs)/live');
+      return;
+    }
+    const range = formatLiveClassWeekRange(liveWeek.startDate);
+    Alert.alert(
+      t('home.preBookChooseTitle'),
+      t('home.preBookChooseMessage', { range }),
+      [
+        {
+          text: t('home.morningCircle'),
+          onPress: () => openLiveWithSlot('Morning'),
+        },
+        {
+          text: t('home.eveningCircle'),
+          onPress: () => openLiveWithSlot('Evening'),
+        },
+        { text: t('common.cancel'), style: 'cancel' },
+      ],
+    );
+  }, [liveWeek, myLiveBooking, openLiveWithSlot, router, t]);
 
   useEffect(() => {
     void loadProducts();
     void loadCourses();
     void loadLive();
   }, [loadProducts, loadCourses, loadLive]);
+
+  /** Hero slide 2 — courses in admin category “Trending Tutorials”. */
+  const trendingCourse = useMemo(
+    () => pickTrendingHeroCourse(courses),
+    [courses],
+  );
+
+  /** Hero slide 3 — courses in admin category “Viral projects”. */
+  const viralCourse = useMemo(
+    () => pickViralHeroCourse(courses),
+    [courses],
+  );
+
+  /** Hero slide 4 — course linked from a Shop product. */
+  const productCourse = useMemo(() => {
+    const mainIds = new Set(selectMainCourses(courses).map((c) => c.id));
+    const linked = selectProductLinkedCourses(courses, products, mainIds);
+    if (!linked.length) return null;
+    return linked.find((c) => Boolean(c.thumbnailUrl?.trim())) ?? linked[0] ?? null;
+  }, [courses, products]);
+
+  /** Learn & Loop rail — only the three main structured courses. */
+  const academyCourses = useMemo(() => selectMainCourses(courses), [courses]);
 
   const liveSlots = useMemo(() => {
     if (!liveWeek?.slots?.length) return [];
@@ -192,62 +357,63 @@ export default function HomeScreen() {
   }, [liveWeek]);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <HeroGradient>
-        <View style={styles.topBar}>
-          <BrandWordmark size="sm" />
-          <Pressable
-            style={styles.iconBtn}
-            onPress={() => router.push('/(tabs)/profile')}
-            accessibilityRole="button"
-            accessibilityLabel="My VIVI settings"
-            hitSlop={8}
-          >
-            <Ionicons name="settings-outline" size={20} color={colors.ink} />
-          </Pressable>
+    <MyViviPageGradient>
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <View>
+          <View style={styles.topBar}>
+            <BrandWordmark size="sm" />
+            <View style={styles.topActions}>
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => router.push('/cart')}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  itemCount > 0 ? t('home.cartItems', { count: itemCount }) : t('home.cart')
+                }
+                hitSlop={8}
+              >
+                <Ionicons name="bag-outline" size={22} color={colors.ink} />
+                {itemCount > 0 ? (
+                  <View style={styles.cartBadge}>
+                    <Text style={styles.cartBadgeText}>{itemCount > 99 ? '99+' : itemCount}</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            </View>
+          </View>
+
+          <HomeHeroCarousel
+            trendingCourse={!coursesLoading && !coursesError ? trendingCourse : null}
+            viralCourse={!coursesLoading && !coursesError ? viralCourse : null}
+            productCourse={
+              !coursesLoading && !coursesError && !productsLoading && !productsError
+                ? productCourse
+                : null
+            }
+            onBrandCta={() => router.push('/(tabs)/learn')}
+            onCourseCta={(courseId) => router.push(`/course/${courseId}`)}
+          />
         </View>
 
-        <View style={styles.hero}>
-          {/* Hero image intentionally removed — copy-only header. */}
-          <Text style={styles.heroEyebrow}>HANDMADE WITH LOVE</Text>
-          <Text style={styles.heroTitle}>
-            Every loop is a <Text style={styles.heroAccent}>choice.</Text>
-          </Text>
-          <Text style={styles.heroScript}>Stitch by stitch</Text>
-          <Text style={styles.heroLinks}>
-            <Text onPress={() => router.push('/(tabs)/learn')} style={styles.heroLink}>
-              Learn
-            </Text>
-            {' · '}
-            <Text onPress={() => router.push('/(tabs)/shop')} style={styles.heroLink}>
-              Shop
-            </Text>
-            {' · '}
-            <Text onPress={() => router.push('/(tabs)/live')} style={styles.heroLink}>
-              Live
-            </Text>
-          </Text>
-        </View>
-      </HeroGradient>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: dockClearance + 24 }}
-        showsVerticalScrollIndicator={false}
-      >
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={{ paddingBottom: dockClearance + 24 }}
+          showsVerticalScrollIndicator={false}
+        >
 
         <View style={styles.section}>
           <SectionHeader
             number="1"
-            eyebrow="LEARN & LOOP"
-            title="Crochet Academy"
-            linkLabel="VIEW ALL →"
+            eyebrow={t('home.learnLoopEyebrow')}
+            title={t('home.crochetAcademy')}
+            linkLabel={t('common.viewAll')}
             onLinkPress={() => router.push('/(tabs)/learn')}
+            styles={styles}
           />
 
           {coursesLoading && (
             <View style={styles.inlineState}>
-              <LoadingView message="Loading courses…" />
+              <LoadingView message={t('home.loadingCourses')} />
             </View>
           )}
           {!coursesLoading && coursesError && (
@@ -255,22 +421,25 @@ export default function HomeScreen() {
               <ErrorView message={coursesError} onRetry={loadCourses} />
             </View>
           )}
-          {!coursesLoading && !coursesError && courses.length === 0 && (
+          {!coursesLoading && !coursesError && academyCourses.length === 0 && (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>Published courses will appear here.</Text>
+              <Text style={styles.emptyText}>{t('home.emptyCourses')}</Text>
             </View>
           )}
-          {!coursesLoading && !coursesError && courses.length > 0 && (
+          {!coursesLoading && !coursesError && academyCourses.length > 0 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               nestedScrollEnabled
               contentContainerStyle={styles.courseRail}
             >
-              {courses.map((course, index) => (
+              {academyCourses.map((course, index) => (
                 <View
                   key={course.id}
-                  style={[styles.courseRailItem, index === courses.length - 1 && styles.railItemLast]}
+                  style={[
+                    styles.courseRailItem,
+                    index === academyCourses.length - 1 && styles.railItemLast,
+                  ]}
                 >
                   <CourseCard
                     course={course}
@@ -287,15 +456,16 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <SectionHeader
             number="2"
-            eyebrow="LIVE CROCHET STUDIO"
-            title="Crochet with Vivi, live"
-            linkLabel="VIEW LIVE →"
+            eyebrow={t('home.liveStudioEyebrow')}
+            title={t('home.liveTitle')}
+            linkLabel={t('home.viewLive')}
             onLinkPress={() => router.push('/(tabs)/live')}
+            styles={styles}
           />
 
           {liveLoading && (
             <View style={styles.inlineStateSmall}>
-              <LoadingView message="Loading live weeks…" />
+              <LoadingView message={t('home.loadingLive')} />
             </View>
           )}
           {!liveLoading && liveError && (
@@ -305,50 +475,93 @@ export default function HomeScreen() {
           )}
           {!liveLoading && !liveError && !liveWeek && (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>
-                Live weeks will appear here when the season opens.
-              </Text>
+              <Text style={styles.emptyText}>{t('home.emptyLive')}</Text>
             </View>
           )}
           {!liveLoading && !liveError && liveWeek && (
-            <Pressable
-              style={styles.livePreview}
-              onPress={() => router.push('/(tabs)/live')}
-              accessibilityRole="button"
-              accessibilityLabel="Open Live Crochet Studio"
-            >
+            <View style={styles.livePreview}>
+              {liveWeekRange ? (
+                <Text style={styles.liveWeekRange}>
+                  {t('home.nextAvailableWeek', { range: liveWeekRange })}
+                </Text>
+              ) : null}
+
               {liveSlots.length > 0 ? (
                 <View style={styles.liveSlotsRow}>
                   {liveSlots.map((slot) => (
-                    <View key={slot.slotType} style={styles.liveSlotWrap}>
-                      <LiveSlotPreviewCard slot={slot} />
-                    </View>
+                    <Pressable
+                      key={slot.slotType}
+                      style={styles.liveSlotWrap}
+                      onPress={() =>
+                        openLiveWithSlot(
+                          slot.slotType === 'Evening' ? 'Evening' : 'Morning',
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        slot.slotType === 'Evening'
+                          ? t('home.eveningCircle')
+                          : t('home.morningCircle')
+                      }
+                    >
+                      <LiveSlotPreviewCard slot={slot} styles={styles} t={t} />
+                    </Pressable>
                   ))}
                 </View>
               ) : (
                 <View style={styles.liveWeekFallback}>
-                  <Text style={styles.liveWeekLabel}>WEEK {liveWeek.weekNumber}</Text>
+                  <Text style={styles.liveWeekLabel}>
+                    {t('home.weekLabel', { number: liveWeek.weekNumber })}
+                  </Text>
                   <Text style={styles.liveWeekHint}>
-                    {liveWeek.isBookable ? 'Open for booking' : 'View schedule'}
+                    {liveWeek.isBookable ? t('home.openForBooking') : t('home.viewSchedule')}
                   </Text>
                 </View>
               )}
-            </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.preBookCta, pressed && styles.pressed]}
+                onPress={onPreBookLive}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  myLiveBooking
+                    ? t('home.bookedSessionCta', { range: bookedRange })
+                    : t('home.preBookSession')
+                }
+              >
+                <View style={styles.preBookCtaCopy}>
+                  <Text style={styles.preBookCtaText} numberOfLines={2}>
+                    {myLiveBooking
+                      ? t('home.bookedSessionCta', { range: bookedRange })
+                      : t('home.preBookSession')}
+                  </Text>
+                  {myLiveBooking ? (
+                    <Text style={styles.preBookCtaSub} numberOfLines={1}>
+                      {t('home.bookedSessionReady', {
+                        circle: myLiveBooking.slotName || myLiveBooking.slotType,
+                      })}
+                    </Text>
+                  ) : null}
+                </View>
+                <Ionicons name="arrow-forward" size={16} color={colors.pink} />
+              </Pressable>
+            </View>
           )}
         </View>
 
         <View style={styles.section}>
           <SectionHeader
             number="3"
-            eyebrow="SHOP HANDMADE"
-            title="Beautiful pieces, made by hand."
-            linkLabel="SHOP ALL →"
+            eyebrow={t('home.shopEyebrow')}
+            title={t('home.shopTitle')}
+            linkLabel={t('home.shopAll')}
             onLinkPress={() => router.push('/(tabs)/shop')}
+            styles={styles}
           />
 
           {productsLoading && (
             <View style={styles.shopInlineState}>
-              <LoadingView message="Loading products…" />
+              <LoadingView message={t('home.loadingProducts')} />
             </View>
           )}
           {!productsLoading && productsError && (
@@ -358,10 +571,7 @@ export default function HomeScreen() {
           )}
           {!productsLoading && !productsError && products.length === 0 && (
             <View style={styles.shopInlineState}>
-              <EmptyView
-                title="No products yet"
-                message="Handmade pieces will appear here when published."
-              />
+              <EmptyView title={t('home.noProductsTitle')} message={t('home.noProductsMessage')} />
             </View>
           )}
           {!productsLoading && !productsError && products.length > 0 && (
@@ -373,17 +583,20 @@ export default function HomeScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+      </View>
+    </MyViviPageGradient>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(fonts: UiFonts, compactHero = false) {
+  return StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: 'transparent',
   },
   scroll: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   topBar: {
     flexDirection: 'row',
@@ -393,53 +606,34 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hero: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+  cartBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    backgroundColor: colors.pink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  heroEyebrow: {
-    fontFamily: fonts.semiBold,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    color: colors.pink,
-  },
-  heroTitle: {
-    fontFamily: fonts.heading,
-    fontSize: 36,
-    lineHeight: 44,
-    paddingBottom: 4,
-    color: colors.ink,
-    marginTop: 6,
-  },
-  heroAccent: {
-    color: colors.pink,
-  },
-  heroScript: {
-    fontFamily: fonts.decorative,
-    fontSize: 28,
-    lineHeight: 36,
-    paddingBottom: 4,
-    color: colors.pink,
-    marginTop: 2,
-  },
-  heroLinks: {
-    marginTop: 8,
-    fontFamily: fonts.regular,
-    fontSize: 13,
-    color: colors.muted,
-  },
-  heroLink: {
-    fontFamily: fonts.semiBold,
-    fontSize: 13,
-    color: colors.muted,
+  cartBadgeText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 9,
+    color: colors.white,
   },
   section: {
     paddingTop: spacing.md,
@@ -472,19 +666,31 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: fonts.extraBold,
-    fontSize: 17,
-    lineHeight: 21,
+    fontSize: compactHero ? 14 : 17,
+    lineHeight: compactHero ? 19 : 21,
     letterSpacing: -0.3,
     color: colors.ink,
     marginTop: 2,
+    flexShrink: 1,
   },
   viewAllBtn: {
-    paddingTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 2,
   },
   viewAllText: {
     fontFamily: fonts.semiBold,
     fontSize: 11,
     color: colors.pink,
+  },
+  viewAllArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.pink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pressed: {
     opacity: 0.7,
@@ -522,7 +728,13 @@ const styles = StyleSheet.create({
   },
   livePreview: {
     paddingHorizontal: spacing.md,
-    gap: 8,
+    gap: 10,
+  },
+  liveWeekRange: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.ink,
   },
   liveSlotsRow: {
     flexDirection: 'row',
@@ -531,11 +743,23 @@ const styles = StyleSheet.create({
   liveSlotWrap: {
     flex: 1,
   },
+  liveSlotOuter: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.55)',
+  },
   liveSlotCard: {
-    backgroundColor: colors.white,
-    borderRadius: radii.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
+  },
+  liveSlotCardAndroid: {
+    backgroundColor: 'rgba(255, 248, 250, 0.78)',
+  },
+  liveSlotCardMuted: {
+    opacity: 0.72,
   },
   liveSlotTop: {
     flexDirection: 'row',
@@ -544,11 +768,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   liveSlotLabel: {
+    flex: 1,
     fontFamily: fonts.semiBold,
-    fontSize: 11,
-    letterSpacing: 0.8,
-    color: colors.pink,
-    textTransform: 'uppercase',
+    fontSize: 13,
+    lineHeight: 17,
+    color: colors.ink,
   },
   liveSlotName: {
     fontFamily: fonts.semiBold,
@@ -561,7 +785,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     color: colors.muted,
-    marginTop: 4,
+    marginTop: 2,
   },
   liveSeatsText: {
     fontFamily: fonts.semiBold,
@@ -572,10 +796,43 @@ const styles = StyleSheet.create({
   liveSeatsMuted: {
     color: colors.muted,
   },
+  preBookCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.55)',
+    overflow: 'hidden',
+    gap: 8,
+  },
+  preBookCtaCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  preBookCtaText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 14,
+    lineHeight: 18,
+    color: colors.pink,
+  },
+  preBookCtaSub: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.muted,
+  },
   liveWeekFallback: {
-    borderRadius: radii.md,
-    backgroundColor: colors.white,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.55)',
     padding: 14,
+    overflow: 'hidden',
   },
   liveWeekLabel: {
     fontFamily: fonts.extraBold,
@@ -589,4 +846,5 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 4,
   },
-});
+  });
+}

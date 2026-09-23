@@ -1,6 +1,8 @@
 export type CourseType = 'DigitalCourse' | 'ProjectCourse' | 'Bundle';
 export type CourseStatus = 'Draft' | 'Published';
 export type VideoStatus = 'Draft' | 'Published';
+export type VideoTranscodeStatus = 'None' | 'Queued' | 'Processing' | 'Ready' | 'Failed';
+
 
 export interface ApiError {
   code: string;
@@ -54,6 +56,7 @@ export interface Course {
   name: string;
   type: CourseType;
   level?: string | null;
+  description?: string | null;
   about?: string | null;
   price: number;
   mrp?: number | null;
@@ -61,6 +64,7 @@ export interface Course {
   renewalPercentage: number;
   languages?: string | null;
   thumbnailUrl?: string | null;
+  sortOrder: number;
   status: CourseStatus;
   videoCount: number;
   createdAt: string;
@@ -83,6 +87,7 @@ export interface LaunchOfferAdmin {
   launchLimit: number;
   regularPriceAfterLaunch: number;
   mrp: number;
+  completedPurchaseCount?: number;
 }
 
 export interface CourseRequest {
@@ -90,12 +95,14 @@ export interface CourseRequest {
   categoryId?: string | null;
   type: CourseType;
   level?: string | null;
+  description?: string | null;
   about?: string | null;
   price: number;
   mrp?: number | null;
   accessDays: number;
   renewalPercentage: number;
   languages?: string | null;
+  sortOrder?: number;
   includedCourseIds?: string[] | null;
   launchPrice?: number | null;
   launchLimit?: number | null;
@@ -111,6 +118,10 @@ export interface Video {
   videoFileName: string;
   fileSizeBytes: number;
   contentType: string;
+  playableFileSizeBytes?: number | null;
+  playableContentType?: string | null;
+  transcodeStatus?: VideoTranscodeStatus;
+  transcodeError?: string | null;
   isFreePreview: boolean;
   uploadConfirmed: boolean;
   status: VideoStatus;
@@ -145,6 +156,23 @@ export interface UpdateVideoRequest {
 export type ProductStatus = 'Draft' | 'Published';
 export type ProductType = 'Handmade' | 'Resell';
 
+export interface LinkedCourseSummary {
+  id: string;
+  name: string;
+  price: number;
+  videoCount: number;
+  level?: string | null;
+}
+
+export interface RecommendedEssentialSummary {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  imageUrl?: string | null;
+  availableStock: number;
+}
+
 export interface ProductImage {
   id: string;
   url: string;
@@ -165,13 +193,8 @@ export interface Product {
   spec1?: string | null;
   spec2?: string | null;
   courseId?: string | null;
-  linkedCourse?: {
-    id: string;
-    name: string;
-    price: number;
-    videoCount: number;
-    level?: string | null;
-  } | null;
+  linkedCourse?: LinkedCourseSummary | null;
+  recommendedEssentials?: RecommendedEssentialSummary[];
   sortOrder: number;
   productType: ProductType;
   availableStock: number;
@@ -192,6 +215,7 @@ export interface ProductRequest {
   sortOrder: number;
   productType: ProductType;
   availableStock: number;
+  recommendedEssentialIds?: string[];
 }
 
 export interface ProductImageUploadUrlRequest {
@@ -233,9 +257,14 @@ export interface AdminOrderListItem {
   paymentStatus?: PaymentStatus | null;
   totalAmount: number;
   customerName: string;
+  customerEmail?: string | null;
   customerPhone: string;
+  /** Snapshot-based line title(s), e.g. "Pink Yarn + 2 more". */
+  titleSummary?: string | null;
   createdAt: string;
   hasPhysicalItems: boolean;
+  hasCourseItems?: boolean;
+  hasLiveItems?: boolean;
   deliveryDateOverridden: boolean;
   deliveryLabel?: string | null;
 }
@@ -323,9 +352,11 @@ export type LiveSlotType = 'Morning' | 'Evening';
 export interface LiveSlotAvailability {
   slotType: string;
   name: string;
+  hours?: string;
   seatCapacity: number;
   seatsBooked: number;
   seatsRemaining: number;
+  isBlocked?: boolean;
   status: string;
 }
 
@@ -375,6 +406,8 @@ export interface AdminLiveWeek {
   breakWeekday?: string | null;
   isBookable: boolean;
   packagePrice: number;
+  tutorName?: string | null;
+  tutorPhotoUrl?: string | null;
   slots: LiveSlotAvailability[];
 }
 
@@ -387,5 +420,10 @@ export interface AdminCustomerListItem {
   signedUpAt: string;
   lastActiveAt: string;
   orderCount: number;
+  track: string;
+  age: number | null;
+  country: string | null;
+  state: string | null;
+  city: string | null;
 }
 

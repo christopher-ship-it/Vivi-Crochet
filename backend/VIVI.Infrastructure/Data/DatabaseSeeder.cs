@@ -72,15 +72,25 @@ public sealed class DatabaseSeeder
     {
         await SeedAdminAsync(cancellationToken);
         await SeedCategoriesAsync(cancellationToken);
-        await SeedCatalogCoursesAsync(cancellationToken);
+        try
+        {
+            await SeedCatalogCoursesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Catalog course seed failed (Complete Collection bundle may be missing).");
+            throw;
+        }
         await SeedProductsAsync(cancellationToken);
-        await LinkProductCoursesAsync(cancellationToken);
+        await ClearBlanketProductCourseLinksAsync(cancellationToken);
         await SeedTestAccountAsync(cancellationToken);
     }
 
     private async Task SeedAdminAsync(CancellationToken cancellationToken)
     {
-        if (await _db.AdminUsers.AnyAsync(cancellationToken))
+        // Only create the first admin. Never overwrite existing logins on startup —
+        // that would reset passwords whenever AutoSeed runs in production.
+        if (await _db.AdminUsers.AnyAsync(u => u.Role == UserRole.Admin, cancellationToken))
             return;
 
         if (string.IsNullOrWhiteSpace(_settings.AdminPassword))
@@ -90,12 +100,14 @@ public sealed class DatabaseSeeder
             return;
         }
 
+        var email = _settings.AdminEmail.Trim().ToLowerInvariant();
+        var name = string.IsNullOrWhiteSpace(_settings.AdminName) ? "Admin" : _settings.AdminName.Trim();
         var now = DateTime.UtcNow;
         var admin = new AdminUser
         {
             Id = Guid.NewGuid(),
-            Email = _settings.AdminEmail.Trim().ToLowerInvariant(),
-            Name = string.IsNullOrWhiteSpace(_settings.AdminName) ? "Admin" : _settings.AdminName.Trim(),
+            Email = email,
+            Name = name,
             Role = UserRole.Admin,
             IsActive = true,
             CreatedAt = now,
@@ -110,34 +122,96 @@ public sealed class DatabaseSeeder
 
     private async Task SeedCategoriesAsync(CancellationToken cancellationToken)
     {
-        if (await _db.Categories.AnyAsync(cancellationToken))
-            return;
-
         var now = DateTime.UtcNow;
-        _db.Categories.AddRange(
-            new Category
+        await EnsureCategoryAsync(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "Learn & Loop",
+            "Levelled crochet classes",
+            sortOrder: 1,
+            now,
+            cancellationToken);
+        await EnsureCategoryAsync(
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            "Viral projects",
+            "Stand-alone project classes",
+            sortOrder: 2,
+            now,
+            cancellationToken);
+        await EnsureCategoryAsync(
+            Guid.Parse("33333333-3333-3333-3333-333333333333"),
+            "Trending Tutorials",
+            "Featured tutorials for the Home hero",
+            sortOrder: 3,
+            now,
+            cancellationToken);
+    }
+
+    private async Task EnsureCategoryAsync(
+        Guid id,
+        string name,
+        string description,
+        int sortOrder,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        // Prefer stable id, then exact name, then a close “trending*” / “viral*” typo match.
+        var existing = await _db.Categories.FirstOrDefaultAsync(c => c.Id == id, cancellationToken)
+            ?? await _db.Categories.FirstOrDefaultAsync(
+                c => c.Name.ToLower() == name.ToLower(),
+                cancellationToken);
+
+        if (existing is null && name.StartsWith("Trending", StringComparison.OrdinalIgnoreCase))
+        {
+            existing = await _db.Categories.FirstOrDefaultAsync(
+                c => c.Name.ToLower().StartsWith("trending"),
+                cancellationToken);
+        }
+        else if (existing is null && name.StartsWith("Viral", StringComparison.OrdinalIgnoreCase))
+        {
+            existing = await _db.Categories.FirstOrDefaultAsync(
+                c => c.Name.ToLower().StartsWith("viral"),
+                cancellationToken);
+        }
+
+        if (existing is null)
+        {
+            _db.Categories.Add(new Category
             {
-                Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                Name = "Learn & Loop",
-                Description = "Levelled crochet classes",
-                SortOrder = 1,
-                IsActive = true,
-                CreatedAt = now,
-                UpdatedAt = now
-            },
-            new Category
-            {
-                Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-                Name = "Viral projects",
-                Description = "Stand-alone project classes",
-                SortOrder = 2,
+                Id = id,
+                Name = name,
+                Description = description,
+                SortOrder = sortOrder,
                 IsActive = true,
                 CreatedAt = now,
                 UpdatedAt = now
             });
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Seeded category {Name}", name);
+            return;
+        }
 
-        await _db.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Seeded default categories");
+        var changed = false;
+        if (!string.Equals(existing.Name, name, StringComparison.Ordinal))
+        {
+            existing.Name = name;
+            changed = true;
+        }
+        if (!existing.IsActive)
+        {
+            existing.IsActive = true;
+            changed = true;
+        }
+        if (existing.SortOrder != sortOrder)
+        {
+            existing.SortOrder = sortOrder;
+            changed = true;
+        }
+        if (changed)
+        {
+            existing.UpdatedAt = now;
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Updated category {Name}", name);
+        }
     }
 
     /// <summary>
@@ -147,6 +221,8 @@ public sealed class DatabaseSeeder
     public static class Catalog
     {
         public static readonly Guid LearnLoopCategoryId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        public static readonly Guid ViralProjectsCategoryId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        public static readonly Guid TrendingTutorialsCategoryId = Guid.Parse("33333333-3333-3333-3333-333333333333");
         public static readonly Guid FoundationId = Guid.Parse("c0a1f001-0001-4000-8000-000000000001");
         public static readonly Guid SignatureId = Guid.Parse("c0a1f001-0001-4000-8000-000000000002");
         public static readonly Guid MasterId = Guid.Parse("c0a1f001-0001-4000-8000-000000000003");
@@ -177,7 +253,7 @@ public sealed class DatabaseSeeder
         await UpsertCatalogCourseAsync(
             Catalog.FoundationId,
             "Foundation Stitches",
-            "7 guided lessons and 5 mini cute projects.",
+            "7 guided lessons + 5 mini cute projects.",
             "Beginner",
             299,
             null,
@@ -191,7 +267,7 @@ public sealed class DatabaseSeeder
         await UpsertCatalogCourseAsync(
             Catalog.SignatureId,
             "Signature Stitches",
-            "10 guided lessons and 5 mini cute projects.",
+            "10 guided lessons + 5 mini cute projects.",
             "Intermediate",
             599,
             null,
@@ -205,7 +281,7 @@ public sealed class DatabaseSeeder
         await UpsertCatalogCourseAsync(
             Catalog.MasterId,
             "Master Stitch Series",
-            "10 guided lessons and 10 mini cute projects.",
+            "10 guided lessons + 10 mini cute projects.",
             "Advanced",
             1099,
             null,
@@ -229,6 +305,9 @@ public sealed class DatabaseSeeder
             adminId,
             now,
             cancellationToken);
+
+        // Persist courses before bundle membership / launch-offer FKs.
+        await _db.SaveChangesAsync(cancellationToken);
 
         await SyncBundleMembershipAsync(cancellationToken);
         await SyncBundleLaunchOfferAsync(now, cancellationToken);
@@ -353,8 +432,9 @@ public sealed class DatabaseSeeder
             .FirstOrDefaultAsync(cancellationToken);
 
         var now = DateTime.UtcNow;
-        var courseId = linkedCourse?.Id;
-
+        // Only seed an intentional course link on one demo product. Do not attach
+        // every product to a course — that makes every shop card show "Learn".
+        var demoCourseId = linkedCourse?.Id;
         var products = new[]
         {
             new Product
@@ -367,7 +447,7 @@ public sealed class DatabaseSeeder
                 Mrp = 1050,
                 Spec1 = "18 cm tall",
                 Spec2 = "Cotton yarn",
-                CourseId = courseId,
+                CourseId = demoCourseId,
                 SortOrder = 1,
                 Status = ProductStatus.Published,
                 CreatedAt = now,
@@ -383,7 +463,7 @@ public sealed class DatabaseSeeder
                 Mrp = 1350,
                 Spec1 = "26 cm tall",
                 Spec2 = "Baby-safe fill",
-                CourseId = courseId,
+                CourseId = null,
                 SortOrder = 2,
                 Status = ProductStatus.Published,
                 CreatedAt = now,
@@ -399,7 +479,7 @@ public sealed class DatabaseSeeder
                 Mrp = 899,
                 Spec1 = "14 cm wide",
                 Spec2 = "Chenille yarn",
-                CourseId = courseId,
+                CourseId = null,
                 SortOrder = 3,
                 Status = ProductStatus.Published,
                 CreatedAt = now,
@@ -415,7 +495,7 @@ public sealed class DatabaseSeeder
                 Mrp = 2200,
                 Spec1 = "Made to size",
                 Spec2 = "Cotton blend",
-                CourseId = courseId,
+                CourseId = null,
                 SortOrder = 4,
                 Status = ProductStatus.Published,
                 CreatedAt = now,
@@ -431,7 +511,7 @@ public sealed class DatabaseSeeder
                 Mrp = 749,
                 Spec1 = "12 cm tall",
                 Spec2 = "Chenille yarn",
-                CourseId = courseId,
+                CourseId = null,
                 SortOrder = 5,
                 Status = ProductStatus.Published,
                 CreatedAt = now,
@@ -447,7 +527,7 @@ public sealed class DatabaseSeeder
                 Mrp = 2900,
                 Spec1 = "90 × 70 cm",
                 Spec2 = "Acrylic blend",
-                CourseId = courseId,
+                CourseId = null,
                 SortOrder = 6,
                 Status = ProductStatus.Published,
                 CreatedAt = now,
@@ -460,34 +540,54 @@ public sealed class DatabaseSeeder
         _logger.LogInformation("Seeded {Count} shop products", products.Length);
     }
 
-    private async Task LinkProductCoursesAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Undo the old startup behavior that attached every product to a course
+    /// (which made every shop card show a Learn badge).
+    /// </summary>
+    private async Task ClearBlanketProductCourseLinksAsync(CancellationToken cancellationToken)
     {
-        var courseId = await _db.Courses
-            .AsNoTracking()
-            .Where(c => c.Status == CourseStatus.Published)
-            .OrderBy(c => c.CreatedAt)
-            .Select(c => c.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (courseId == Guid.Empty)
-            return;
-
-        var orphans = await _db.Products
-            .Where(p => p.CourseId == null)
+        var linked = await _db.Products
+            .Where(p => p.CourseId != null)
             .ToListAsync(cancellationToken);
 
-        if (orphans.Count == 0)
+        if (linked.Count < 3)
             return;
 
-        var now = DateTime.UtcNow;
-        foreach (var product in orphans)
+        var total = await _db.Products.CountAsync(cancellationToken);
+
+        // If (almost) the whole catalog is course-linked, treat it as the old
+        // blanket auto-link and clear every CourseId. Admins can re-link
+        // individual products that should show Learn.
+        var nearlyAllLinked = linked.Count >= total - 1;
+        List<Product> toClear;
+        if (nearlyAllLinked)
         {
-            product.CourseId = courseId;
+            toClear = linked;
+        }
+        else
+        {
+            var dominantId = linked
+                .GroupBy(p => p.CourseId!.Value)
+                .OrderByDescending(g => g.Count())
+                .Select(g => g.Key)
+                .First();
+            var dominantCount = linked.Count(p => p.CourseId == dominantId);
+            if (dominantCount < 3 || dominantCount * 2 < total)
+                return;
+            toClear = linked.Where(p => p.CourseId == dominantId).ToList();
+        }
+
+        var now = DateTime.UtcNow;
+        foreach (var product in toClear)
+        {
+            product.CourseId = null;
             product.UpdatedAt = now;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Linked {Count} products to published course {CourseId}", orphans.Count, courseId);
+        _logger.LogInformation(
+            "Cleared blanket Learn course link from {Count} products",
+            toClear.Count);
     }
 
     /// <summary>

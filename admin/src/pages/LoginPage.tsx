@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { AuthLayout } from '../layouts/AuthLayout';
@@ -31,7 +32,7 @@ export function LoginPage() {
     <AuthLayout>
       <div className="auth-card">
         <div className="auth-card__brand">
-          <img src="/favicon.svg" alt="" className="auth-card__logo" />
+          <img src="/vivi-logo.png" alt="VIVI Crochet" className="auth-card__logo" />
           <div>
             <h1 className="auth-card__title">VIVI Admin</h1>
             <p className="auth-card__subtitle">Sign in to manage courses and videos</p>
@@ -70,6 +71,12 @@ export function LoginPage() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+
+        <div className="auth-card__legal">
+          <Link to="/privacy-policy">Privacy policy</Link>
+          <span aria-hidden>·</span>
+          <Link to="/delete-account">Delete account</Link>
+        </div>
       </div>
     </AuthLayout>
   );

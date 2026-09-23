@@ -212,4 +212,4 @@ $hostname = & $az webapp show --resource-group $ResourceGroup --name $AppName --
 Write-Host ""
 Write-Host "Admin deployed successfully."
 Write-Host "  URL: https://$hostname"
-Write-Host "  Custom domain: add CNAME admin -> $hostname in DNS, then bind admin.vivicrochet.in in Portal."
+Write-Host "  Custom domain: run .\scripts\wire-custom-domains.ps1 (CNAME admin/api -> Azure hostnames)."

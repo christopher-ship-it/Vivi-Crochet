@@ -1,26 +1,30 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using VIVI.Infrastructure.Data;
+using VIVI.Infrastructure.Push;
 
 namespace VIVI.Infrastructure.Email;
 
 /// <summary>
 /// Sends course expiry reminders exactly once per access cycle, 3 days before expiry.
-/// Requires an external scheduler (Azure Function timer, Logic App, etc.) — not wired automatically.
+/// Runs via ExpiryReminderBackgroundService and POST /api/internal/jobs/expiry-reminders.
 /// </summary>
 public sealed class ExpiryReminderService
 {
     private readonly ViviDbContext _db;
     private readonly TransactionalEmailService _emails;
+    private readonly CustomerPushService _push;
     private readonly ILogger<ExpiryReminderService> _logger;
 
     public ExpiryReminderService(
         ViviDbContext db,
         TransactionalEmailService emails,
+        CustomerPushService push,
         ILogger<ExpiryReminderService> logger)
     {
         _db = db;
         _emails = emails;
+        _push = push;
         _logger = logger;
     }
 
@@ -64,6 +68,12 @@ public sealed class ExpiryReminderService
                     tracked.UpdatedAt = DateTime.UtcNow;
                     await _db.SaveChangesAsync(cancellationToken);
                     sent++;
+
+                    await _push.TrySendCourseExpiryReminderAsync(
+                        enrollment.Customer.Id,
+                        enrollment.Course.Name,
+                        enrollment.Course.Id,
+                        cancellationToken);
                 }
             }
             catch (Exception ex)

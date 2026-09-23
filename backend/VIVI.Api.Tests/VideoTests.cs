@@ -76,8 +76,25 @@ public sealed class VideoTests : IClassFixture<ApiFactory>
 
         await client.PostAsync($"/api/videos/{upload!.VideoId}/upload-complete", null);
 
-        var stream = await client.GetAsync($"/api/videos/{upload.VideoId}/stream-url");
+        // Learners (anonymous) must not stream drafts; admins may for duration detection.
+        var anonymous = _factory.CreateClient();
+        var stream = await anonymous.GetAsync($"/api/videos/{upload.VideoId}/stream-url");
         Assert.Equal(HttpStatusCode.Forbidden, stream.StatusCode);
+    }
+
+    [Fact]
+    public async Task Upload_complete_marks_transcode_ready_in_tests()
+    {
+        var (client, courseId) = await AdminWithCourse();
+        var upload = await (await client.PostAsJsonAsync("/api/videos/upload-url", ValidUpload(courseId)))
+            .Content.ReadFromJsonAsync<UploadUrlResponse>(Json);
+
+        var complete = await client.PostAsync($"/api/videos/{upload!.VideoId}/upload-complete", null);
+        complete.EnsureSuccessStatusCode();
+
+        var video = await client.GetFromJsonAsync<VideoResponse>($"/api/videos/{upload.VideoId}", Json);
+        Assert.Equal(VideoTranscodeStatus.Ready, video!.TranscodeStatus);
+        Assert.True(video.UploadConfirmed);
     }
 
     [Fact]

@@ -25,6 +25,8 @@ export interface CoursePricing {
   launchOfferActive: boolean;
   launchOfferRemaining?: number | null;
   accessDays: number;
+  isRenewalOffer?: boolean;
+  renewalPercentage?: number | null;
 }
 
 export async function listMyEnrollments(): Promise<Enrollment[]> {
@@ -35,6 +37,14 @@ export async function getMyEnrollment(courseId: string): Promise<Enrollment> {
   return apiRequest<Enrollment>(`/api/me/enrollments/${courseId}`);
 }
 
+/** Marks a purchased course finished for journey / encouragement (idempotent). */
+export async function completeMyEnrollment(courseId: string): Promise<Enrollment> {
+  return apiRequest<Enrollment>(`/api/me/enrollments/${courseId}/complete`, {
+    method: 'POST',
+  });
+}
+
+/** Prefer authenticated call so personal renewal pricing is included when signed in. */
 export async function getCoursePricing(courseId: string): Promise<CoursePricing> {
-  return apiRequest<CoursePricing>(`/api/courses/${courseId}/pricing`, {}, false);
+  return apiRequest<CoursePricing>(`/api/courses/${courseId}/pricing`);
 }

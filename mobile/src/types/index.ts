@@ -19,6 +19,8 @@ export interface LoginResponse {
   accessToken: string;
   expiresAt: string;
   user: User;
+  requiresProfileSetup?: boolean;
+  isNewCustomer?: boolean;
 }
 
 export interface Category {
@@ -46,6 +48,8 @@ export interface Course {
   name: string;
   type: CourseType;
   level?: string | null;
+  /** Short copy for Home Viral / Trending hero slides. */
+  description?: string | null;
   about?: string | null;
   price: number;
   mrp?: number | null;
@@ -53,6 +57,8 @@ export interface Course {
   renewalPercentage: number;
   languages?: string | null;
   thumbnailUrl?: string | null;
+  /** Lower values appear first in Viral / Trending discovery. */
+  sortOrder?: number;
   status: CourseStatus;
   videoCount: number;
   createdAt: string;
@@ -84,12 +90,24 @@ export interface StreamUrlResponse {
 
 export type ProductStatus = 'Draft' | 'Published';
 
+/** Handmade Collection vs Crochet Essentials (stocked/resold). */
+export type ProductType = 'Handmade' | 'Resell';
+
 export interface LinkedCourseSummary {
   id: string;
   name: string;
   price: number;
   videoCount: number;
   level?: string | null;
+}
+
+export interface RecommendedEssentialSummary {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  imageUrl?: string | null;
+  availableStock: number;
 }
 
 export interface ProductImage {
@@ -113,7 +131,9 @@ export interface Product {
   spec2?: string | null;
   courseId?: string | null;
   linkedCourse?: LinkedCourseSummary | null;
+  recommendedEssentials?: RecommendedEssentialSummary[];
   sortOrder: number;
+  productType?: ProductType;
   availableStock: number;
   status: ProductStatus;
   createdAt: string;

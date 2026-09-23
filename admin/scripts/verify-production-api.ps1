@@ -1,8 +1,8 @@
 # Verify production API flows used by the admin dashboard.
 param(
     [string]$ApiBase = "https://app-vivi-api-hwbmc3dzhkewa5hb.centralindia-01.azurewebsites.net",
-    [string]$AdminOrigin = "https://admin.vivicrochet.in",
-    [string]$AdminEmail = "admin@vivicrochet.in",
+    [string]$AdminOrigin = "https://admin.vivicrochet01.com",
+    [string]$AdminEmail = "admin@vivicrochet01.com",
     [string]$AdminPassword
 )
 

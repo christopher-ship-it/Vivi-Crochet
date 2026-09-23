@@ -8,8 +8,13 @@ import {
   type ReactNode,
 } from 'react';
 import { devCustomerLogin, testAccountLogin } from '../api/auth';
-import { setUnauthorizedHandler } from '../api/client';
+import { setMemoryAccessToken, setUnauthorizedHandler } from '../api/client';
+import {
+  registerForPushNotificationsAsync,
+  unregisterPushNotificationsAsync,
+} from '../notifications/push';
 import type { LoginResponse, User } from '../types';
+import { clearRegistrationDraft } from './registrationDraft';
 import {
   clearLearningCustomer,
   clearShoppingSession,
@@ -51,16 +56,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
+      setMemoryAccessToken(null);
       setShoppingUser(null);
       void clearShoppingSession();
     });
 
     Promise.all([loadShoppingSession(), loadLearningCustomer()]).then(([shopping, learning]) => {
-      if (shopping) setShoppingUser(shopping.user);
+      if (shopping) {
+        setMemoryAccessToken(shopping.accessToken);
+        setShoppingUser(shopping.user);
+      } else {
+        setMemoryAccessToken(null);
+      }
       if (learning) setLearningProfile(learning);
       setIsLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    if (!shoppingUser) return;
+    void registerForPushNotificationsAsync();
+  }, [shoppingUser]);
 
   const completeSignIn = useCallback(async (response: LoginResponse) => {
     const session: StoredSession = {
@@ -68,6 +84,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       expiresAt: response.expiresAt,
       user: response.user,
     };
+    setMemoryAccessToken(response.accessToken);
     await saveShoppingSession(session);
     setShoppingUser(response.user);
   }, []);
@@ -89,8 +106,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    await clearShoppingSession();
+    await unregisterPushNotificationsAsync();
+    setMemoryAccessToken(null);
+    await Promise.all([
+      clearShoppingSession(),
+      clearLearningCustomer(),
+      clearRegistrationDraft(),
+    ]);
     setShoppingUser(null);
+    setLearningProfile(null);
   }, []);
 
   const saveProfile = useCallback(async (profile: LearningCustomerProfile) => {

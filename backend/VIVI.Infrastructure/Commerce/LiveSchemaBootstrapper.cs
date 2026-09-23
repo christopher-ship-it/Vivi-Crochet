@@ -11,6 +11,28 @@ public static class LiveSchemaBootstrapper
 {
     public static async Task EnsureAsync(ViviDbContext db, CancellationToken cancellationToken)
     {
+        // Always ensure slot block + tutor photo columns exist (tables may already be present).
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF OBJECT_ID(N'[LiveWeekSlots]', N'U') IS NOT NULL
+               AND COL_LENGTH('LiveWeekSlots', 'IsBlocked') IS NULL
+                ALTER TABLE [LiveWeekSlots]
+                ADD [IsBlocked] bit NOT NULL
+                    CONSTRAINT [DF_LiveWeekSlots_IsBlocked] DEFAULT CAST(0 AS bit);
+
+            IF OBJECT_ID(N'[LiveWeeks]', N'U') IS NOT NULL
+               AND COL_LENGTH('LiveWeeks', 'TutorName') IS NULL
+                ALTER TABLE [LiveWeeks]
+                ADD [TutorName] nvarchar(100) NOT NULL
+                    CONSTRAINT [DF_LiveWeeks_TutorName] DEFAULT N'SRI';
+
+            IF OBJECT_ID(N'[LiveWeeks]', N'U') IS NOT NULL
+               AND COL_LENGTH('LiveWeeks', 'TutorPhotoBlobPath') IS NULL
+                ALTER TABLE [LiveWeeks]
+                ADD [TutorPhotoBlobPath] nvarchar(500) NULL;
+            """,
+            cancellationToken);
+
         // Fast path: skip multi-statement DDL probes when Live Studio is already present.
         var ready = await db.Database
             .SqlQueryRaw<int>(
@@ -51,6 +73,8 @@ public static class LiveSchemaBootstrapper
                     [EndDate] date NOT NULL,
                     [BreakWeekday] int NULL,
                     [IsBookable] bit NOT NULL,
+                    [TutorName] nvarchar(100) NOT NULL CONSTRAINT [DF_LiveWeeks_TutorName] DEFAULT N'SRI',
+                    [TutorPhotoBlobPath] nvarchar(500) NULL,
                     [CreatedAt] datetime2 NOT NULL,
                     [UpdatedAt] datetime2 NOT NULL,
                     CONSTRAINT [PK_LiveWeeks] PRIMARY KEY ([Id])
@@ -71,6 +95,7 @@ public static class LiveSchemaBootstrapper
                     [SlotType] int NOT NULL,
                     [SeatCapacity] int NOT NULL,
                     [SeatsBooked] int NOT NULL,
+                    [IsBlocked] bit NOT NULL CONSTRAINT [DF_LiveWeekSlots_IsBlocked] DEFAULT CAST(0 AS bit),
                     [CreatedAt] datetime2 NOT NULL,
                     [UpdatedAt] datetime2 NOT NULL,
                     CONSTRAINT [PK_LiveWeekSlots] PRIMARY KEY ([Id]),

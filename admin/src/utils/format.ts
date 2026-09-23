@@ -79,6 +79,59 @@ export function parseDuration(value: string): number | null {
   return Number.isNaN(asNum) ? null : asNum;
 }
 
+/** Reads duration from a local video File via the browser media element. */
+export function readVideoFileDurationSeconds(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const el = document.createElement('video');
+    el.preload = 'metadata';
+    el.muted = true;
+    el.playsInline = true;
+
+    const finish = (seconds: number | null) => {
+      URL.revokeObjectURL(url);
+      el.removeAttribute('src');
+      el.load();
+      resolve(seconds);
+    };
+
+    el.onloadedmetadata = () => {
+      const seconds = Number.isFinite(el.duration) && el.duration > 0
+        ? Math.round(el.duration)
+        : null;
+      finish(seconds);
+    };
+    el.onerror = () => finish(null);
+    el.src = url;
+  });
+}
+
+/** Reads duration from a remote/playable video URL. */
+export function readVideoUrlDurationSeconds(url: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const el = document.createElement('video');
+    el.preload = 'metadata';
+    el.muted = true;
+    el.playsInline = true;
+    el.crossOrigin = 'anonymous';
+
+    const finish = (seconds: number | null) => {
+      el.removeAttribute('src');
+      el.load();
+      resolve(seconds);
+    };
+
+    el.onloadedmetadata = () => {
+      const seconds = Number.isFinite(el.duration) && el.duration > 0
+        ? Math.round(el.duration)
+        : null;
+      finish(seconds);
+    };
+    el.onerror = () => finish(null);
+    el.src = url;
+  });
+}
+
 export function formatInr(amount: number): string {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',

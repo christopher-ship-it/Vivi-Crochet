@@ -9,10 +9,12 @@ import { ApiClientError } from '../api/client';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { Category, CategoryRequest } from '../types';
 
-const emptyForm: CategoryRequest = {
+type CategoryFormState = Omit<CategoryRequest, 'sortOrder'> & { sortOrder: number | '' };
+
+const emptyForm: CategoryFormState = {
   name: '',
   description: '',
-  sortOrder: 0,
+  sortOrder: '',
   isActive: true,
 };
 
@@ -22,7 +24,7 @@ export function CategoriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<CategoryRequest>(emptyForm);
+  const [form, setForm] = useState<CategoryFormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
 
@@ -63,10 +65,14 @@ export function CategoriesPage() {
     e.preventDefault();
     setSaving(true);
     try {
+      const payload: CategoryRequest = {
+        ...form,
+        sortOrder: form.sortOrder === '' ? 0 : form.sortOrder,
+      };
       if (editingId) {
-        await updateCategory(editingId, form);
+        await updateCategory(editingId, payload);
       } else {
-        await createCategory(form);
+        await createCategory(payload);
       }
       setShowForm(false);
       await load();
@@ -209,7 +215,12 @@ export function CategoriesPage() {
                     id="cat-sort"
                     type="number"
                     value={form.sortOrder}
-                    onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        sortOrder: e.target.value.trim() === '' ? '' : Number(e.target.value),
+                      })
+                    }
                   />
                 </div>
                 <div className="form-field form-field--checkbox">

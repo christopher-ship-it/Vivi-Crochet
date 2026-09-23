@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { heroGradient } from '../theme';
 
 type Props = {
@@ -7,22 +7,28 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-/** Pink gradient panel for page heroes. */
+/**
+ * Pink wash for headers/heroes that soft-fades into the page gradient
+ * (no hard edge / divider line).
+ */
 export function HeroGradient({ children, style }: Props) {
   return (
-    <LinearGradient
-      colors={[...heroGradient.colors]}
-      start={heroGradient.start}
-      end={heroGradient.end}
-      style={[styles.hero, style]}
-    >
+    <View style={[styles.wrap, style]}>
+      <LinearGradient
+        colors={[...heroGradient.colors]}
+        locations={[...heroGradient.locations]}
+        start={heroGradient.start}
+        end={heroGradient.end}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       {children}
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: {
+  wrap: {
     overflow: 'hidden',
   },
 });

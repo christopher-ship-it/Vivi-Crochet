@@ -28,6 +28,11 @@ public sealed class UpdateVideoRequest
     public int? SortOrder { get; set; }
 }
 
+public sealed class ReportVideoDurationRequest
+{
+    public int DurationSeconds { get; set; }
+}
+
 public sealed class VideoResponse
 {
     public Guid Id { get; set; }
@@ -38,6 +43,10 @@ public sealed class VideoResponse
     public string VideoFileName { get; set; } = string.Empty;
     public long FileSizeBytes { get; set; }
     public string ContentType { get; set; } = string.Empty;
+    public long? PlayableFileSizeBytes { get; set; }
+    public string? PlayableContentType { get; set; }
+    public VideoTranscodeStatus TranscodeStatus { get; set; }
+    public string? TranscodeError { get; set; }
     public bool IsFreePreview { get; set; }
     public bool UploadConfirmed { get; set; }
     public VideoStatus Status { get; set; }

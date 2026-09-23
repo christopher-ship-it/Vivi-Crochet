@@ -32,5 +32,7 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("LiveStudio:SeasonStartMonday", "2026-01-05");
         // Tests book across many weeks on a shared DB; production default is 2 (this + next).
         builder.UseSetting("LiveStudio:CustomerSelectableWeekCount", "52");
+        builder.UseSetting("Push:Enabled", "false");
+        builder.UseSetting("Push:JobSecret", "");
     }
 }

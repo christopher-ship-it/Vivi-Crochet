@@ -6,6 +6,7 @@ using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
 using VIVI.Core.Interfaces;
+using VIVI.Infrastructure.Auth;
 using VIVI.Infrastructure.Configuration;
 using VIVI.Infrastructure.Data;
 
@@ -156,6 +157,20 @@ public sealed class LiveBookingService
                 ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
                 : null;
 
+            var customer = await _db.Customers
+                .SingleOrDefaultAsync(c => c.Id == customerId, cancellationToken)
+                ?? throw ViviException.NotFound("CUSTOMER_NOT_FOUND", "Customer was not found.");
+
+            var email = CustomerAccountService.NormalizeEmail(customer.Email);
+            if (string.IsNullOrWhiteSpace(email)
+                || email.EndsWith("@vivicrochet.dev", StringComparison.OrdinalIgnoreCase)
+                || customer.EmailVerifiedAt is null)
+            {
+                throw ViviException.Conflict(
+                    "EMAIL_VERIFICATION_REQUIRED",
+                    "Add and verify your email before booking a live class.");
+            }
+
             var week = await _db.LiveWeeks
                 .Include(w => w.Slots)
                 .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
@@ -167,7 +182,7 @@ public sealed class LiveBookingService
             if (!_calendar.IsCustomerSelectableWeek(week))
                 throw ViviException.Conflict(
                     "WEEK_OUTSIDE_WINDOW",
-                    "You can only book the current week or next week.");
+                    "You can only book an upcoming open live week.");
 
             // Validate schedule (Sunday never bookable; replacement rules).
             _ = _calendar.BuildDayPlan(week);
@@ -184,6 +199,9 @@ public sealed class LiveBookingService
 
             var slot = week.Slots.SingleOrDefault(s => s.SlotType == slotType)
                 ?? throw ViviException.NotFound("LIVE_SLOT_NOT_FOUND", "Live slot was not found.");
+
+            if (slot.IsBlocked)
+                throw ViviException.Conflict("SLOT_BLOCKED", "This slot is blocked by the studio.");
 
             if (slot.SeatsBooked >= slot.SeatCapacity)
                 throw ViviException.Conflict("FULLY_BOOKED", "This slot is fully booked.");

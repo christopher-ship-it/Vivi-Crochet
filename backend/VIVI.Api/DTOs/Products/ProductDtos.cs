@@ -16,6 +16,8 @@ public sealed class ProductRequest
     public int SortOrder { get; set; }
     public ProductType ProductType { get; set; } = ProductType.Handmade;
     public int AvailableStock { get; set; }
+    /// <summary>Configured Crochet Essentials product ids (Handmade only). Max 3.</summary>
+    public IReadOnlyList<Guid>? RecommendedEssentialIds { get; set; }
 }
 
 public sealed class ProductImageUploadUrlRequest
@@ -60,6 +62,16 @@ public sealed class LinkedCourseSummary
     public string? Level { get; set; }
 }
 
+public sealed class RecommendedEssentialSummary
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public int Price { get; set; }
+    public string? ImageUrl { get; set; }
+    public int AvailableStock { get; set; }
+}
+
 public sealed class ProductResponse
 {
     public Guid Id { get; set; }
@@ -82,4 +94,7 @@ public sealed class ProductResponse
     public ProductStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    /// <summary>Configured Crochet Essentials for cart/product recommendations.</summary>
+    public IReadOnlyList<RecommendedEssentialSummary> RecommendedEssentials { get; set; }
+        = Array.Empty<RecommendedEssentialSummary>();
 }

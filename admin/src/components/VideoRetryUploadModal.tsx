@@ -89,12 +89,23 @@ export function VideoRetryUploadModal({
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  function handleCancel() {
+    if (step === 'uploading') {
+      const confirmed = window.confirm(
+        'Upload is in progress. Are you sure you want to cancel?',
+      );
+      if (!confirmed) return;
+      abortRef.current?.abort();
+    }
+    onClose();
+  }
+
   return (
-    <div className="modal-backdrop" onClick={onClose} role="presentation">
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog">
+    <div className="modal-backdrop" onClick={handleCancel} role="presentation">
+      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="modal__header">
           <h2 className="modal__title">Retry upload — {video.title}</h2>
-          <button type="button" className="btn btn--ghost btn--icon" onClick={onClose}>✕</button>
+          <button type="button" className="btn btn--ghost btn--icon" onClick={handleCancel} aria-label="Close">✕</button>
         </div>
 
         {step === 'ready' && (
@@ -121,10 +132,15 @@ export function VideoRetryUploadModal({
             <div className="progress-bar" style={{ marginBottom: 8 }}>
               <div className="progress-bar__fill" style={{ width: `${progress?.percent ?? 0}%` }} />
             </div>
-            <p style={{ color: 'var(--vivi-muted)' }}>
+            <p style={{ color: 'var(--vivi-muted)', marginBottom: 16 }}>
               {progress?.percent ?? 0}% · {formatFileSize(progress?.loaded ?? 0)} of{' '}
               {formatFileSize(progress?.total ?? file.size)}
             </p>
+            <div className="modal__footer">
+              <button type="button" className="btn btn--ghost" onClick={handleCancel}>
+                Cancel upload
+              </button>
+            </div>
           </>
         )}
 
@@ -141,7 +157,7 @@ export function VideoRetryUploadModal({
           <>
             <div className="form-error" style={{ marginBottom: 16 }}>{error}</div>
             <div className="modal__footer">
-              <button type="button" className="btn btn--ghost" onClick={onClose}>Close</button>
+              <button type="button" className="btn btn--ghost" onClick={handleCancel}>Close</button>
               <button type="button" className="btn btn--primary" onClick={() => setStep('ready')}>
                 Try again
               </button>

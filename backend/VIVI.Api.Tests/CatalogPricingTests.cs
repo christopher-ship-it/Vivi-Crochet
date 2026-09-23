@@ -289,6 +289,10 @@ public sealed class CatalogPricingTests
 
         var stalePay = await VerifyPaymentRawAsync(abandoned, stale);
         Assert.Equal(HttpStatusCode.Conflict, stalePay.StatusCode);
+        var staleBody = await stalePay.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal(
+            "LAUNCH_OFFER_EXHAUSTED",
+            staleBody.GetProperty("code").GetString());
         Assert.Equal(100, await GetLaunchCountAsync());
     }
 
@@ -331,14 +335,101 @@ public sealed class CatalogPricingTests
         Assert.DoesNotContain(DatabaseSeeder.Catalog.BundleId, enrolledCourseIds);
     }
 
+    [Fact]
+    public async Task Renewal_offer_applies_half_price_when_access_ended()
+    {
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        var first = await CreateCourseOrderAsync(customer, DatabaseSeeder.Catalog.FoundationId);
+        Assert.Equal(299m, first.TotalAmount);
+        await VerifyPaymentAsync(customer, first);
+
+        await ExpireEnrollmentAsync(customer, DatabaseSeeder.Catalog.FoundationId, daysAgo: 1);
+
+        var pricing = await GetPricingAsync(DatabaseSeeder.Catalog.FoundationId, customer);
+        Assert.True(pricing.IsRenewalOffer);
+        Assert.Equal(50, pricing.RenewalPercentage);
+        Assert.Equal(150, pricing.Price);
+        Assert.Equal(150, pricing.ApplicablePrice);
+        Assert.False(pricing.IsLaunchOffer);
+
+        var renewal = await CreateCourseOrderAsync(customer, DatabaseSeeder.Catalog.FoundationId);
+        Assert.Equal(150m, renewal.TotalAmount);
+        await VerifyPaymentAsync(customer, renewal);
+
+        var mine = await customer.GetFromJsonAsync<List<EnrollmentResponse>>("/api/me/enrollments", Json);
+        var foundation = mine!.Where(e => e.CourseId == DatabaseSeeder.Catalog.FoundationId)
+            .OrderBy(e => e.PurchaseDate)
+            .ToList();
+        Assert.Equal(2, foundation.Count);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+        var rows = await db.CourseEnrollments
+            .Where(e => foundation.Select(f => f.Id).Contains(e.Id))
+            .OrderBy(e => e.CreatedAt)
+            .ToListAsync();
+        Assert.Equal(2, rows.Count);
+        Assert.True(rows[0].RenewalOfferUsedFlag);
+        Assert.False(rows[1].RenewalOfferUsedFlag);
+        Assert.True(rows[1].RenewalOfferEligibleFlag);
+
+        var after = await GetPricingAsync(DatabaseSeeder.Catalog.FoundationId, customer);
+        Assert.False(after.IsRenewalOffer);
+        Assert.Equal(299, after.Price);
+    }
+
+    [Fact]
+    public async Task Anonymous_pricing_ignores_renewal_eligibility()
+    {
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        var first = await CreateCourseOrderAsync(customer, DatabaseSeeder.Catalog.SignatureId);
+        await VerifyPaymentAsync(customer, first);
+        await ExpireEnrollmentAsync(customer, DatabaseSeeder.Catalog.SignatureId, daysAgo: 0);
+
+        var anon = await GetPricingAsync(DatabaseSeeder.Catalog.SignatureId);
+        Assert.False(anon.IsRenewalOffer);
+        Assert.Equal(599, anon.Price);
+
+        var mine = await GetPricingAsync(DatabaseSeeder.Catalog.SignatureId, customer);
+        Assert.True(mine.IsRenewalOffer);
+        Assert.Equal(300, mine.Price); // 50% of 599 → 299.5 → 300
+    }
+
     private static string NextPhone() => (8100000000L + Interlocked.Increment(ref PhoneSeq)).ToString();
 
-    private async Task<CoursePricingResponse> GetPricingAsync(Guid courseId)
+    private async Task<CoursePricingResponse> GetPricingAsync(Guid courseId, HttpClient? asCustomer = null)
     {
-        var client = _factory.CreateClient();
+        var client = asCustomer ?? _factory.CreateClient();
         var response = await client.GetAsync($"/api/courses/{courseId}/pricing");
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<CoursePricingResponse>(Json))!;
+    }
+
+    private async Task<CreateOrderResponse> CreateCourseOrderAsync(HttpClient customer, Guid courseId)
+    {
+        var response = await customer.PostAsJsonAsync("/api/orders", new
+        {
+            items = new[]
+            {
+                new { itemType = "Course", courseId, quantity = 1 }
+            }
+        });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<CreateOrderResponse>(Json))!;
+    }
+
+    private async Task ExpireEnrollmentAsync(HttpClient customer, Guid courseId, int daysAgo)
+    {
+        var enrollments = await customer.GetFromJsonAsync<List<EnrollmentResponse>>("/api/me/enrollments", Json);
+        var mine = Assert.Single(enrollments!.Where(e => e.CourseId == courseId)
+            .OrderByDescending(e => e.PurchaseDate));
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+        var enrollment = await db.CourseEnrollments.SingleAsync(e => e.Id == mine.Id);
+        enrollment.AccessExpiryDate = DateTime.UtcNow.Date.AddDays(-daysAgo).AddHours(12);
+        enrollment.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
     }
 
     private async Task<CreateOrderResponse> CreateBundleOrderAsync(HttpClient customer)

@@ -1,5 +1,5 @@
 import { apiRequest } from './client';
-import type { Product } from '../types';
+import type { Product, ProductType } from '../types';
 
 /** Preferred shop order: T-Shirt Yarn first (fills a full row), then Rose, then others. */
 function categoryRank(category: string): number {
@@ -28,17 +28,36 @@ export function sortCategoriesForShop(categories: string[]): string[] {
   });
 }
 
-export async function listProducts(category?: string, query?: string): Promise<Product[]> {
+export function productTypeForRoom(room: 'handmade' | 'essentials'): ProductType {
+  return room === 'essentials' ? 'Resell' : 'Handmade';
+}
+
+export async function listProducts(
+  category?: string,
+  query?: string,
+  productType?: ProductType,
+): Promise<Product[]> {
   const params = new URLSearchParams();
   if (category && category !== 'All') params.set('category', category);
   if (query?.trim()) params.set('q', query.trim());
+  if (productType) params.set('productType', productType);
   const qs = params.toString();
   const products = await apiRequest<Product[]>(`/api/products${qs ? `?${qs}` : ''}`, {}, false);
-  return sortProductsForShop(products);
+  const scoped = productType
+    ? products.filter((p) => (p.productType ?? 'Handmade') === productType)
+    : products;
+  return sortProductsForShop(scoped);
 }
 
-export async function listProductCategories(): Promise<string[]> {
-  const categories = await apiRequest<string[]>('/api/products/categories', {}, false);
+export async function listProductCategories(productType?: ProductType): Promise<string[]> {
+  const params = new URLSearchParams();
+  if (productType) params.set('productType', productType);
+  const qs = params.toString();
+  const categories = await apiRequest<string[]>(
+    `/api/products/categories${qs ? `?${qs}` : ''}`,
+    {},
+    false,
+  );
   return sortCategoriesForShop(categories);
 }
 

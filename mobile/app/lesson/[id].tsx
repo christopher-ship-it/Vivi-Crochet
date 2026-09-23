@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -10,22 +9,28 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourse } from '../../src/api/courses';
-import { getMyEnrollment, type Enrollment } from '../../src/api/enrollments';
-import { getVideo, getStreamUrl } from '../../src/api/videos';
+import { completeMyEnrollment, getMyEnrollment, type Enrollment } from '../../src/api/enrollments';
+import { getVideo, getStreamUrl, reportVideoDuration } from '../../src/api/videos';
 import { ApiClientError } from '../../src/api/client';
-import { useShoppingSession } from '../../src/auth/SessionContext';
-import { BackButton } from '../../src/components/BackButton';
+import { useLearningCustomer, useShoppingSession } from '../../src/auth/SessionContext';
 import { HeroGradient } from '../../src/components/HeroGradient';
+import { BackButton } from '../../src/components/BackButton';
 import { LessonPlayer } from '../../src/components/LessonPlayer';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Course, CourseLesson, Video } from '../../src/types';
 import { colors, fonts, radii, spacing } from '../../src/theme';
 import { formatDuration } from '../../src/utils/format';
+import {
+  getNextMainCourseEligibility,
+  isLastLessonInCourse,
+} from '../../src/utils/learnerJourney';
+import { useI18n } from '../../src/i18n';
 
 type LoadPhase = 'idle' | 'metadata' | 'stream';
 type AccessBlock = 'auth' | 'enrollment' | 'expired' | null;
 
 export default function LessonScreen() {
+  const { t } = useI18n();
   const { id, courseName, courseId: courseIdParam } = useLocalSearchParams<{
     id: string;
     courseName?: string;
@@ -34,14 +39,17 @@ export default function LessonScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isAuthenticated } = useShoppingSession();
+  const { profile } = useLearningCustomer();
   const [video, setVideo] = useState<Video | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [phase, setPhase] = useState<LoadPhase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [accessBlock, setAccessBlock] = useState<AccessBlock>(null);
   const [playerKey, setPlayerKey] = useState(0);
+  const [scrubbing, setScrubbing] = useState(false);
   const [course, setCourse] = useState<Course | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  const [finalVideoDone, setFinalVideoDone] = useState(false);
 
   const lessonReturnPath = id ? `/lesson/${id}` : '/(tabs)/learn';
   const courseId = courseIdParam || video?.courseId || course?.id;
@@ -49,6 +57,9 @@ export default function LessonScreen() {
 
   const loadStream = useCallback(async () => {
     if (!id) return;
+    // #region agent log
+    fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'A',location:'lesson/[id].tsx:loadStream:start',message:'loadStream start',data:{hasId:Boolean(id),isAuthenticated},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     setPhase('metadata');
     setError(null);
     setAccessBlock(null);
@@ -57,18 +68,40 @@ export default function LessonScreen() {
     try {
       const videoData = await getVideo(id);
       setVideo(videoData);
+      // #region agent log
+      fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'post-fix',hypothesisId:'A',location:'lesson/[id].tsx:loadStream:meta',message:'video metadata loaded',data:{isFreePreview:videoData.isFreePreview,status:videoData.status,uploadConfirmed:videoData.uploadConfirmed,contentType:videoData.contentType,fileSizeMB:Math.round((videoData.fileSizeBytes||0)/1048576),durationSeconds:videoData.durationSeconds??null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       if (!videoData.isFreePreview && !isAuthenticated) {
+        // #region agent log
+        fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'E',location:'lesson/[id].tsx:loadStream:authBlock',message:'blocked before stream — needs auth',data:{},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         setAccessBlock('auth');
         setPhase('idle');
         return;
       }
 
       setPhase('stream');
+      const streamStarted = Date.now();
       const stream = await getStreamUrl(id, !videoData.isFreePreview);
+      let streamHost = '';
+      let streamPath = '';
+      try {
+        const u = new URL(stream.streamUrl);
+        streamHost = u.host;
+        streamPath = u.pathname.slice(0, 80);
+      } catch {
+        streamHost = 'invalid-url';
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'A',location:'lesson/[id].tsx:loadStream:url',message:'stream url received',data:{elapsedMs:Date.now()-streamStarted,host:streamHost,pathPrefix:streamPath,urlLen:stream.streamUrl?.length??0,expiresAt:stream.expiresAt??null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setStreamUrl(stream.streamUrl);
       setPlayerKey((k) => k + 1);
     } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'A',location:'lesson/[id].tsx:loadStream:error',message:'loadStream failed',data:{code:err instanceof ApiClientError?err.code:'unknown',status:err instanceof ApiClientError?err.status:0,msg:err instanceof Error?err.message.slice(0,120):'non-error'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (err instanceof ApiClientError) {
         if (err.code === 'UNAUTHORIZED' || err.status === 401) {
           setAccessBlock('auth');
@@ -166,6 +199,47 @@ export default function LessonScreen() {
 
   const currentLessonNumber = currentIndex >= 0 ? currentIndex + 1 : null;
   const nextLesson = currentIndex >= 0 ? lessons[currentIndex + 1] ?? null : null;
+  const isFinalLesson = Boolean(id && lessons.length > 0 && isLastLessonInCourse(lessons, id));
+
+  const firstName = useMemo(() => {
+    const raw = profile?.fullName?.trim();
+    if (!raw) return '';
+    return raw.split(/\s+/)[0] ?? raw;
+  }, [profile?.fullName]);
+
+  const nextEligibility = useMemo(() => {
+    const cid = courseId || course?.id;
+    if (!cid) return null;
+    if (!enrollment?.completedFlag && !finalVideoDone) return null;
+    return getNextMainCourseEligibility(cid);
+  }, [courseId, course?.id, enrollment?.completedFlag, finalVideoDone]);
+
+  // Mark course finished when the learner finishes the final lesson video.
+  const markCourseComplete = useCallback(() => {
+    const cid = courseId || course?.id;
+    if (!cid || !isAuthenticated || !enrollment) return;
+    if (enrollment.completedFlag) return;
+    void completeMyEnrollment(cid)
+      .then((updated) => setEnrollment(updated))
+      .catch(() => {
+        /* best-effort journey mark */
+      });
+  }, [courseId, course?.id, isAuthenticated, enrollment]);
+
+  const handleFinalVideoComplete = useCallback(() => {
+    if (!isFinalLesson) return;
+    setFinalVideoDone(true);
+    markCourseComplete();
+  }, [isFinalLesson, markCourseComplete]);
+
+  // Reset local completion when navigating between lessons.
+  useEffect(() => {
+    setFinalVideoDone(false);
+  }, [id]);
+
+  const showCongrats = Boolean(
+    isFinalLesson && (enrollment?.completedFlag || finalVideoDone),
+  );
 
   const openLesson = useCallback(
     (lesson: CourseLesson) => {
@@ -183,13 +257,17 @@ export default function LessonScreen() {
   );
 
   if (phase !== 'idle' && !video) {
-    return <LoadingView message={phase === 'stream' ? 'Fetching stream…' : 'Loading lesson…'} />;
+    return (
+      <LoadingView
+        message={phase === 'stream' ? t('learn.fetchingStream') : t('learn.loadingLesson')}
+      />
+    );
   }
 
   if (accessBlock === 'auth') {
     return (
       <>
-        <Stack.Screen options={{ title: video?.title ?? 'Lesson', headerShown: true }} />
+        <Stack.Screen options={{ title: video?.title ?? t('headers.lesson'), headerShown: true }} />
         <ErrorView
           title="Sign in to stream"
           message="Free previews play without an account. Full lessons need a one-time mobile sign-in for a secure stream link — this is not shop checkout."
@@ -204,7 +282,7 @@ export default function LessonScreen() {
   if (accessBlock === 'enrollment') {
     return (
       <>
-        <Stack.Screen options={{ title: video?.title ?? 'Lesson', headerShown: true }} />
+        <Stack.Screen options={{ title: video?.title ?? t('headers.lesson'), headerShown: true }} />
         <ErrorView
           title="Course purchase required"
           message="This lesson unlocks after you buy the course. Tap below to purchase with Razorpay."
@@ -219,7 +297,7 @@ export default function LessonScreen() {
   if (accessBlock === 'expired') {
     return (
       <>
-        <Stack.Screen options={{ title: video?.title ?? 'Lesson', headerShown: true }} />
+        <Stack.Screen options={{ title: video?.title ?? t('headers.lesson'), headerShown: true }} />
         <ErrorView
           title="Access expired"
           message="Your access to this course has ended. Renew from the course page when renewal is available."
@@ -234,7 +312,7 @@ export default function LessonScreen() {
   if (error || !video) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Lesson', headerShown: true }} />
+        <Stack.Screen options={{ title: t('headers.lesson'), headerShown: true }} />
         <ErrorView
           title="Unable to play this lesson"
           message={error ?? 'Try again.'}
@@ -254,39 +332,44 @@ export default function LessonScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <HeroGradient style={styles.header}>
-          <BackButton onPress={() => {
-            if (router.canGoBack()) router.back();
-            else goToCourse();
-          }} />
+          <BackButton
+            onPress={goToCourse}
+            fallbackHref={courseId ? `/course/${courseId}` : '/(tabs)/learn'}
+            accessibilityLabel={t('common.back')}
+          />
           <Text style={styles.headerTitle} numberOfLines={1}>
             {displayCourseName || video.title}
           </Text>
-          <Pressable
-            style={styles.headerBtn}
-            onPress={goToCourse}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Open course"
-          >
-            <Ionicons name="ellipsis-horizontal" size={20} color={colors.ink} />
-          </Pressable>
         </HeroGradient>
 
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={!scrubbing}
         >
           {streamUrl ? (
             <LessonPlayer
               key={playerKey}
               streamUrl={streamUrl}
               title={video.title}
+              fileSizeBytes={video.fileSizeBytes}
+              contentType={video.contentType}
               onError={handlePlayerError}
               onRetry={handleRetry}
+              onComplete={handleFinalVideoComplete}
+              onScrubbingChange={setScrubbing}
+              onDurationKnown={(seconds) => {
+                if (video.durationSeconds != null && video.durationSeconds > 0) return;
+                void reportVideoDuration(video.id, seconds, !video.isFreePreview)
+                  .then((updated) => setVideo(updated))
+                  .catch(() => {
+                    // Best-effort backfill — playback continues either way.
+                  });
+              }}
             />
           ) : phase === 'stream' ? (
-            <LoadingView message="Fetching stream…" />
+            <LoadingView message={t('learn.fetchingStream')} />
           ) : (
             <ErrorView
               title="Unable to play this lesson"
@@ -304,7 +387,9 @@ export default function LessonScreen() {
 
             <Text style={styles.lessonMeta}>
               {[
-                currentLessonNumber != null ? `Lesson ${currentLessonNumber}` : null,
+                currentLessonNumber != null
+                  ? t('learn.lessonNumber', { number: currentLessonNumber })
+                  : null,
                 ...metaParts,
               ]
                 .filter(Boolean)
@@ -317,9 +402,12 @@ export default function LessonScreen() {
 
             {lessons.length > 0 && currentLessonNumber != null && (
               <View style={styles.progressBlock}>
-                <Text style={styles.blockLabel}>YOUR PROGRESS</Text>
+                <Text style={styles.blockLabel}>{t('learn.yourProgress').toUpperCase()}</Text>
                 <Text style={styles.progressText}>
-                  Lesson {currentLessonNumber} of {lessons.length}
+                  {t('learn.lessonProgress', {
+                    current: currentLessonNumber,
+                    total: lessons.length,
+                  })}
                 </Text>
                 <View style={styles.progressDots}>
                   {lessons.map((lesson, index) => {
@@ -342,7 +430,7 @@ export default function LessonScreen() {
 
             {lessons.length > 0 && (
               <View style={styles.lessonsBlock}>
-                <Text style={styles.blockLabel}>LESSONS</Text>
+                <Text style={styles.blockLabel}>{t('learn.lessons').toUpperCase()}</Text>
                 {lessons.map((lesson, index) => {
                   const active = lesson.id === id;
                   const num = String(index + 1).padStart(2, '0');
@@ -389,25 +477,67 @@ export default function LessonScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Next lesson, ${nextLesson.title}`}
               >
-                <Text style={styles.nextEyebrow}>NEXT LESSON</Text>
+                <Text style={styles.nextEyebrow}>{t('learn.nextLessonEyebrow').toUpperCase()}</Text>
                 <View style={styles.nextRow}>
                   <Text style={styles.nextTitle} numberOfLines={2}>
                     {nextLesson.title}
                   </Text>
-                  <Text style={styles.nextCta}>Continue →</Text>
+                  <Text style={styles.nextCta}>{t('learn.continueArrow')}</Text>
                 </View>
               </Pressable>
             )}
 
-            {enrollment?.completedFlag && (
+            {showCongrats ? (
               <View style={styles.congratsCard}>
-                <Text style={styles.congratsEyebrow}>COURSE COMPLETE</Text>
-                <Text style={styles.congratsTitle}>Congrats — you finished this course.</Text>
-                <Pressable onPress={() => router.push('/(tabs)/learn')} hitSlop={8}>
-                  <Text style={styles.congratsCta}>Browse more courses →</Text>
-                </Pressable>
+                <Text style={styles.congratsEyebrow}>
+                  {t('learn.courseCompleteEyebrow').toUpperCase()}
+                </Text>
+                <Text style={styles.congratsTitle}>
+                  {firstName
+                    ? t('learn.courseCompleteCongrats', { name: firstName })
+                    : t('learn.courseCompleteMessage')}
+                </Text>
+                <Text style={styles.congratsBody}>{t('learn.courseCompleteMessage')}</Text>
+
+                {nextEligibility ? (
+                  <View style={styles.eligibilityBlock}>
+                    <Text style={styles.eligibilityEyebrow}>
+                      {t('learn.nextCourseEligibilityEyebrow').toUpperCase()}
+                    </Text>
+                    <Text style={styles.eligibilityMessage}>
+                      {t('learn.nextCourseEligibilityMessage', {
+                        course: nextEligibility.shortLabel,
+                        badge: nextEligibility.badgeLabel,
+                      })}
+                    </Text>
+                    <Pressable
+                      onPress={() =>
+                        router.push({
+                          pathname: '/course/[id]',
+                          params: { id: nextEligibility.courseId },
+                        })
+                      }
+                      hitSlop={8}
+                    >
+                      <Text style={styles.congratsCta}>
+                        {t('learn.nextCourseEligibilityCta', {
+                          course: nextEligibility.shortLabel,
+                        })}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={styles.eligibilityMessage}>
+                      {t('learn.journeyCompleteMessage')}
+                    </Text>
+                    <Pressable onPress={() => router.push('/(tabs)/learn')} hitSlop={8}>
+                      <Text style={styles.congratsCta}>{t('learn.browseMoreCourses')}</Text>
+                    </Pressable>
+                  </>
+                )}
               </View>
-            )}
+            ) : null}
 
             {video.description?.trim() ? (
               <View style={styles.aboutBlock}>
@@ -425,27 +555,21 @@ export default function LessonScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.canvas,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
-  },
-  headerBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
   },
   headerTitle: {
     flex: 1,
-    textAlign: 'center',
     fontFamily: fonts.semiBold,
     fontSize: 15,
     color: colors.ink,
-    paddingHorizontal: 4,
+    paddingLeft: spacing.sm,
   },
   scroll: {
     flex: 1,
@@ -634,8 +758,34 @@ const styles = StyleSheet.create({
   },
   congratsTitle: {
     fontFamily: fonts.extraBold,
-    fontSize: 18,
-    lineHeight: 22,
+    fontSize: 20,
+    lineHeight: 24,
+    color: colors.ink,
+    marginTop: 6,
+  },
+  congratsBody: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.muted,
+    marginTop: 6,
+  },
+  eligibilityBlock: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.softBorder,
+  },
+  eligibilityEyebrow: {
+    fontFamily: fonts.semiBold,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: colors.pink,
+  },
+  eligibilityMessage: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    lineHeight: 20,
     color: colors.ink,
     marginTop: 6,
   },

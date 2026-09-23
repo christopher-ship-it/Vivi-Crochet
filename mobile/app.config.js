@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Expo config. Cleartext HTTP is disabled unless EXPO_PUBLIC_ALLOW_HTTP=true (local dev only).
  * Production builds must set EXPO_PUBLIC_API_BASE_URL to an HTTPS API URL.
  *
@@ -16,7 +16,7 @@ module.exports = ({ config }) => {
     slug: 'vivi-crochet',
     owner: 'chris88navi',
     scheme: 'vivi',
-    version: '1.0.2',
+    version: '1.0.5',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
@@ -28,35 +28,24 @@ module.exports = ({ config }) => {
     },
     androidStatusBar: {
       barStyle: 'dark-content',
-      backgroundColor: '#ffffff',
-      translucent: false,
-    },
-    ios: {
-      supportsTablet: true,
-      bundleIdentifier: 'in.vivicrochet.app',
-      buildNumber: '3',
-    },
-    android: {
-      package: 'in.vivicrochet.app',
-      versionCode: 3,
-      adaptiveIcon: {
-        backgroundColor: '#fff0f4',
-        foregroundImage: './assets/android-icon-foreground.png',
-        backgroundImage: './assets/android-icon-background.png',
-        monochromeImage: './assets/android-icon-monochrome.png',
-      },
-      predictiveBackGestureEnabled: false,
-      softwareKeyboardLayoutMode: 'resize',
-    },
-    web: {
-      favicon: './assets/favicon.png',
+      backgroundColor: '#00000000',
+      translucent: true,
     },
     plugins: [
       'expo-router',
+      'expo-image',
       'expo-video',
       'expo-secure-store',
       'expo-font',
       'expo-status-bar',
+      [
+        'expo-notifications',
+        {
+          icon: './assets/icon.png',
+          color: '#e8215b',
+          defaultChannel: 'default',
+        },
+      ],
       [
         'expo-location',
         {
@@ -73,6 +62,30 @@ module.exports = ({ config }) => {
         },
       ],
     ],
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: 'in.vivicrochet.app',
+      buildNumber: '5',
+      infoPlist: {
+        UIBackgroundModes: ['remote-notification'],
+      },
+    },
+    android: {
+      package: 'in.vivicrochet.app',
+      versionCode: 6,
+      adaptiveIcon: {
+        backgroundColor: '#fcf3ee',
+        foregroundImage: './assets/android-icon-foreground.png',
+        backgroundImage: './assets/android-icon-background.png',
+        monochromeImage: './assets/android-icon-monochrome.png',
+      },
+      predictiveBackGestureEnabled: false,
+      softwareKeyboardLayoutMode: 'resize',
+      permissions: ['RECEIVE_BOOT_COMPLETED', 'VIBRATE'],
+    },
+    web: {
+      favicon: './assets/favicon.png',
+    },
     extra: {
       apiBaseUrl,
       eas: {

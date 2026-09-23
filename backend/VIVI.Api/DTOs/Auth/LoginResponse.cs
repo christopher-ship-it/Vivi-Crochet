@@ -5,6 +5,10 @@ public sealed class LoginResponse
     public string AccessToken { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public AdminUserDto User { get; set; } = new();
+    /// <summary>True when India phone OTP created/signed in an account missing name, age, or place.</summary>
+    public bool RequiresProfileSetup { get; set; }
+    /// <summary>True when the customer record was created in the last few minutes (first signup).</summary>
+    public bool IsNewCustomer { get; set; }
 }
 
 public sealed class AdminUserDto

@@ -8,12 +8,16 @@ public sealed class CourseRequest
     public Guid? CategoryId { get; set; }
     public CourseType Type { get; set; } = CourseType.DigitalCourse;
     public string? Level { get; set; }
+    /// <summary>Short copy for Home Viral / Trending hero slides.</summary>
+    public string? Description { get; set; }
     public string? About { get; set; }
     public int Price { get; set; }
     public int? Mrp { get; set; }
     public int AccessDays { get; set; } = 30;
     public byte RenewalPercentage { get; set; } = 50;
     public string? Languages { get; set; }
+    /// <summary>Lower values appear first in Viral / Trending / home discovery.</summary>
+    public int SortOrder { get; set; }
     public IReadOnlyList<Guid>? IncludedCourseIds { get; set; }
     public int? LaunchPrice { get; set; }
     public int? LaunchLimit { get; set; }
@@ -28,6 +32,8 @@ public sealed class CourseResponse
     public string Name { get; set; } = string.Empty;
     public CourseType Type { get; set; }
     public string? Level { get; set; }
+    /// <summary>Short copy for Home Viral / Trending hero slides.</summary>
+    public string? Description { get; set; }
     public string? About { get; set; }
     public int Price { get; set; }
     public int? Mrp { get; set; }
@@ -36,6 +42,7 @@ public sealed class CourseResponse
     public string? Languages { get; set; }
     /// <summary>Resolved read URL for the course cover thumbnail.</summary>
     public string? ThumbnailUrl { get; set; }
+    public int SortOrder { get; set; }
     public CourseStatus Status { get; set; }
     public int VideoCount { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -60,6 +67,7 @@ public sealed class LaunchOfferAdminResponse
     public int LaunchLimit { get; set; }
     public int RegularPriceAfterLaunch { get; set; }
     public int Mrp { get; set; }
+    public int CompletedPurchaseCount { get; set; }
 }
 
 public sealed class CourseThumbnailUploadUrlRequest

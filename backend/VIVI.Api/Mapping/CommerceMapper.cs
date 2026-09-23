@@ -85,7 +85,8 @@ public static class CommerceMapper
         string.IsNullOrWhiteSpace(address.Landmark) ? null : address.Landmark.Trim(),
         address.City.Trim(),
         address.State.Trim(),
-        address.PinCode.Trim());
+        address.PinCode.Trim(),
+        string.IsNullOrWhiteSpace(address.Country) ? null : address.Country.Trim());
 
     public static EnrollmentResponse ToDto(this CourseEnrollment enrollment, DateTime utcNow) => new()
     {
@@ -113,12 +114,17 @@ public static class CommerceMapper
         IsLaunchOffer = pricing.IsLaunchOffer,
         LaunchOfferActive = pricing.IsLaunchOffer,
         LaunchOfferRemaining = pricing.LaunchOfferRemaining,
-        AccessDays = pricing.AccessDays
+        AccessDays = pricing.AccessDays,
+        IsRenewalOffer = pricing.IsRenewalOffer,
+        RenewalPercentage = pricing.RenewalPercentage
     };
 
     public static AdminOrderListItemResponse ToAdminListItem(this Order order, IDeliveryEstimateService delivery)
     {
         var hasPhysical = order.Items.Any(i => i.ItemType == OrderItemType.Product);
+        var hasCourse = order.Items.Any(i =>
+            i.ItemType is OrderItemType.Course or OrderItemType.CourseBundle);
+        var hasLive = order.Items.Any(i => i.ItemType == OrderItemType.LivePackage);
         var payment = order.Payments?.OrderByDescending(p => p.UpdatedAt).FirstOrDefault();
         return new AdminOrderListItemResponse
         {
@@ -128,14 +134,47 @@ public static class CommerceMapper
             PaymentStatus = payment?.Status,
             TotalAmount = order.TotalAmount,
             CustomerName = DisplayCustomerName(order.Customer, order.ShipFullName),
+            CustomerEmail = order.Customer?.Email ?? string.Empty,
             CustomerPhone = order.Customer?.PhoneNumber ?? order.ShipPhone ?? string.Empty,
+            TitleSummary = BuildTitleSummary(order.Items),
             CreatedAt = order.CreatedAt,
             HasPhysicalItems = hasPhysical,
+            HasCourseItems = hasCourse,
+            HasLiveItems = hasLive,
             DeliveryDateOverridden = delivery.HasManualOverride(order),
             DeliveryLabel = hasPhysical && order.DeliveryEstimateMinDays.HasValue
                 ? delivery.CustomerDeliveryLabel(order)
                 : null
         };
+    }
+
+    /// <summary>
+    /// Prefer product names on mixed carts, else course/bundle, else live — always from
+    /// <see cref="OrderItem.ItemNameSnapshot"/> so renamed catalog titles do not rewrite history.
+    /// </summary>
+    private static string BuildTitleSummary(IEnumerable<OrderItem> items)
+    {
+        var list = items?.ToList() ?? new List<OrderItem>();
+        if (list.Count == 0) return string.Empty;
+
+        static IEnumerable<OrderItem> Prefer(IReadOnlyList<OrderItem> source)
+        {
+            var products = source.Where(i => i.ItemType == OrderItemType.Product).ToList();
+            if (products.Count > 0) return products;
+            var courses = source
+                .Where(i => i.ItemType is OrderItemType.Course or OrderItemType.CourseBundle)
+                .ToList();
+            if (courses.Count > 0) return courses;
+            return source;
+        }
+
+        var named = Prefer(list)
+            .Select(i => (i.ItemNameSnapshot ?? string.Empty).Trim())
+            .Where(n => n.Length > 0)
+            .ToList();
+        if (named.Count == 0) return string.Empty;
+        if (named.Count == 1) return named[0];
+        return $"{named[0]} + {named.Count - 1} more";
     }
 
     public static AdminOrderDetailResponse ToAdminDetail(this Order order, IDeliveryEstimateService delivery)

@@ -7,12 +7,13 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-/** Full-screen pink → light purple wash for app pages. */
+/** Full-screen pink gradient wash for app pages. */
 export function GradientBackground({ children, style }: Props) {
   return (
     <View style={[styles.root, style]}>
       <LinearGradient
         colors={[...pageGradient.colors]}
+        locations={[...pageGradient.locations]}
         start={pageGradient.start}
         end={pageGradient.end}
         style={StyleSheet.absoluteFill}

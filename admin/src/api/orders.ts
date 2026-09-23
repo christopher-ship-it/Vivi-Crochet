@@ -32,3 +32,7 @@ export async function updateOrderStatus(
     body: JSON.stringify(data),
   });
 }
+
+export async function deleteAdminOrder(id: string): Promise<void> {
+  await apiRequest<void>(`/api/admin/orders/${id}`, { method: 'DELETE' });
+}

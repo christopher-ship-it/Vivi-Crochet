@@ -1,16 +1,21 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getOrder, type OrderResponse } from '../src/api/orders';
 import { ApiClientError } from '../src/api/client';
 import { ErrorView, LoadingView } from '../src/components/StateViews';
 import { HeroGradient } from '../src/components/HeroGradient';
-import { colors, fonts, radii, spacing } from '../src/theme';
+import { useI18n } from '../src/i18n';
+import { uiFonts, type UiFonts } from '../src/i18n/uiFonts';
+import { colors, radii, spacing } from '../src/theme';
 import { formatInr } from '../src/utils/format';
 
 export default function OrderConfirmationScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const { t, language } = useI18n();
+  const fonts = uiFonts(language);
+  const styles = useMemo(() => createStyles(fonts), [language]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [order, setOrder] = useState<OrderResponse | null>(null);
@@ -24,25 +29,34 @@ export default function OrderConfirmationScreen() {
     try {
       setOrder(await getOrder(orderId));
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Could not load order confirmation.');
+      setError(err instanceof ApiClientError ? err.message : t('orderConfirmation.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (loading) return <LoadingView message="Loading confirmation…" />;
+  if (loading) return <LoadingView message={t('orderConfirmation.loading')} />;
   if (error || !order) {
-    return <ErrorView message={error ?? 'Order not found.'} onRetry={load} />;
+    return <ErrorView message={error ?? t('orderConfirmation.notFound')} onRetry={load} />;
   }
 
   const hasPhysical = order.items.some((i) => i.itemType === 'Product');
-  const hasCourse = order.items.some(
-    (i) => i.itemType === 'Course' || i.itemType === 'CourseBundle',
+  const courseItems = order.items.filter(
+    (i) =>
+      (i.itemType === 'Course' || i.itemType === 'CourseBundle') &&
+      typeof i.courseId === 'string' &&
+      i.courseId.length > 0,
   );
+  const hasCourse = courseItems.length > 0;
+  // Prefer a single course over a bundle when both are in the same order.
+  const continueCourseId =
+    courseItems.find((i) => i.itemType === 'Course')?.courseId ??
+    courseItems[0]?.courseId ??
+    null;
   const paidOn =
     order.paidAt || order.confirmedAt
       ? new Date(order.paidAt ?? order.confirmedAt!).toLocaleString('en-IN', {
@@ -66,17 +80,23 @@ export default function OrderConfirmationScreen() {
             <Text style={styles.checkMarkText}>✓</Text>
           </View>
           <View style={styles.heroCopy}>
-            <Text style={styles.title}>Booking confirmed</Text>
-            <Text style={styles.sub}>Payment received · you’re all set</Text>
+            <Text style={styles.title}>{t('orderConfirmation.title')}</Text>
+            <Text style={styles.sub}>{t('orderConfirmation.sub')}</Text>
           </View>
         </HeroGradient>
 
         <View style={styles.panel}>
-          <Row label="Order" value={order.orderNumber} />
-          <Row label="Payment" value={order.paymentMethod ?? 'Online'} />
-          {paidOn ? <Row label="Paid on" value={paidOn} last={!order.delivery} /> : null}
+          <Row label={t('orderConfirmation.order')} value={order.orderNumber} styles={styles} />
+          <Row
+            label={t('orderConfirmation.payment')}
+            value={order.paymentMethod ?? t('checkout.online')}
+            styles={styles}
+          />
+          {paidOn ? (
+            <Row label={t('orderConfirmation.paidOn')} value={paidOn} last={!order.delivery} styles={styles} />
+          ) : null}
           {order.delivery ? (
-            <Row label="Delivery" value={order.delivery.customerLabel} last />
+            <Row label={t('orderConfirmation.delivery')} value={order.delivery.customerLabel} last styles={styles} />
           ) : null}
         </View>
 
@@ -88,22 +108,22 @@ export default function OrderConfirmationScreen() {
             >
               <View style={styles.lineText}>
                 <Text style={styles.itemName} numberOfLines={2}>{item.itemNameSnapshot}</Text>
-                <Text style={styles.itemMeta}>Qty {item.quantity}</Text>
+                <Text style={styles.itemMeta}>{t('orderConfirmation.qty', { count: item.quantity })}</Text>
               </View>
               <Text style={styles.itemPrice}>{formatInr(item.totalAmount)}</Text>
             </View>
           ))}
           <View style={styles.totalStrip}>
-            <Text style={styles.totalLabel}>Total paid</Text>
+            <Text style={styles.totalLabel}>{t('orderConfirmation.totalPaid')}</Text>
             <Text style={styles.totalValue}>{formatInr(order.totalAmount)}</Text>
           </View>
         </View>
 
         <Text style={styles.nextBody}>
           {[
-            hasPhysical ? 'Products are booked into production.' : null,
-            hasCourse ? 'Course access is active in Learn & Loop.' : null,
-            'We’ll email you the order details.',
+            hasPhysical ? t('orderConfirmation.productsProduction') : null,
+            hasCourse ? t('orderConfirmation.courseAccess') : null,
+            t('orderConfirmation.emailDetails'),
           ]
             .filter(Boolean)
             .join(' ')}
@@ -111,16 +131,22 @@ export default function OrderConfirmationScreen() {
 
         <Pressable
           style={styles.primaryBtn}
-          onPress={() =>
-            router.replace(
-              hasCourse && !hasPhysical
-                ? '/(tabs)/learn'
-                : { pathname: '/(tabs)/shop', params: { shopTab: 'orders' } },
-            )
-          }
+          onPress={() => {
+            if (hasCourse && !hasPhysical && continueCourseId) {
+              router.replace(`/course/${continueCourseId}`);
+              return;
+            }
+            if (hasCourse && !hasPhysical) {
+              router.replace('/(tabs)/learn');
+              return;
+            }
+            router.replace({ pathname: '/(tabs)/shop', params: { shopTab: 'orders' } });
+          }}
         >
           <Text style={styles.primaryText}>
-            {hasCourse && !hasPhysical ? 'Go to Learn' : 'Check my orders'}
+            {hasCourse && !hasPhysical
+              ? t('orderConfirmation.continueLearn')
+              : t('orderConfirmation.viewOrders')}
           </Text>
         </Pressable>
       </ScrollView>
@@ -128,7 +154,17 @@ export default function OrderConfirmationScreen() {
   );
 }
 
-function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function Row({
+  label,
+  value,
+  last,
+  styles,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
     <View style={[styles.row, last && styles.rowLast]}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -137,7 +173,8 @@ function Row({ label, value, last }: { label: string; value: string; last?: bool
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(fonts: UiFonts) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
@@ -284,4 +321,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.white,
   },
-});
+  });
+}

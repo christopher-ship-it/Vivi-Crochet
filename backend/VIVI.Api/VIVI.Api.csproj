@@ -23,4 +23,18 @@
     </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.4" />
   </ItemGroup>
+
+  <!-- Optional: ship static ffmpeg next to the app for Azure Linux App Service -->
+  <ItemGroup>
+    <Content Include="..\tools\ffmpeg\ffmpeg" Condition="Exists('..\tools\ffmpeg\ffmpeg')">
+      <Link>tools\ffmpeg\ffmpeg</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\tools\ffmpeg\ffmpeg.exe" Condition="Exists('..\tools\ffmpeg\ffmpeg.exe')">
+      <Link>tools\ffmpeg\ffmpeg.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

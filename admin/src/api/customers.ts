@@ -9,3 +9,7 @@ export async function listAdminCustomers(q?: string): Promise<AdminCustomerListI
     `/api/admin/customers${query ? `?${query}` : ''}`,
   );
 }
+
+export async function deleteAdminCustomer(id: string): Promise<void> {
+  await apiRequest<void>(`/api/admin/customers/${id}`, { method: 'DELETE' });
+}

@@ -1,12 +1,18 @@
 import { apiRequest } from './client';
-import type { Product, ProductImageUploadCompleteRequest, ProductImageUploadUrlRequest, ProductImageUploadUrlResponse, ProductRequest } from '../types';
+import type { Product, ProductImageUploadCompleteRequest, ProductImageUploadUrlRequest, ProductImageUploadUrlResponse, ProductRequest, ProductType } from '../types';
 
-export async function listProducts(): Promise<Product[]> {
-  return apiRequest<Product[]>('/api/products');
+export async function listProducts(productType?: ProductType): Promise<Product[]> {
+  const params = new URLSearchParams();
+  if (productType) params.set('productType', productType);
+  const qs = params.toString();
+  return apiRequest<Product[]>(`/api/products${qs ? `?${qs}` : ''}`);
 }
 
-export async function listProductCategories(): Promise<string[]> {
-  return apiRequest<string[]>('/api/products/categories');
+export async function listProductCategories(productType?: ProductType): Promise<string[]> {
+  const params = new URLSearchParams();
+  if (productType) params.set('productType', productType);
+  const qs = params.toString();
+  return apiRequest<string[]>(`/api/products/categories${qs ? `?${qs}` : ''}`);
 }
 
 export async function getProduct(id: string): Promise<Product> {

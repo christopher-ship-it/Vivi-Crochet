@@ -7,7 +7,13 @@ import {
   updateVideo,
 } from '../api/videos';
 import type { Video } from '../types';
-import { formatFileSize, parseDuration, validateVideoFile } from '../utils/format';
+import {
+  formatDuration,
+  formatFileSize,
+  parseDuration,
+  readVideoFileDurationSeconds,
+  validateVideoFile,
+} from '../utils/format';
 import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
 
 interface VideoUploadModalProps {
@@ -32,6 +38,7 @@ export function VideoUploadModal({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState('');
+  const [durationHint, setDurationHint] = useState<string | null>(null);
   const [isFreePreview, setIsFreePreview] = useState(false);
   const [sortOrder, setSortOrder] = useState(nextSortOrder);
   const [step, setStep] = useState<Step>('select');
@@ -39,7 +46,7 @@ export function VideoUploadModal({
   const [error, setError] = useState<string | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
 
-  function handleFileChange(selected: File | null) {
+  async function handleFileChange(selected: File | null) {
     if (!selected) return;
     const validation = validateVideoFile(selected);
     if (!validation.valid) {
@@ -49,9 +56,18 @@ export function VideoUploadModal({
     }
     setError(null);
     setFile(selected);
+    setDurationHint('Reading duration from video…');
     if (!title) {
       const baseName = selected.name.replace(/\.[^.]+$/, '');
       setTitle(baseName);
+    }
+
+    const seconds = await readVideoFileDurationSeconds(selected);
+    if (seconds != null && seconds > 0) {
+      setDuration(formatDuration(seconds));
+      setDurationHint('Detected from video file');
+    } else {
+      setDurationHint('Could not read duration — enter mm:ss manually');
     }
   }
 
@@ -92,7 +108,11 @@ export function VideoUploadModal({
 
       let video = await completeUpload(ticket.videoId);
 
-      const durationSeconds = parseDuration(duration);
+      let durationSeconds = parseDuration(duration);
+      if (durationSeconds == null || durationSeconds <= 0) {
+        durationSeconds = await readVideoFileDurationSeconds(file);
+      }
+
       video = await updateVideo(ticket.videoId, {
         title: title.trim() || video.title,
         description: description.trim() || null,
@@ -116,6 +136,12 @@ export function VideoUploadModal({
   }
 
   function handleCancel() {
+    if (step === 'uploading') {
+      const confirmed = window.confirm(
+        'Upload is in progress. Are you sure you want to cancel?',
+      );
+      if (!confirmed) return;
+    }
     abortRef.current?.abort();
     onClose();
   }
@@ -145,6 +171,7 @@ export function VideoUploadModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-labelledby="upload-modal-title"
+        aria-modal="true"
       >
         <div className="modal__header">
           <h2 id="upload-modal-title" className="modal__title">Add video lesson</h2>
@@ -161,7 +188,7 @@ export function VideoUploadModal({
                 ref={fileInputRef}
                 type="file"
                 accept=".mp4,.mov,.webm,video/mp4,video/quicktime,video/webm"
-                onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+                onChange={(e) => void handleFileChange(e.target.files?.[0] ?? null)}
               />
             </div>
 
@@ -187,9 +214,17 @@ export function VideoUploadModal({
                 <input
                   id="v-duration"
                   value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  placeholder="5:30"
+                  onChange={(e) => {
+                    setDuration(e.target.value);
+                    setDurationHint(null);
+                  }}
+                  placeholder="Auto from video"
                 />
+                {durationHint ? (
+                  <span style={{ fontSize: 12, color: 'var(--vivi-muted)', marginTop: 4 }}>
+                    {durationHint}
+                  </span>
+                ) : null}
               </div>
               <div className="form-field">
                 <label htmlFor="v-sort">Sort order</label>
@@ -228,7 +263,7 @@ export function VideoUploadModal({
                 type="button"
                 className="btn btn--primary"
                 disabled={!file || !title.trim()}
-                onClick={startUpload}
+                onClick={() => void startUpload()}
               >
                 Upload video
               </button>
@@ -262,7 +297,8 @@ export function VideoUploadModal({
         {step === 'success' && (
           <>
             <p style={{ marginBottom: 16 }}>
-              Upload complete. The video is saved as <strong>Draft</strong> until you publish it.
+              Upload complete. The file is being <strong>compressed for mobile</strong> (H.264 MP4).
+              You can publish once the lesson shows Ready.
             </p>
             <div className="modal__footer">
               <button type="button" className="btn btn--primary" onClick={onClose}>Done</button>
@@ -284,7 +320,7 @@ export function VideoUploadModal({
             )}
             <div className="modal__footer">
               <button type="button" className="btn btn--ghost" onClick={handleCancel}>Close</button>
-              <button type="button" className="btn btn--primary" onClick={handleRetry}>Retry</button>
+              <button type="button" className="btn btn--primary" onClick={() => void handleRetry()}>Retry</button>
             </div>
           </>
         )}

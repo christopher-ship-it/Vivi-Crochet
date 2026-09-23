@@ -62,7 +62,9 @@ export function CoursesPage() {
       <header className="page-header">
         <div>
           <h1 className="page-header__title">Courses & videos</h1>
-          <p className="page-header__subtitle">Manage Learn & Loop courses and lesson uploads</p>
+          <p className="page-header__subtitle">
+            Manage Learn &amp; Loop, Viral projects, and Trending Tutorials
+          </p>
         </div>
         <div className="page-header__actions">
           <Link to="/courses/new" className="btn btn--primary">New course</Link>
@@ -93,32 +95,48 @@ export function CoursesPage() {
 
       {!loading && !error && courses.length > 0 && (
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table data-table--courses">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Price</th>
-                <th>Videos</th>
-                <th>Status</th>
-                <th>Updated</th>
-                <th aria-label="Actions" />
+                <th className="col-name">Name</th>
+                <th className="col-category">Category</th>
+                <th className="col-order">Order</th>
+                <th className="col-type">Type</th>
+                <th className="col-price">Price</th>
+                <th className="col-videos">Videos</th>
+                <th className="col-status">Status</th>
+                <th className="col-updated">Updated</th>
+                <th className="col-actions" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
               {courses.map((course) => (
                 <tr key={course.id}>
-                  <td style={{ fontWeight: 600 }}>{course.name}</td>
-                  <td>{COURSE_TYPE_LABELS[course.type] ?? course.type}</td>
-                  <td>{formatInr(course.price)}</td>
-                  <td>{course.videoCount}</td>
-                  <td>
+                  <td className="col-name">
+                    <Link to={`/courses/${course.id}`} className="cell-link" title={course.name}>
+                      {course.name}
+                    </Link>
+                  </td>
+                  <td className="col-category">
+                    <span className="cell-clip" title={course.categoryName ?? undefined}>
+                      {course.categoryName ?? '—'}
+                    </span>
+                  </td>
+                  <td className="col-order">{course.sortOrder ?? 0}</td>
+                  <td className="col-type">
+                    <span className="cell-clip">
+                      {COURSE_TYPE_LABELS[course.type] ?? course.type}
+                    </span>
+                  </td>
+                  <td className="col-price">{formatInr(course.price)}</td>
+                  <td className="col-videos">{course.videoCount}</td>
+                  <td className="col-status">
                     <span className={`badge badge--${course.status.toLowerCase()}`}>
                       {course.status}
                     </span>
                   </td>
-                  <td>{formatDate(course.updatedAt)}</td>
-                  <td>
+                  <td className="col-updated">{formatDate(course.updatedAt)}</td>
+                  <td className="col-actions">
                     <div className="data-table__actions">
                       <RowActionsMenu
                         label={`Actions for ${course.name}`}

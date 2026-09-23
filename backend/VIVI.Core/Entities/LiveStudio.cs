@@ -15,6 +15,10 @@ public sealed class LiveWeek
     /// <summary>Optional single Mon–Fri studio break day. Saturday remains replacement-only; Sunday always OFF.</summary>
     public DayOfWeek? BreakWeekday { get; set; }
     public bool IsBookable { get; set; } = true;
+    /// <summary>Display name of the tutor for this week (default SRI).</summary>
+    public string TutorName { get; set; } = "SRI";
+    /// <summary>Blob path for the tutor portrait photo; null shows the mobile placeholder.</summary>
+    public string? TutorPhotoBlobPath { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
@@ -30,6 +34,8 @@ public sealed class LiveWeekSlot
     public int SeatCapacity { get; set; } = 4;
     /// <summary>Confirmed + pending-payment reservations currently held.</summary>
     public int SeatsBooked { get; set; }
+    /// <summary>When true, customers cannot book this Morning/Evening circle for the week.</summary>
+    public bool IsBlocked { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

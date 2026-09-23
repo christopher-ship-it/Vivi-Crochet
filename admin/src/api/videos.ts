@@ -44,3 +44,18 @@ export async function publishVideo(id: string): Promise<Video> {
 export async function unpublishVideo(id: string): Promise<Video> {
   return apiRequest<Video>(`/api/videos/${id}/unpublish`, { method: 'POST' });
 }
+
+export async function requeueVideoTranscode(id: string): Promise<Video> {
+  return apiRequest<Video>(`/api/videos/${id}/requeue-transcode`, { method: 'POST' });
+}
+
+export async function getStreamUrl(id: string): Promise<{ streamUrl: string }> {
+  return apiRequest<{ streamUrl: string }>(`/api/videos/${id}/stream-url`);
+}
+
+export async function reportVideoDuration(id: string, durationSeconds: number): Promise<Video> {
+  return apiRequest<Video>(`/api/videos/${id}/report-duration`, {
+    method: 'POST',
+    body: JSON.stringify({ durationSeconds }),
+  });
+}

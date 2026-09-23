@@ -68,4 +68,7 @@ public static class VideoFileRules
 
     public static string BuildOriginalBlobPath(Guid courseId, Guid videoId, string sanitizedFileName)
         => $"courses/{courseId:D}/videos/{videoId:D}/original/{sanitizedFileName}";
+
+    public static string BuildPlayableBlobPath(Guid courseId, Guid videoId)
+        => $"courses/{courseId:D}/videos/{videoId:D}/playable/lesson.mp4";
 }

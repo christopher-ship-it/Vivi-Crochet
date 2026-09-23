@@ -1,10 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Live;
 using VIVI.Api.Mapping;
+using VIVI.Api.Services;
+using VIVI.Core;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
+using VIVI.Core.Interfaces;
 using VIVI.Infrastructure.Commerce;
 using VIVI.Infrastructure.Data;
 
@@ -12,21 +16,27 @@ namespace VIVI.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/live")]
-[Authorize(Roles = nameof(UserRole.Admin))]
+[Authorize(Roles = AuthRoles.Console)]
 public sealed class AdminLiveController : ControllerBase
 {
     private readonly ViviDbContext _db;
     private readonly LiveCalendarService _calendar;
     private readonly LiveBookingService _bookings;
+    private readonly IBlobStorageService _blob;
+    private readonly ILogger<AdminLiveController> _logger;
 
     public AdminLiveController(
         ViviDbContext db,
         LiveCalendarService calendar,
-        LiveBookingService bookings)
+        LiveBookingService bookings,
+        IBlobStorageService blob,
+        ILogger<AdminLiveController> logger)
     {
         _db = db;
         _calendar = calendar;
         _bookings = bookings;
+        _blob = blob;
+        _logger = logger;
     }
 
     [HttpPost("ensure-season")]
@@ -51,7 +61,149 @@ public sealed class AdminLiveController : ControllerBase
             .ThenBy(w => w.WeekNumber)
             .ToListAsync(cancellationToken);
 
-        return Ok(weeks.Select(MapWeek).ToList());
+        return Ok(await Task.WhenAll(weeks.Select(w => MapWeekAsync(w, cancellationToken))));
+    }
+
+    [HttpPost("weeks/{weekId:guid}/tutor-photo-upload-url")]
+    [ProducesResponseType(typeof(LiveTutorPhotoUploadUrlResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<LiveTutorPhotoUploadUrlResponse>> CreateTutorPhotoUploadUrl(
+        Guid weekId,
+        [FromBody] LiveTutorPhotoUploadUrlRequest request,
+        CancellationToken cancellationToken)
+    {
+        _ = await _db.LiveWeeks.AsNoTracking()
+                .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
+
+        ImageFileRules.Validate(
+            request.FileName,
+            request.ContentType,
+            request.FileSizeBytes,
+            ImageFileRules.DefaultMaxBytes);
+
+        var safeName = ImageFileRules.SanitizeFileName(request.FileName);
+        var uniqueName = $"{Guid.NewGuid():N}-{safeName}";
+        var blobPath = ImageFileRules.BuildLiveTutorPhotoBlobPath(weekId, uniqueName);
+        var ticket = await _blob.CreateUploadSasAsync(blobPath, request.ContentType.Trim(), cancellationToken);
+
+        return Ok(new LiveTutorPhotoUploadUrlResponse
+        {
+            UploadUrl = ticket.UploadUrl,
+            ExpiresAt = ticket.ExpiresAt,
+            BlobPath = blobPath,
+            MaxFileSizeBytes = ImageFileRules.DefaultMaxBytes
+        });
+    }
+
+    [HttpPost("weeks/{weekId:guid}/tutor-photo-upload-complete")]
+    [ProducesResponseType(typeof(AdminLiveWeekResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveWeekResponse>> CompleteTutorPhotoUpload(
+        Guid weekId,
+        [FromBody] LiveTutorPhotoUploadCompleteRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ImageFileRules.IsOwnedLiveTutorPhotoPath(weekId, request.BlobPath))
+            throw new ViviException("INVALID_BLOB_PATH", "The blob path does not belong to this live week.");
+
+        ImageFileRules.Validate(
+            Path.GetFileName(request.BlobPath),
+            request.ContentType,
+            request.FileSizeBytes,
+            ImageFileRules.DefaultMaxBytes);
+
+        var completed = await _blob.TryCompleteUploadAsync(
+            request.BlobPath,
+            request.FileSizeBytes,
+            request.ContentType.Trim(),
+            cancellationToken);
+
+        if (!completed)
+            throw ViviException.Conflict(
+                "BLOB_MISSING",
+                "The image file was not found in storage. Upload it to the SAS URL, then retry.");
+
+        var week = await _db.LiveWeeks
+                .Include(w => w.Slots)
+                .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
+
+        var previous = week.TutorPhotoBlobPath;
+        week.TutorPhotoBlobPath = request.BlobPath;
+        if (string.IsNullOrWhiteSpace(week.TutorName))
+            week.TutorName = "SRI";
+        week.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(previous)
+            && !string.Equals(previous, request.BlobPath, StringComparison.OrdinalIgnoreCase)
+            && ProductImageResolver.IsBlobPath(previous))
+        {
+            try
+            {
+                await _blob.DeleteAsync(previous, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete previous live tutor photo {BlobPath}", previous);
+            }
+        }
+
+        return Ok(await MapWeekAsync(week, cancellationToken));
+    }
+
+    [HttpDelete("weeks/{weekId:guid}/tutor-photo")]
+    [ProducesResponseType(typeof(AdminLiveWeekResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveWeekResponse>> DeleteTutorPhoto(
+        Guid weekId,
+        CancellationToken cancellationToken)
+    {
+        var week = await _db.LiveWeeks
+                .Include(w => w.Slots)
+                .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
+
+        var previous = week.TutorPhotoBlobPath;
+        week.TutorPhotoBlobPath = null;
+        week.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(previous) && ProductImageResolver.IsBlobPath(previous))
+        {
+            try
+            {
+                await _blob.DeleteAsync(previous, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete live tutor photo {BlobPath}", previous);
+            }
+        }
+
+        return Ok(await MapWeekAsync(week, cancellationToken));
+    }
+
+    [HttpPut("weeks/{weekId:guid}/tutor")]
+    [ProducesResponseType(typeof(AdminLiveWeekResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveWeekResponse>> SetTutor(
+        Guid weekId,
+        [FromBody] SetLiveWeekTutorRequest request,
+        CancellationToken cancellationToken)
+    {
+        var name = (request.TutorName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ViviException("INVALID_TUTOR_NAME", "Tutor name is required.");
+        if (name.Length > 100)
+            throw new ViviException("INVALID_TUTOR_NAME", "Tutor name must be 100 characters or fewer.");
+
+        var week = await _db.LiveWeeks
+                .Include(w => w.Slots)
+                .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
+
+        week.TutorName = name;
+        week.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        return Ok(await MapWeekAsync(week, cancellationToken));
     }
 
     [HttpPut("weeks/{weekId:guid}/break")]
@@ -85,6 +237,18 @@ public sealed class AdminLiveController : ControllerBase
         CancellationToken cancellationToken)
     {
         await _calendar.SetSlotCapacityAsync(weekId, slotType, request.SeatCapacity, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPut("weeks/{weekId:guid}/slots/{slotType}/blocked")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SetSlotBlocked(
+        Guid weekId,
+        LiveSlotType slotType,
+        [FromBody] SetLiveSlotBlockedRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _calendar.SetSlotBlockedAsync(weekId, slotType, request.IsBlocked, cancellationToken);
         return NoContent();
     }
 
@@ -165,22 +329,38 @@ public sealed class AdminLiveController : ControllerBase
         return Ok(MapDetail(booking));
     }
 
-    private AdminLiveWeekResponse MapWeek(Core.Entities.LiveWeek week) => new()
+    private async Task<AdminLiveWeekResponse> MapWeekAsync(
+        Core.Entities.LiveWeek week,
+        CancellationToken cancellationToken)
     {
-        Id = week.Id,
-        WeekNumber = week.WeekNumber,
-        SeasonYear = week.SeasonYear,
-        StartDate = week.StartDate,
-        EndDate = week.EndDate,
-        BreakWeekday = week.BreakWeekday?.ToString(),
-        IsBookable = week.IsBookable,
-        PackagePrice = _calendar.PackagePrice,
-        Slots = week.Slots.OrderBy(s => s.SlotType).Select(MapSlot).ToList()
-    };
+        var tutorPhotoUrl = await ProductImageResolver.ResolveAsync(
+            week.TutorPhotoBlobPath,
+            _blob,
+            cancellationToken);
+        return new AdminLiveWeekResponse
+        {
+            Id = week.Id,
+            WeekNumber = week.WeekNumber,
+            SeasonYear = week.SeasonYear,
+            StartDate = week.StartDate,
+            EndDate = week.EndDate,
+            BreakWeekday = week.BreakWeekday?.ToString(),
+            IsBookable = week.IsBookable,
+            PackagePrice = _calendar.PackagePrice,
+            TutorName = string.IsNullOrWhiteSpace(week.TutorName) ? "SRI" : week.TutorName.Trim(),
+            TutorPhotoUrl = tutorPhotoUrl,
+            Slots = week.Slots.OrderBy(s => s.SlotType).Select(MapSlot).ToList()
+        };
+    }
 
     private LiveSlotAvailabilityResponse MapSlot(Core.Entities.LiveWeekSlot slot)
     {
         var remaining = Math.Max(0, slot.SeatCapacity - slot.SeatsBooked);
+        var status = slot.IsBlocked
+            ? "Blocked"
+            : remaining == 0
+                ? "FullyBooked"
+                : "Available";
         return new LiveSlotAvailabilityResponse
         {
             SlotType = slot.SlotType.ToString(),
@@ -188,8 +368,9 @@ public sealed class AdminLiveController : ControllerBase
             Hours = _calendar.SlotHours(slot.SlotType),
             SeatCapacity = slot.SeatCapacity,
             SeatsBooked = slot.SeatsBooked,
-            SeatsRemaining = remaining,
-            Status = remaining == 0 ? "FullyBooked" : "Available"
+            SeatsRemaining = slot.IsBlocked ? 0 : remaining,
+            IsBlocked = slot.IsBlocked,
+            Status = status
         };
     }
 

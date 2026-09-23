@@ -684,7 +684,7 @@ These need a human answer. Until they are settled, implementation should not sta
 5. **Playback rights.** Confirm P0 rule: any logged-in customer can play all **published** lessons (no ₹299 entitlement check yet).
 6. **Mobile distribution.** Expo internal build / APK / TestFlight only, or is a store listing mandatory on 15 Sep?
 7. **Max video size** and **allowed formats**. Proposed: 2 GB, `mp4` / `mov` / `webm`, recommend H.264.
-8. **Custom domain** for API and admin (`api.vivicrochet.in`, `admin.vivicrochet.in`) — needed for launch or Azure default hostnames OK?
+8. **Custom domain** for API and admin (`api.vivicrochet01.com`, `admin.vivicrochet01.com`) — see `scripts/wire-custom-domains.ps1`
 9. **Existing videos.** Are there real lesson files to seed, or only the design’s placeholder titles?
 
 ---

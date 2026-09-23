@@ -9,6 +9,8 @@ public sealed class Course
     public string Name { get; set; } = string.Empty;
     public CourseType Type { get; set; } = CourseType.DigitalCourse;
     public string? Level { get; set; }
+    /// <summary>Short copy for Home Viral / Trending hero slides.</summary>
+    public string? Description { get; set; }
     public string? About { get; set; }
     public int Price { get; set; }
     public int? Mrp { get; set; }
@@ -17,6 +19,8 @@ public sealed class Course
     public string? Languages { get; set; }
     /// <summary>Blob path for the Learn & Loop course cover (resolved to a read SAS in API responses).</summary>
     public string? ThumbnailUrl { get; set; }
+    /// <summary>Lower values appear first in Viral / Trending / home discovery lists.</summary>
+    public int SortOrder { get; set; }
     public CourseStatus Status { get; set; } = CourseStatus.Draft;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

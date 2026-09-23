@@ -27,6 +27,7 @@ public sealed class PaymentFulfillmentService
     private readonly IRazorpayPaymentGateway _razorpay;
     private readonly TransactionalEmailService _emails;
     private readonly LaunchOfferService _launchOffers;
+    private readonly PricingService _pricing;
     private readonly IDeliveryEstimateService _delivery;
     private readonly InventoryService _inventory;
     private readonly LiveBookingService _liveBookings;
@@ -37,6 +38,7 @@ public sealed class PaymentFulfillmentService
         IRazorpayPaymentGateway razorpay,
         TransactionalEmailService emails,
         LaunchOfferService launchOffers,
+        PricingService pricing,
         IDeliveryEstimateService delivery,
         InventoryService inventory,
         LiveBookingService liveBookings)
@@ -46,6 +48,7 @@ public sealed class PaymentFulfillmentService
         _razorpay = razorpay;
         _emails = emails;
         _launchOffers = launchOffers;
+        _pricing = pricing;
         _delivery = delivery;
         _inventory = inventory;
         _liveBookings = liveBookings;
@@ -198,14 +201,26 @@ public sealed class PaymentFulfillmentService
                 .Include(c => c.LaunchOffer)
                 .SingleAsync(c => c.Id == item.CourseId.Value, cancellationToken);
 
-            await _launchOffers.EnsureLaunchSlotForPricedOrderOrThrowAsync(course, item.UnitPrice, cancellationToken);
+            var renewal = await _pricing.TryResolveRenewalAsync(
+                course,
+                order.CustomerId,
+                now,
+                cancellationToken);
+            var isRenewalPurchase = renewal is not null
+                && decimal.Round(item.UnitPrice, 0, MidpointRounding.AwayFromZero) == renewal.RenewalPrice;
+
+            if (!isRenewalPurchase)
+                await _launchOffers.EnsureLaunchSlotForPricedOrderOrThrowAsync(course, item.UnitPrice, cancellationToken);
 
             var targetCourseIds = course.Type == CourseType.Bundle
                 ? course.BundleItems.OrderBy(b => b.SortOrder).Select(b => b.IncludedCourseId).ToList()
-                : [course.Id];
+                : new List<Guid> { course.Id };
 
             if (course.Type == CourseType.Bundle && targetCourseIds.Count == 0)
                 throw ViviException.Conflict("BUNDLE_EMPTY", "This bundle has no included courses configured.");
+
+            if (isRenewalPurchase)
+                await _pricing.MarkRenewalOffersUsedAsync(order.CustomerId, course, now, cancellationToken);
 
             foreach (var targetCourseId in targetCourseIds)
             {
@@ -222,7 +237,14 @@ public sealed class PaymentFulfillmentService
                     continue;
 
                 var accessStart = now;
-                var accessExpiry = accessStart.AddDays(course.AccessDays);
+                var accessExpiry = isRenewalPurchase
+                    ? await _pricing.ResolveRenewalAccessExpiryAsync(
+                        order.CustomerId,
+                        [targetCourseId],
+                        course.AccessDays,
+                        now,
+                        cancellationToken)
+                    : accessStart.AddDays(course.AccessDays);
 
                 _db.CourseEnrollments.Add(new CourseEnrollment
                 {

@@ -20,7 +20,7 @@ public sealed class LiveStudioOptions
     public string EveningSlotName { get; set; } = "Evening Crochet Circle";
 
     /// <summary>Display hours for Morning Crochet Circle.</summary>
-    public string MorningSlotHours { get; set; } = "11:00 AM – 1:00 PM";
+    public string MorningSlotHours { get; set; } = "10:00 AM – 12:00 PM";
 
     /// <summary>Display hours for Evening Crochet Circle.</summary>
     public string EveningSlotHours { get; set; } = "6:00 PM – 8:00 PM";
@@ -35,8 +35,9 @@ public sealed class LiveStudioOptions
     public int WeeklyLiveHours { get; set; } = 10;
 
     /// <summary>
-    /// How many weeks customers may see/book, starting at the current India week.
-    /// Default 2 = this week + next week only.
+    /// How many upcoming open weeks customers may see/book.
+    /// Current week is open only until Monday Morning Circle start (IST);
+    /// after that the window starts at next Monday. Default 2.
     /// </summary>
     public int CustomerSelectableWeekCount { get; set; } = 2;
 }

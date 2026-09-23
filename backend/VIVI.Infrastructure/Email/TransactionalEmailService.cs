@@ -53,6 +53,11 @@ public sealed class TransactionalEmailService
                 await SendLiveBookingConfirmationAsync(order, customer, cancellationToken);
             }
 
+            // Bundle / All-Access Pass: one order confirmation covers the purchase.
+            // Do not send a separate "course is ready" email per included course.
+            if (order.Items.Any(i => i.ItemType == OrderItemType.CourseBundle))
+                return;
+
             var enrollments = await _db.CourseEnrollments
                 .AsNoTracking()
                 .Include(e => e.Course)

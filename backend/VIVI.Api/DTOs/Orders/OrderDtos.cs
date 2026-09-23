@@ -138,9 +138,14 @@ public sealed class AdminOrderListItemResponse
     public PaymentStatus? PaymentStatus { get; set; }
     public decimal TotalAmount { get; set; }
     public string CustomerName { get; set; } = string.Empty;
+    public string CustomerEmail { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
+    /// <summary>Display title from order item name snapshots (e.g. first item + "N more").</summary>
+    public string TitleSummary { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public bool HasPhysicalItems { get; set; }
+    public bool HasCourseItems { get; set; }
+    public bool HasLiveItems { get; set; }
     public bool DeliveryDateOverridden { get; set; }
     public string? DeliveryLabel { get; set; }
 }

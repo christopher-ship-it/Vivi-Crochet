@@ -16,4 +16,7 @@ public sealed class OtpVerifyRequest
     public Guid ChallengeId { get; set; }
     public string Code { get; set; } = string.Empty;
     public string? Name { get; set; }
+    public int? Age { get; set; }
+    public string? State { get; set; }
+    public string? City { get; set; }
 }

@@ -104,6 +104,40 @@ public sealed class InMemoryBlobStorageService : IBlobStorageService
         return Task.CompletedTask;
     }
 
+    public Task DownloadToFileAsync(
+        string blobPath,
+        string localFilePath,
+        CancellationToken cancellationToken = default)
+    {
+        var source = ResolveFilePath(blobPath);
+        if (source is null || !File.Exists(source))
+            throw new FileNotFoundException($"Blob not found: {blobPath}");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(localFilePath)!);
+        File.Copy(source, localFilePath, overwrite: true);
+        return Task.CompletedTask;
+    }
+
+    public Task UploadFromFileAsync(
+        string blobPath,
+        string localFilePath,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(localFilePath))
+            throw new FileNotFoundException($"Local file not found: {localFilePath}");
+
+        var dest = ResolveFilePath(blobPath)
+            ?? throw new InvalidOperationException($"Invalid blob path: {blobPath}");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        File.Copy(localFilePath, dest, overwrite: true);
+        var length = new FileInfo(dest).Length;
+        var type = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType.Trim();
+        _blobs[blobPath] = new MemoryBlob(true, length, type);
+        return Task.CompletedTask;
+    }
+
     public bool TryWriteBlob(string blobPath, ReadOnlySpan<byte> content, string? contentType)
     {
         if (!_blobs.ContainsKey(blobPath))

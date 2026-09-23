@@ -27,8 +27,36 @@ public sealed class EmailTests : IClassFixture<ApiFactory>
         var order = await OrderTestsHelper.CreateCourseOrderAsync(customer, courseId);
         await OrderTestsHelper.VerifyPaymentAsync(customer, order);
 
-        Assert.Contains(emails.SentMessages, m => m.Subject.Contains("order is confirmed", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(emails.SentMessages, m =>
+            m.Subject.Contains("order is confirmed", StringComparison.OrdinalIgnoreCase)
+            || m.Subject.Contains("order has been placed", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(emails.SentMessages, m => m.Subject.Contains("course is ready", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Bundle_payment_sends_only_order_confirmation_not_per_course_emails()
+    {
+        var emails = _factory.GetFakeEmailService();
+        emails.Clear();
+
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), "9444444401");
+        var create = await customer.PostAsJsonAsync("/api/orders", new
+        {
+            items = new[]
+            {
+                new { itemType = "Course", courseId = DatabaseSeeder.Catalog.BundleId, quantity = 1 }
+            }
+        });
+        create.EnsureSuccessStatusCode();
+        var order = (await create.Content.ReadFromJsonAsync<VIVI.Api.DTOs.Orders.CreateOrderResponse>(AuthTests.Json))!;
+        await OrderTestsHelper.VerifyPaymentAsync(customer, order);
+
+        Assert.Contains(emails.SentMessages, m =>
+            m.Subject.Contains("order is confirmed", StringComparison.OrdinalIgnoreCase)
+            || m.Subject.Contains("order has been placed", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(emails.SentMessages, m =>
+            m.Subject.Contains("course is ready", StringComparison.OrdinalIgnoreCase));
+        Assert.Single(emails.SentMessages);
     }
 
     [Fact]
@@ -71,6 +99,7 @@ public sealed class EmailTests : IClassFixture<ApiFactory>
             razorpay,
             emails,
             new LaunchOfferService(db),
+            new PricingService(db),
             new DeliveryEstimateService(),
             new InventoryService(db),
             scope.ServiceProvider.GetRequiredService<LiveBookingService>());

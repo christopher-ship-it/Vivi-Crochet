@@ -7,6 +7,8 @@ export interface CartLineItem {
   imageUrl?: string | null;
   category?: string;
   availableStock?: number;
+  /** Handmade vs Resell — Resell (essentials) use a compact cart row. */
+  productType?: 'Handmade' | 'Resell';
 }
 
 export interface CartState {

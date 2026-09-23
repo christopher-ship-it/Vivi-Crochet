@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -19,13 +18,17 @@ import { getProduct } from '../../src/api/products';
 import { ApiClientError } from '../../src/api/client';
 import { useCart } from '../../src/cart/CartContext';
 import { canIncreaseQuantity, isOutOfStock } from '../../src/cart/stock';
+import { AppImage, prefetchImages } from '../../src/components/AppImage';
+import { ProductImageFrame } from '../../src/components/ProductImageFrame';
+import { InStockLabel } from '../../src/components/InStockLabel';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { BackButton } from '../../src/components/BackButton';
-import { HeroGradient } from '../../src/components/HeroGradient';
 import { LearnThisModal } from '../../src/components/LearnThisModal';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Product } from '../../src/types';
-import { colors, fonts, radii, spacing } from '../../src/theme';
+import { useI18n } from '../../src/i18n';
+import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
+import { colors, radii, spacing } from '../../src/theme';
 import { formatInr } from '../../src/utils/format';
 import { LEARN_PROMPT_DELAY_MS } from '../../src/utils/learnPromptTimer';
 import { useWishlist } from '../../src/wishlist/WishlistContext';
@@ -33,10 +36,15 @@ import { useWishlist } from '../../src/wishlist/WishlistContext';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 /** Compact product gallery so title, price, and CTAs stay closer to first view. */
 const GALLERY_HEIGHT = Math.round(SCREEN_WIDTH * 0.72);
-const DESC_PREVIEW_CHARS = 140;
+/** Inset so product photos aren’t edge-cropped / feel zoomed. */
+const IMAGE_SIZE = Math.round(Math.min(SCREEN_WIDTH, GALLERY_HEIGHT) * 0.88);
+const DESC_PREVIEW_CHARS = 220;
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { t, language } = useI18n();
+  const fonts = uiFonts(language);
+  const styles = useMemo(() => createStyles(fonts), [language]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const galleryRef = useRef<ScrollView>(null);
@@ -75,11 +83,11 @@ export default function ProductDetailScreen() {
       const stock = data.availableStock ?? 0;
       setQty(stock > 0 ? 1 : 0);
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Failed to load product.');
+      setError(t('product.failedLoadFriendly'));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     load();
@@ -116,17 +124,33 @@ export default function ProductDetailScreen() {
   useEffect(() => {
     setActiveImage(0);
     galleryRef.current?.scrollTo({ x: 0, animated: false });
+    // Hero first — prefetch siblings after a beat so they don't steal bandwidth.
+    if (galleryUrls.length === 0) return;
+    prefetchImages([galleryUrls[0]]);
+    if (galleryUrls.length === 1) return;
+    const timer = setTimeout(() => prefetchImages(galleryUrls.slice(1)), 200);
+    return () => clearTimeout(timer);
   }, [galleryUrls]);
 
-  if (loading) return <LoadingView message="Loading product…" />;
+  useEffect(() => {
+    if (galleryUrls.length <= 1) return;
+    prefetchImages([
+      galleryUrls[activeImage],
+      galleryUrls[activeImage + 1],
+      galleryUrls[activeImage - 1],
+    ]);
+  }, [activeImage, galleryUrls]);
+
+  if (loading) return <LoadingView message={t('product.loadingProduct')} />;
   if (error || !product) {
-    return <ErrorView message={error ?? 'Product not found.'} onRetry={load} />;
+    return <ErrorView message={error ?? t('product.notFound')} onRetry={load} />;
   }
 
   const discount =
     product.mrp && product.mrp > product.price
       ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
       : null;
+  const isEssentials = (product.productType ?? 'Handmade') === 'Resell';
   const course = product.linkedCourse;
   const stock = product.availableStock ?? 0;
   const outOfStock = isOutOfStock(stock);
@@ -141,7 +165,11 @@ export default function ProductDetailScreen() {
       : description;
 
   const learnMeta = course
-    ? [course.level, `${course.videoCount} lessons`, `from ${formatInr(course.price)}`]
+    ? [
+        course.level,
+        t('product.lessonsCount', { count: course.videoCount }),
+        t('product.priceFrom', { price: formatInr(course.price) }),
+      ]
         .filter(Boolean)
         .join(' · ')
     : null;
@@ -166,11 +194,12 @@ export default function ProductDetailScreen() {
   }
 
   async function handleWishlist() {
+    if (!product) return;
     const added = await toggleWishlist(product.id);
     if (added && outOfStock) {
       Alert.alert(
-        'Saved to wishlist',
-        'We will let you know when this product is available.',
+        t('product.savedWishlist'),
+        t('product.savedWishlistBody'),
       );
     }
   }
@@ -224,18 +253,24 @@ export default function ProductDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={[styles.root, { paddingTop: insets.top }]}>
-        <HeroGradient>
+      <View style={styles.root}>
+        <View style={[styles.headerBar, { paddingTop: insets.top }]}>
           <View style={styles.header}>
-            <BackButton fallbackHref="/(tabs)/shop" />
-            <BrandWordmark size="sm" />
-            <View style={styles.headerActions}>
+            <View style={styles.headerSide}>
+              <BackButton fallbackHref="/(tabs)/shop" />
+            </View>
+            <View style={styles.headerBrand} pointerEvents="none">
+              <BrandWordmark size="sm" />
+            </View>
+            <View style={[styles.headerSide, styles.headerActions]}>
               <Pressable
                 style={styles.headerBtn}
                 onPress={() => void handleWishlist()}
                 hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+                accessibilityLabel={
+                  wishlisted ? t('product.removeWishlist') : t('product.addWishlist')
+                }
               >
                 <Ionicons
                   name={wishlisted ? 'heart' : 'heart-outline'}
@@ -254,8 +289,9 @@ export default function ProductDetailScreen() {
               </Pressable>
             </View>
           </View>
+        </View>
 
-          <View style={styles.gallery}>
+        <View style={styles.gallery}>
             {galleryUrls.length > 0 ? (
               <>
                 <ScrollView
@@ -265,27 +301,34 @@ export default function ProductDetailScreen() {
                   showsHorizontalScrollIndicator={false}
                   onMomentumScrollEnd={onGalleryScroll}
                 >
-                  {galleryUrls.map((url, index) => (
-                    <View key={`${url}-${index}`} style={styles.heroSlide}>
-                      <Image
-                        source={{ uri: url }}
-                        style={[styles.heroImage, outOfStock && styles.heroImageDimmed]}
-                        resizeMode="contain"
-                        accessibilityLabel={`${product.name} image ${index + 1}`}
-                      />
-                    </View>
-                  ))}
+                  {galleryUrls.map((url, index) => {
+                    // Only decode nearby slides — mounting every gallery image
+                    // at once delayed the first (hero) paint.
+                    const shouldLoad = Math.abs(index - activeImage) <= 1;
+                    return (
+                      <View key={`${url}-${index}`} style={styles.heroSlide}>
+                        {shouldLoad ? (
+                          <ProductImageFrame
+                            uri={url}
+                            style={styles.heroFrame}
+                            imageStyle={[styles.heroImage, outOfStock && styles.heroImageDimmed]}
+                            contentFit="contain"
+                            contentPadding={0}
+                            priority={index === activeImage ? 'high' : 'low'}
+                            recyclingKey={url}
+                            accessibilityLabel={`${product.name} image ${index + 1}`}
+                            placeholderMark={product.name.charAt(0).toUpperCase() || 'V'}
+                            placeholderSize="hero"
+                          />
+                        ) : null}
+                      </View>
+                    );
+                  })}
                 </ScrollView>
 
                 {outOfStock && (
                   <View style={styles.gallerySoldOut} pointerEvents="none">
-                    <Text style={styles.gallerySoldOutText}>SOLD OUT</Text>
-                  </View>
-                )}
-
-                {discount !== null && !outOfStock && (
-                  <View style={styles.galleryDiscount}>
-                    <Text style={styles.galleryDiscountText}>{discount}% OFF</Text>
+                    <Text style={styles.gallerySoldOutText}>{t('product.soldOut')}</Text>
                   </View>
                 )}
 
@@ -318,19 +361,22 @@ export default function ProductDetailScreen() {
                 )}
               </>
             ) : (
-              <View style={[styles.heroSlide, styles.heroFallback]}>
-                <Text style={[styles.heroInitial, outOfStock && styles.heroImageDimmed]}>
-                  {product.name.charAt(0)}
-                </Text>
+              <ProductImageFrame
+                style={[styles.heroSlide, styles.heroFallback]}
+                uri={null}
+                placeholderMark={product.name.charAt(0).toUpperCase() || 'V'}
+                placeholderSize="hero"
+                dimmed={outOfStock}
+                contentPadding={0}
+              >
                 {outOfStock ? (
                   <View style={styles.gallerySoldOut} pointerEvents="none">
-                    <Text style={styles.gallerySoldOutText}>SOLD OUT</Text>
+                    <Text style={styles.gallerySoldOutText}>{t('product.soldOut')}</Text>
                   </View>
                 ) : null}
-              </View>
+              </ProductImageFrame>
             )}
-          </View>
-        </HeroGradient>
+        </View>
 
         <ScrollView
           style={styles.scroll}
@@ -356,7 +402,14 @@ export default function ProductDetailScreen() {
                       accessibilityState={{ selected: active }}
                       accessibilityLabel={`View image ${index + 1}`}
                     >
-                      <Image source={{ uri: url }} style={styles.thumbImage} resizeMode="cover" />
+                      <AppImage
+                        uri={url}
+                        style={styles.thumbImage}
+                        contentFit="cover"
+                        priority="low"
+                        transition={0}
+                        recyclingKey={`thumb-${url}`}
+                      />
                     </Pressable>
                   );
                 })}
@@ -364,48 +417,58 @@ export default function ProductDetailScreen() {
             </View>
           )}
 
-          <View style={styles.body}>
+          <View style={[styles.body, isEssentials && styles.bodyCompact]}>
             <Text style={styles.category}>{product.category.toUpperCase()}</Text>
-            <Text style={styles.name}>{product.name}</Text>
-            <Text style={styles.craftAccent}>Made with love</Text>
+            <Text style={[styles.name, isEssentials && styles.nameCompact]}>{product.name}</Text>
 
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>{formatInr(product.price)}</Text>
-              {product.mrp && product.mrp > product.price && (
+            <View style={[styles.priceRow, isEssentials && styles.priceRowCompact]}>
+              <Text style={[styles.price, isEssentials && styles.priceCompact]}>
+                {formatInr(product.price)}
+              </Text>
+              {product.mrp && product.mrp > product.price ? (
                 <Text style={styles.mrp}>{formatInr(product.mrp)}</Text>
-              )}
-              {discount !== null && (
-                <View style={styles.offBadge}>
-                  <Text style={styles.offText}>{discount}% OFF</Text>
-                </View>
-              )}
+              ) : null}
+              {discount !== null ? (
+                <Text style={styles.offTextInline}>{discount}% OFF</Text>
+              ) : null}
             </View>
 
-            {course && (
+            {isEssentials ? (
+              <Text style={[styles.deliveryHint, styles.deliveryHintCompact]}>
+                {t('product.essentialsDeliveryHint')}
+              </Text>
+            ) : null}
+
+            {isEssentials && !outOfStock ? <InStockLabel compact /> : null}
+
+            {course ? (
               <Pressable style={styles.learnBanner} onPress={goToCourse}>
                 <View style={styles.learnIcon}>
-                  <Text style={styles.learnIconText}>▶</Text>
+                  <Ionicons name="play" size={12} color={colors.white} />
                 </View>
                 <View style={styles.learnBody}>
-                  <Text style={styles.learnEyebrow}>LEARN</Text>
-                  <Text style={styles.learnTitle}>Want to learn this?</Text>
-                  {learnMeta && <Text style={styles.learnMeta}>{learnMeta}</Text>}
+                  <Text style={styles.learnEyebrow}>LEARN THIS</Text>
+                  <Text style={styles.learnTitle}>Course available for this piece</Text>
+                  {learnMeta ? <Text style={styles.learnMeta}>{learnMeta}</Text> : null}
                 </View>
-                <Text style={styles.learnArrow}>→</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.pink} />
               </Pressable>
-            )}
+            ) : null}
 
             {description ? (
-              <View style={styles.descBlock}>
-                <Text style={styles.desc}>{descShown}</Text>
-                {descNeedsMore && (
+              <View style={[styles.descBlock, isEssentials && styles.descBlockCompact]}>
+                <Text style={[styles.sectionLabel, isEssentials && styles.sectionLabelCompact]}>
+                  About
+                </Text>
+                <Text style={[styles.desc, isEssentials && styles.descCompact]}>{descShown}</Text>
+                {descNeedsMore ? (
                   <Pressable
                     style={styles.readMoreBtn}
                     onPress={() => setDescExpanded((v) => !v)}
                     hitSlop={6}
                   >
                     <Text style={styles.readMoreText}>
-                      {descExpanded ? 'Read less' : 'Read more'}
+                      {descExpanded ? 'Show less' : 'Show more'}
                     </Text>
                     <Ionicons
                       name={descExpanded ? 'chevron-up' : 'chevron-down'}
@@ -413,17 +476,26 @@ export default function ProductDetailScreen() {
                       color={colors.pink}
                     />
                   </Pressable>
-                )}
+                ) : null}
               </View>
             ) : null}
 
-            <View style={styles.featureRow}>
-              <View style={styles.featureCard}>
-                <Ionicons name="water-outline" size={12} color={colors.pink} />
-                <Text style={styles.featureLabel}>CARE</Text>
-                <Text style={styles.featureValue}>{product.spec1?.trim() || 'Hand wash'}</Text>
-              </View>
-            </View>
+            {!isEssentials
+              ? (() => {
+                  const careText = product.spec1?.trim() || 'Hand wash';
+                  return (
+                    <View style={styles.featureRow}>
+                      <View style={styles.featureCard}>
+                        <Ionicons name="water-outline" size={16} color={colors.pink} />
+                        <View style={styles.featureCopy}>
+                          <Text style={styles.featureLabel}>Care</Text>
+                          <Text style={styles.featureValue}>{careText}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })()
+              : null}
 
             {outOfStock ? (
               <View style={styles.oosBlock}>
@@ -431,7 +503,9 @@ export default function ProductDetailScreen() {
                   style={styles.wishlistCta}
                   onPress={() => void handleWishlist()}
                   accessibilityRole="button"
-                  accessibilityLabel={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+                  accessibilityLabel={
+                  wishlisted ? t('product.removeWishlist') : t('product.addWishlist')
+                }
                 >
                   <Ionicons
                     name={wishlisted ? 'heart' : 'heart-outline'}
@@ -439,17 +513,19 @@ export default function ProductDetailScreen() {
                     color={colors.pink}
                   />
                   <Text style={styles.wishlistCtaText}>
-                    {wishlisted ? 'Saved to wishlist' : 'Add to wishlist'}
+                    {wishlisted ? t('product.savedWishlistShort') : t('product.addWishlist')}
                   </Text>
                 </Pressable>
                 <Text style={styles.oosNote}>
-                  Add to wishlist we will notify you when this product is available.
+                  We’ll notify you when this piece is back in stock.
                 </Text>
               </View>
             ) : (
               <>
-                <View style={styles.qtyBlock}>
-                  <Text style={styles.qtyLabel}>QUANTITY</Text>
+                <View style={[styles.qtyBlock, isEssentials && styles.qtyBlockCompact]}>
+                  <Text style={[styles.qtyLabel, isEssentials && styles.sectionLabelCompact]}>
+                    {t('product.quantity')}
+                  </Text>
                   <View style={styles.qtyControl}>
                     <Pressable
                       style={[styles.qtyBtn, qty <= 1 && styles.qtyBtnDisabled]}
@@ -469,13 +545,13 @@ export default function ProductDetailScreen() {
                   </View>
                 </View>
 
-                {lowStock && (
+                {lowStock ? (
                   <Text style={styles.stockHint}>
                     {atMaxQty
-                      ? 'Maximum quantity reached · Few stocks left'
-                      : 'Few stocks left'}
+                      ? 'Maximum quantity reached · Few left'
+                      : 'Few pieces left'}
                   </Text>
-                )}
+                ) : null}
 
                 <View style={styles.actionRow}>
                   <Pressable
@@ -484,7 +560,9 @@ export default function ProductDetailScreen() {
                     disabled={adding}
                   >
                     <Ionicons name="bag-outline" size={16} color={colors.white} />
-                    <Text style={styles.addBtnText}>{adding ? 'Adding…' : 'Add to cart'}</Text>
+                    <Text style={styles.addBtnText}>
+                      {adding ? t('product.adding') : t('product.addToCart')}
+                    </Text>
                   </Pressable>
 
                   <Pressable
@@ -499,20 +577,20 @@ export default function ProductDetailScreen() {
               </>
             )}
 
-            {cartMessage && (
+            {cartMessage ? (
               <View style={styles.successBanner}>
                 <Text style={styles.successText}>{cartMessage}</Text>
                 <Pressable onPress={() => router.push('/cart')}>
                   <Text style={styles.successLink}>View cart →</Text>
                 </Pressable>
               </View>
-            )}
+            ) : null}
 
-            {cartError && (
+            {cartError ? (
               <View style={styles.errorBanner}>
                 <Text style={styles.errorText}>{cartError}</Text>
               </View>
-            )}
+            ) : null}
           </View>
         </ScrollView>
       </View>
@@ -530,10 +608,16 @@ export default function ProductDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(fonts: UiFonts) {
+  return StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.shopCanvas,
+  },
+  headerBar: {
+    backgroundColor: colors.white,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.softBorder,
   },
   header: {
     flexDirection: 'row',
@@ -541,6 +625,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
+    position: 'relative',
+  },
+  headerBrand: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSide: {
+    minWidth: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1,
   },
   headerBtn: {
     width: 40,
@@ -549,26 +645,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   scroll: {
     flex: 1,
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.shopCanvas,
   },
   gallery: {
     position: 'relative',
     height: GALLERY_HEIGHT,
+    backgroundColor: colors.cottonBase,
   },
   heroSlide: {
     width: SCREEN_WIDTH,
     height: GALLERY_HEIGHT,
+    backgroundColor: colors.cottonBase,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroImage: {
+  heroFrame: {
     width: SCREEN_WIDTH,
     height: GALLERY_HEIGHT,
+  },
+  heroImage: {
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
   },
   heroImageDimmed: {
     opacity: 0.55,
@@ -585,29 +686,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     color: colors.white,
   },
-  heroFallback: {
-    backgroundColor: colors.mediaWash,
-  },
-  heroInitial: {
-    fontFamily: fonts.extraBold,
-    fontSize: 72,
-    color: colors.ink,
-    opacity: 0.12,
-  },
-  galleryDiscount: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    backgroundColor: colors.pink,
-    borderRadius: radii.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  galleryDiscountText: {
-    fontFamily: fonts.extraBold,
-    fontSize: 11,
-    color: colors.white,
-  },
+  heroFallback: {},
   navArrow: {
     position: 'absolute',
     top: '50%',
@@ -642,9 +721,7 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   thumbsWrap: {
-    backgroundColor: colors.canvas,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.softBorder,
+    backgroundColor: 'transparent',
   },
   thumbsScroll: {
     height: 76,
@@ -662,7 +739,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: 'transparent',
-    backgroundColor: colors.white,
+    backgroundColor: colors.cottonBase,
   },
   thumbActive: {
     borderColor: colors.pink,
@@ -672,117 +749,167 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   body: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.shopCanvas,
+  },
+  bodyCompact: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   category: {
     fontFamily: fonts.semiBold,
     fontSize: 11,
     letterSpacing: 1.4,
-    color: colors.pink,
+    color: colors.muted,
   },
   name: {
     fontFamily: fonts.extraBold,
-    fontSize: 26,
-    lineHeight: 30,
-    letterSpacing: -0.4,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.5,
     color: colors.ink,
-    marginTop: 6,
+    marginTop: 8,
   },
-  craftAccent: {
-    fontFamily: fonts.decorative,
+  nameCompact: {
     fontSize: 22,
     lineHeight: 28,
-    paddingBottom: 4,
-    color: colors.pink,
-    marginTop: 2,
+    marginTop: 4,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
+    marginTop: 12,
+  },
+  priceRowCompact: {
     marginTop: 6,
+    gap: 6,
   },
   price: {
     fontFamily: fonts.extraBold,
+    fontSize: 24,
+    color: colors.ink,
+  },
+  priceCompact: {
     fontSize: 20,
-    color: colors.pink,
   },
   mrp: {
     fontFamily: fonts.regular,
-    fontSize: 13,
+    fontSize: 15,
     color: colors.muted,
     textDecorationLine: 'line-through',
   },
   offBadge: {
-    backgroundColor: colors.pink,
-    borderRadius: radii.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: colors.pinkSoft,
+    borderRadius: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   offText: {
     fontFamily: fonts.extraBold,
-    fontSize: 10,
-    color: colors.white,
+    fontSize: 11,
+    color: colors.pink,
+  },
+  offTextInline: {
+    fontFamily: fonts.semiBold,
+    fontSize: 12,
+    color: colors.pink,
+  },
+  deliveryHint: {
+    fontFamily: fonts.semiBold,
+    fontSize: 12,
+    color: colors.pink,
+    marginTop: 8,
+  },
+  deliveryHintCompact: {
+    marginTop: 4,
+  },
+  sectionLabel: {
+    fontFamily: fonts.extraBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.muted,
+    marginBottom: 8,
+  },
+  sectionLabelCompact: {
+    marginBottom: 4,
   },
   descBlock: {
-    marginTop: 8,
+    marginTop: spacing.lg,
+  },
+  descBlockCompact: {
+    marginTop: spacing.sm,
   },
   desc: {
     fontFamily: fonts.regular,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 15,
+    lineHeight: 23,
     color: colors.ink,
+  },
+  descCompact: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   readMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginTop: 8,
   },
   readMoreText: {
     fontFamily: fonts.semiBold,
-    fontSize: 12,
+    fontSize: 13,
     color: colors.pink,
   },
   featureRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 8,
+    marginTop: spacing.md,
   },
   featureCard: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: colors.pinkSoft,
-    borderRadius: radii.sm,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    gap: 5,
+    backgroundColor: colors.white,
+    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.softBorder,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  featureCopy: {
+    gap: 2,
   },
   featureLabel: {
     fontFamily: fonts.semiBold,
-    fontSize: 8,
+    fontSize: 10,
     letterSpacing: 0.8,
-    color: colors.pink,
+    textTransform: 'uppercase',
+    color: colors.muted,
   },
   featureValue: {
     fontFamily: fonts.semiBold,
-    fontSize: 11,
+    fontSize: 14,
     color: colors.ink,
   },
   qtyBlock: {
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
+  },
+  qtyBlockCompact: {
+    marginTop: spacing.sm,
   },
   qtyLabel: {
     fontFamily: fonts.extraBold,
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1,
-    color: colors.ink,
-    marginBottom: 6,
+    textTransform: 'uppercase',
+    color: colors.muted,
+    marginBottom: 8,
   },
   qtyControl: {
     flexDirection: 'row',
@@ -790,13 +917,13 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radii.sm,
+    borderRadius: radii.md,
     backgroundColor: colors.white,
     overflow: 'hidden',
   },
   qtyBtn: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -805,21 +932,21 @@ const styles = StyleSheet.create({
   },
   qtyBtnText: {
     fontFamily: fonts.extraBold,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.ink,
   },
   qtyValue: {
-    minWidth: 28,
+    minWidth: 36,
     textAlign: 'center',
     fontFamily: fonts.extraBold,
-    fontSize: 13,
+    fontSize: 15,
     color: colors.ink,
   },
   stockHint: {
     fontFamily: fonts.regular,
-    fontSize: 11,
+    fontSize: 12,
     color: colors.muted,
-    marginTop: 6,
+    marginTop: 8,
   },
   oosBlock: {
     marginTop: spacing.lg,
@@ -851,14 +978,14 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: 8,
+    gap: 10,
     marginTop: spacing.lg,
   },
   addBtn: {
-    flex: 1,
+    flex: 1.15,
     backgroundColor: colors.pink,
     borderRadius: radii.md,
-    paddingVertical: 14,
+    paddingVertical: 15,
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -867,14 +994,14 @@ const styles = StyleSheet.create({
   },
   addBtnText: {
     fontFamily: fonts.extraBold,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.white,
   },
   buyBtn: {
     flex: 1,
     backgroundColor: colors.white,
     borderRadius: radii.md,
-    paddingVertical: 14,
+    paddingVertical: 15,
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -885,7 +1012,7 @@ const styles = StyleSheet.create({
   },
   buyBtnText: {
     fontFamily: fonts.extraBold,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.pink,
   },
   btnDisabled: {
@@ -894,53 +1021,43 @@ const styles = StyleSheet.create({
   learnBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#e4d4f5',
-    borderRadius: radii.sm,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    marginTop: 8,
+    gap: 10,
+    backgroundColor: colors.white,
+    borderRadius: radii.md,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginTop: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#d0bce8',
+    borderColor: colors.softBorder,
   },
   learnIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.pink,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  learnIconText: {
-    color: colors.white,
-    fontFamily: fonts.extraBold,
-    fontSize: 11,
   },
   learnBody: {
     flex: 1,
   },
   learnEyebrow: {
     fontFamily: fonts.extraBold,
-    fontSize: 8,
-    letterSpacing: 1.4,
+    fontSize: 9,
+    letterSpacing: 1.2,
     color: colors.pink,
   },
   learnTitle: {
     fontFamily: fonts.extraBold,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.ink,
-    marginTop: 1,
+    marginTop: 2,
   },
   learnMeta: {
     fontFamily: fonts.regular,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.muted,
-    marginTop: 1,
-  },
-  learnArrow: {
-    fontFamily: fonts.extraBold,
-    fontSize: 14,
-    color: colors.pink,
+    marginTop: 2,
   },
   successBanner: {
     marginTop: spacing.md,
@@ -978,4 +1095,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.danger,
   },
-});
+  });
+}

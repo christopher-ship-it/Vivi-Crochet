@@ -122,6 +122,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<Guid>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
                     b.Property<string>("Languages")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -143,6 +147,9 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.Property<byte>("RenewalPercentage")
                         .HasColumnType("tinyint");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -166,6 +173,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasIndex("Name");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("CategoryId", "SortOrder");
 
                     b.ToTable("Courses", (string)null);
                 });
@@ -272,6 +281,20 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("Age")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AuthMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -279,6 +302,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime?>("EmailVerifiedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -288,10 +314,15 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("LastWeeklyPushAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("OnboardingPushesSentAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("ShipAddressLine1")
                         .HasMaxLength(200)
@@ -301,13 +332,17 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("ShipAddressTag")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("ShipCity")
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
                     b.Property<string>("ShipCountry")
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<string>("ShipFullName")
                         .HasMaxLength(120)
@@ -318,14 +353,18 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(120)");
 
                     b.Property<string>("ShipPhone")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("ShipPinCode")
-                        .HasMaxLength(6)
-                        .HasColumnType("nvarchar(6)");
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
 
                     b.Property<string>("ShipState")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("State")
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
@@ -337,15 +376,55 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Email");
+                    b.HasIndex("Email")
+                        .IsUnique();
 
                     b.HasIndex("PhoneNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[PhoneNumber] IS NOT NULL");
 
                     b.HasIndex("UserId")
                         .IsUnique();
 
                     b.ToTable("Customers", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.DevicePushToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ExpoPushToken")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("ExpoPushToken")
+                        .IsUnique();
+
+                    b.ToTable("DevicePushTokens", (string)null);
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.EmailNotification", b =>
@@ -420,6 +499,48 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("EmailNotifications", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.EmailVerificationChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("EmailVerificationChallenges", (string)null);
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.LaunchOfferCounter", b =>
@@ -534,6 +655,15 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("TutorName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("TutorPhotoBlobPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -558,6 +688,9 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsBlocked")
+                        .HasColumnType("bit");
 
                     b.Property<Guid>("LiveWeekId")
                         .HasColumnType("uniqueidentifier");
@@ -666,8 +799,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(80)");
 
                     b.Property<string>("ShipCountry")
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<string>("ShipFullName")
                         .HasMaxLength(120)
@@ -678,12 +811,12 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(120)");
 
                     b.Property<string>("ShipPhone")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("ShipPinCode")
-                        .HasMaxLength(6)
-                        .HasColumnType("nvarchar(6)");
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
 
                     b.Property<string>("ShipState")
                         .HasMaxLength(80)
@@ -865,6 +998,43 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.ToTable("OtpChallenges", (string)null);
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.PasswordResetChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("PasswordResetChallenges", (string)null);
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -997,6 +1167,33 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.ToTable("Products", (string)null);
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.ProductEssentialLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EssentialProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SourceProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EssentialProductId");
+
+                    b.HasIndex("SourceProductId", "EssentialProductId")
+                        .IsUnique();
+
+                    b.HasIndex("SourceProductId", "SortOrder");
+
+                    b.ToTable("ProductEssentialLinks", (string)null);
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.ProductImage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1029,6 +1226,37 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasIndex("ProductId", "SortOrder");
 
                     b.ToTable("ProductImages", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.SupportInquiry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("IsRead");
+
+                    b.ToTable("SupportInquiries", (string)null);
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.Video", b =>
@@ -1069,9 +1297,21 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<bool>("IsFreePreview")
                         .HasColumnType("bit");
 
+                    b.Property<string>("OriginalBlobPath")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
                     b.Property<string>("PatternPdfBlobPath")
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("PlayableContentType")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<long?>("PlayableFileSizeBytes")
+                        .HasColumnType("bigint");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -1087,6 +1327,13 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("TranscodeError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("TranscodeStatus")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -1107,6 +1354,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("TranscodeStatus");
 
                     b.HasIndex("CourseId", "SortOrder");
 
@@ -1194,6 +1443,28 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.DevicePushToken", b =>
+                {
+                    b.HasOne("VIVI.Core.Entities.Customer", "Customer")
+                        .WithMany("DevicePushTokens")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.EmailVerificationChallenge", b =>
+                {
+                    b.HasOne("VIVI.Core.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.LaunchOfferCounter", b =>
@@ -1336,6 +1607,25 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Navigation("Course");
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.ProductEssentialLink", b =>
+                {
+                    b.HasOne("VIVI.Core.Entities.Product", "EssentialProduct")
+                        .WithMany()
+                        .HasForeignKey("EssentialProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VIVI.Core.Entities.Product", "SourceProduct")
+                        .WithMany("EssentialLinks")
+                        .HasForeignKey("SourceProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("EssentialProduct");
+
+                    b.Navigation("SourceProduct");
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.ProductImage", b =>
                 {
                     b.HasOne("VIVI.Core.Entities.Product", "Product")
@@ -1345,6 +1635,17 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.SupportInquiry", b =>
+                {
+                    b.HasOne("VIVI.Core.Entities.Customer", "Customer")
+                        .WithMany("SupportInquiries")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.Video", b =>
@@ -1393,9 +1694,13 @@ namespace VIVI.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("VIVI.Core.Entities.Customer", b =>
                 {
+                    b.Navigation("DevicePushTokens");
+
                     b.Navigation("Enrollments");
 
                     b.Navigation("Orders");
+
+                    b.Navigation("SupportInquiries");
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.LiveWeek", b =>
@@ -1421,6 +1726,8 @@ namespace VIVI.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("VIVI.Core.Entities.Product", b =>
                 {
+                    b.Navigation("EssentialLinks");
+
                     b.Navigation("Images");
                 });
 #pragma warning restore 612, 618

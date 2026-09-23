@@ -50,23 +50,6 @@ export async function ensureLiveSeason(): Promise<void> {
   await apiRequest<void>('/api/admin/live/ensure-season', { method: 'POST' });
 }
 
-export async function setLiveWeekBreak(
-  weekId: string,
-  breakWeekday: string | null,
-): Promise<void> {
-  await apiRequest<void>(`/api/admin/live/weeks/${weekId}/break`, {
-    method: 'PUT',
-    body: JSON.stringify({ breakWeekday }),
-  });
-}
-
-export async function setLiveWeekBookable(weekId: string, isBookable: boolean): Promise<void> {
-  await apiRequest<void>(`/api/admin/live/weeks/${weekId}/bookable`, {
-    method: 'PUT',
-    body: JSON.stringify({ isBookable }),
-  });
-}
-
 export async function setLiveSlotCapacity(
   weekId: string,
   slotType: LiveSlotType | string,
@@ -75,5 +58,74 @@ export async function setLiveSlotCapacity(
   await apiRequest<void>(`/api/admin/live/weeks/${weekId}/slots/${slotType}/capacity`, {
     method: 'PUT',
     body: JSON.stringify({ seatCapacity }),
+  });
+}
+
+export async function setLiveSlotBlocked(
+  weekId: string,
+  slotType: LiveSlotType | string,
+  isBlocked: boolean,
+): Promise<void> {
+  await apiRequest<void>(`/api/admin/live/weeks/${weekId}/slots/${slotType}/blocked`, {
+    method: 'PUT',
+    body: JSON.stringify({ isBlocked }),
+  });
+}
+
+export interface LiveTutorPhotoUploadUrlRequest {
+  fileName: string;
+  contentType: string;
+  fileSizeBytes: number;
+}
+
+export interface LiveTutorPhotoUploadUrlResponse {
+  uploadUrl: string;
+  expiresAt: string;
+  blobPath: string;
+  maxFileSizeBytes: number;
+}
+
+export interface LiveTutorPhotoUploadCompleteRequest {
+  blobPath: string;
+  fileSizeBytes: number;
+  contentType: string;
+}
+
+export async function requestLiveTutorPhotoUploadUrl(
+  weekId: string,
+  data: LiveTutorPhotoUploadUrlRequest,
+): Promise<LiveTutorPhotoUploadUrlResponse> {
+  return apiRequest<LiveTutorPhotoUploadUrlResponse>(
+    `/api/admin/live/weeks/${weekId}/tutor-photo-upload-url`,
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    },
+  );
+}
+
+export async function completeLiveTutorPhotoUpload(
+  weekId: string,
+  data: LiveTutorPhotoUploadCompleteRequest,
+): Promise<AdminLiveWeek> {
+  return apiRequest<AdminLiveWeek>(`/api/admin/live/weeks/${weekId}/tutor-photo-upload-complete`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteLiveTutorPhoto(weekId: string): Promise<AdminLiveWeek> {
+  return apiRequest<AdminLiveWeek>(`/api/admin/live/weeks/${weekId}/tutor-photo`, {
+    method: 'DELETE',
+  });
+}
+
+export async function setLiveWeekTutor(
+  weekId: string,
+  tutorName: string,
+): Promise<AdminLiveWeek> {
+  return apiRequest<AdminLiveWeek>(`/api/admin/live/weeks/${weekId}/tutor`, {
+    method: 'PUT',
+    body: JSON.stringify({ tutorName }),
   });
 }

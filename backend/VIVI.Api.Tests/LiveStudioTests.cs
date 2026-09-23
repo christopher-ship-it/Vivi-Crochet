@@ -42,7 +42,7 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
         Assert.Contains(first.Slots, s => s.Name == "Morning Crochet Circle" && s.SlotType == "Morning");
         Assert.Contains(first.Slots, s => s.Name == "Evening Crochet Circle" && s.SlotType == "Evening");
         Assert.All(first.Slots, s => Assert.Equal(4, s.SeatCapacity));
-        Assert.Contains(first.Slots, s => s.SlotType == "Morning" && s.Hours == "11:00 AM – 1:00 PM");
+        Assert.Contains(first.Slots, s => s.SlotType == "Morning" && s.Hours == "10:00 AM – 12:00 PM");
         Assert.Contains(first.Slots, s => s.SlotType == "Evening" && s.Hours == "6:00 PM – 8:00 PM");
     }
 
@@ -72,8 +72,88 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
             var admin = factory.CreateClient();
             AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
             var all = await admin.GetFromJsonAsync<List<AdminLiveWeekResponse>>("/api/admin/live/weeks", Json);
-            Assert.Equal(52, all!.Count);
+            Assert.Equal(104, all!.Count); // active season + next season (52 × 2)
         }
+    }
+
+    [Fact]
+    public async Task Selectable_weeks_skip_current_after_monday_morning_circle_starts()
+    {
+        await using var factory = _factory.WithWebHostBuilder(builder =>
+            builder.UseSetting("LiveStudio:CustomerSelectableWeekCount", "2"));
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var calendar = scope.ServiceProvider.GetRequiredService<LiveCalendarService>();
+
+        // Monday 21 Sept 2026 — Morning Circle at 10:00 AM IST (= 04:30 UTC).
+        var monday = new DateOnly(2026, 9, 21);
+
+        var beforeCutoffUtc = new DateTime(2026, 9, 21, 4, 29, 0, DateTimeKind.Utc); // 09:59 IST
+        var before = calendar.GetCustomerSelectableWeekStarts(monday, beforeCutoffUtc);
+        Assert.Equal(2, before.Count);
+        Assert.Equal(monday, before[0]);
+        Assert.Equal(monday.AddDays(7), before[1]);
+        Assert.True(calendar.IsWeekOpenForNewBookings(monday, beforeCutoffUtc));
+
+        var atCutoffUtc = new DateTime(2026, 9, 21, 4, 30, 0, DateTimeKind.Utc); // 10:00 IST
+        var after = calendar.GetCustomerSelectableWeekStarts(monday, atCutoffUtc);
+        Assert.Equal(2, after.Count);
+        Assert.Equal(monday.AddDays(7), after[0]);
+        Assert.Equal(monday.AddDays(14), after[1]);
+        Assert.False(calendar.IsWeekOpenForNewBookings(monday, atCutoffUtc));
+
+        // Tuesday afternoon — Week 38 batch closed; window is Week 39 + Week 40.
+        var tuesday = new DateOnly(2026, 9, 22);
+        var tueUtc = new DateTime(2026, 9, 22, 8, 0, 0, DateTimeKind.Utc);
+        var tueStarts = calendar.GetCustomerSelectableWeekStarts(tuesday, tueUtc);
+        Assert.Equal(monday.AddDays(7), tueStarts[0]); // 28 Sept (Week 39)
+        Assert.Equal(monday.AddDays(14), tueStarts[1]); // 5 Oct (Week 40)
+
+        // Week 39 Monday before 10:00 IST — still open: Week 39 + Week 40.
+        var week39 = monday.AddDays(7);
+        var week39BeforeUtc = new DateTime(2026, 9, 28, 4, 29, 0, DateTimeKind.Utc); // 09:59 IST
+        var week39Open = calendar.GetCustomerSelectableWeekStarts(week39, week39BeforeUtc);
+        Assert.Equal(week39, week39Open[0]);
+        Assert.Equal(week39.AddDays(7), week39Open[1]);
+
+        // Week 39 Monday at 10:00 IST — block 39; window is Week 40 + Week 41.
+        var week39AtCutoffUtc = new DateTime(2026, 9, 28, 4, 30, 0, DateTimeKind.Utc); // 10:00 IST
+        var week39Closed = calendar.GetCustomerSelectableWeekStarts(week39, week39AtCutoffUtc);
+        Assert.Equal(week39.AddDays(7), week39Closed[0]); // Week 40
+        Assert.Equal(week39.AddDays(14), week39Closed[1]); // Week 41
+    }
+
+    [Fact]
+    public async Task Next_season_is_seeded_and_selectable_after_week_52_closes()
+    {
+        await using var factory = _factory.WithWebHostBuilder(builder =>
+            builder.UseSetting("LiveStudio:CustomerSelectableWeekCount", "2"));
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var calendar = scope.ServiceProvider.GetRequiredService<LiveCalendarService>();
+        var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+        await calendar.EnsureSeasonAsync(CancellationToken.None);
+
+        var seasonStart = new DateOnly(2026, 1, 5);
+        var week52Monday = seasonStart.AddDays(51 * 7); // 2026-12-28
+        var nextSeasonWeek1 = seasonStart.AddDays(52 * 7); // 2027-01-04
+
+        Assert.Equal(52, await db.LiveWeeks.CountAsync(w => w.SeasonYear == 2026));
+        Assert.Equal(52, await db.LiveWeeks.CountAsync(w => w.SeasonYear == 2027));
+        Assert.True(await db.LiveWeeks.AnyAsync(w => w.StartDate == nextSeasonWeek1 && w.WeekNumber == 1));
+
+        // After Week 52 Monday Morning Circle, customers see next season Week 1 + Week 2.
+        var afterCutoffUtc = new DateTime(2026, 12, 28, 4, 30, 0, DateTimeKind.Utc); // 10:00 IST
+        var starts = calendar.GetCustomerSelectableWeekStarts(week52Monday, afterCutoffUtc);
+        Assert.Equal(2, starts.Count);
+        Assert.Equal(nextSeasonWeek1, starts[0]);
+        Assert.Equal(nextSeasonWeek1.AddDays(7), starts[1]);
+
+        var admin = factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+        var all = await admin.GetFromJsonAsync<List<AdminLiveWeekResponse>>("/api/admin/live/weeks", Json);
+        Assert.Contains(all!, w => w.SeasonYear == 2027 && w.WeekNumber == 1);
+        Assert.Contains(all!, w => w.StartDate == nextSeasonWeek1);
     }
 
     [Fact]
@@ -94,6 +174,7 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
         var outside = all.First(w => !allowed.Contains(w.StartDate));
 
         var customer = await AuthTests.LoginCustomerAsync(factory.CreateClient(), NextPhone());
+        await AuthTests.EnsureVerifiedEmailAsync(customer);
         var fail = await customer.PostAsJsonAsync(
             "/api/live/bookings",
             new { weekId = outside.Id, slotType = "Morning" });
@@ -167,8 +248,22 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
         Assert.Equal("FullyBooked", morning.Status);
 
         var blocked = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        await AuthTests.EnsureVerifiedEmailAsync(blocked);
         var fail = await blocked.PostAsJsonAsync("/api/live/bookings", new { weekId, slotType = "Morning" });
         Assert.Equal(HttpStatusCode.Conflict, fail.StatusCode);
+    }
+
+    [Fact]
+    public async Task Booking_without_verified_email_is_rejected()
+    {
+        var weekId = (await WeeksAsync())[6].Id;
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        var fail = await customer.PostAsJsonAsync(
+            "/api/live/bookings",
+            new { weekId, slotType = "Morning" });
+        Assert.Equal(HttpStatusCode.Conflict, fail.StatusCode);
+        var body = await fail.Content.ReadAsStringAsync();
+        Assert.Contains("EMAIL_VERIFICATION_REQUIRED", body, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -237,6 +332,8 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
 
         var a = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
         var b = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        await AuthTests.EnsureVerifiedEmailAsync(a);
+        await AuthTests.EnsureVerifiedEmailAsync(b);
         var results = await Task.WhenAll(
             a.PostAsJsonAsync("/api/live/bookings", new { weekId, slotType = "Morning" }),
             b.PostAsJsonAsync("/api/live/bookings", new { weekId, slotType = "Morning" }));
@@ -399,6 +496,40 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
         Assert.Equal(4, week.Slots.Single(s => s.SlotType == "Morning").SeatCapacity);
     }
 
+    [Fact]
+    public async Task Admin_can_block_and_unblock_slot_and_customer_cannot_book_blocked()
+    {
+        var weekId = (await WeeksAsync())[18].Id;
+        var admin = _factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+
+        var block = await admin.PutAsJsonAsync(
+            $"/api/admin/live/weeks/{weekId}/slots/Evening/blocked",
+            new { isBlocked = true });
+        Assert.Equal(HttpStatusCode.NoContent, block.StatusCode);
+
+        var weeks = await admin.GetFromJsonAsync<List<AdminLiveWeekResponse>>("/api/admin/live/weeks", Json);
+        var evening = weeks!.Single(w => w.Id == weekId).Slots.Single(s => s.SlotType == "Evening");
+        Assert.True(evening.IsBlocked);
+        Assert.Equal("Blocked", evening.Status);
+        Assert.Equal(0, evening.SeatsRemaining);
+
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        await AuthTests.EnsureVerifiedEmailAsync(customer);
+        var fail = await customer.PostAsJsonAsync(
+            "/api/live/bookings",
+            new { weekId, slotType = "Evening" });
+        Assert.Equal(HttpStatusCode.Conflict, fail.StatusCode);
+
+        var unblock = await admin.PutAsJsonAsync(
+            $"/api/admin/live/weeks/{weekId}/slots/Evening/blocked",
+            new { isBlocked = false });
+        Assert.Equal(HttpStatusCode.NoContent, unblock.StatusCode);
+
+        var checkout = await CreateLiveCheckoutAsync(customer, weekId, LiveSlotType.Evening);
+        Assert.NotEqual(Guid.Empty, checkout.BookingId);
+    }
+
     private async Task<List<LiveWeekSummaryResponse>> WeeksAsync()
     {
         var weeks = await _factory.CreateClient().GetFromJsonAsync<List<LiveWeekSummaryResponse>>("/api/live/weeks", Json);
@@ -411,6 +542,7 @@ public sealed class LiveStudioTests : IClassFixture<ApiFactory>
         Guid weekId,
         LiveSlotType slotType)
     {
+        await AuthTests.EnsureVerifiedEmailAsync(customer);
         var response = await customer.PostAsJsonAsync("/api/live/bookings", new { weekId, slotType = slotType.ToString() });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<CreateLiveBookingResponse>(Json);

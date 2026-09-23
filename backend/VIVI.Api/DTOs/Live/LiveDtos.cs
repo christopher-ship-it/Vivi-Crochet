@@ -11,6 +11,10 @@ public class LiveWeekSummaryResponse
     public DateOnly EndDate { get; set; }
     public bool IsBookable { get; set; }
     public decimal PackagePrice { get; set; }
+    /// <summary>Tutor display name for this week (default SRI).</summary>
+    public string TutorName { get; set; } = "SRI";
+    /// <summary>Resolved read URL for the tutor portrait, or null for placeholder.</summary>
+    public string? TutorPhotoUrl { get; set; }
     public IReadOnlyList<LiveSlotAvailabilityResponse> Slots { get; set; } = Array.Empty<LiveSlotAvailabilityResponse>();
 }
 
@@ -34,11 +38,12 @@ public sealed class LiveSlotAvailabilityResponse
 {
     public string SlotType { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    /// <summary>Studio hours for this circle, e.g. 11:00 AM – 1:00 PM.</summary>
+    /// <summary>Studio hours for this circle, e.g. 10:00 AM – 12:00 PM.</summary>
     public string Hours { get; set; } = string.Empty;
     public int SeatCapacity { get; set; }
     public int SeatsBooked { get; set; }
     public int SeatsRemaining { get; set; }
+    public bool IsBlocked { get; set; }
     public string Status { get; set; } = string.Empty;
 }
 
@@ -98,6 +103,11 @@ public sealed class SetLiveSlotCapacityRequest
     public int SeatCapacity { get; set; }
 }
 
+public sealed class SetLiveSlotBlockedRequest
+{
+    public bool IsBlocked { get; set; }
+}
+
 public class AdminLiveBookingListItemResponse
 {
     public Guid Id { get; set; }
@@ -140,5 +150,34 @@ public sealed class AdminLiveWeekResponse
     public string? BreakWeekday { get; set; }
     public bool IsBookable { get; set; }
     public decimal PackagePrice { get; set; }
+    public string TutorName { get; set; } = "SRI";
+    public string? TutorPhotoUrl { get; set; }
     public IReadOnlyList<LiveSlotAvailabilityResponse> Slots { get; set; } = Array.Empty<LiveSlotAvailabilityResponse>();
+}
+
+public sealed class LiveTutorPhotoUploadUrlRequest
+{
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public long FileSizeBytes { get; set; }
+}
+
+public sealed class LiveTutorPhotoUploadUrlResponse
+{
+    public string UploadUrl { get; set; } = string.Empty;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public string BlobPath { get; set; } = string.Empty;
+    public long MaxFileSizeBytes { get; set; }
+}
+
+public sealed class LiveTutorPhotoUploadCompleteRequest
+{
+    public string BlobPath { get; set; } = string.Empty;
+    public long FileSizeBytes { get; set; }
+    public string ContentType { get; set; } = string.Empty;
+}
+
+public sealed class SetLiveWeekTutorRequest
+{
+    public string TutorName { get; set; } = "SRI";
 }

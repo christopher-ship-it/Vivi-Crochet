@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Infrastructure.Auth;
+using VIVI.Infrastructure.Commerce;
 using VIVI.Infrastructure.Data;
 using Xunit;
 
@@ -34,10 +35,11 @@ public class TestAccountSeedTests
     {
         await using var db = new ViviDbContext(options);
         var hasher = new PasswordHasher<AdminUser>();
+        var cleanup = new AdminDataCleanupService(db, new InventoryService(db));
         var seeder = new DatabaseSeeder(
             db,
             hasher,
-            new CustomerAccountService(db, hasher),
+            new CustomerAccountService(db, hasher, cleanup),
             settings,
             NullLogger<DatabaseSeeder>.Instance);
         await seeder.SeedAsync();

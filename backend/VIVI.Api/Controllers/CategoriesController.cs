@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Categories;
 using VIVI.Api.Extensions;
 using VIVI.Api.Mapping;
@@ -37,7 +38,7 @@ public sealed class CategoriesController : ControllerBase
 
     /// <summary>Creates a category. Admin only.</summary>
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status201Created)]
     public async Task<ActionResult<CategoryResponse>> Create([FromBody] CategoryRequest request, CancellationToken cancellationToken)
     {
@@ -60,7 +61,7 @@ public sealed class CategoriesController : ControllerBase
 
     /// <summary>Updates a category. Admin only.</summary>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CategoryResponse>> Update(Guid id, [FromBody] CategoryRequest request, CancellationToken cancellationToken)
     {
@@ -79,7 +80,7 @@ public sealed class CategoriesController : ControllerBase
 
     /// <summary>Deletes a category. Blocked if any course still uses it.</summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {

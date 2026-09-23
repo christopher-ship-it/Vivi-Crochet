@@ -1,5 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useRef } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useI18n, type TranslationKey } from '../i18n';
+import { uiFonts } from '../i18n/uiFonts';
 import { colors, fonts } from '../theme';
 
 interface TabRoute {
@@ -31,20 +35,21 @@ export interface PremiumTabBarProps {
   };
 }
 
-type TabIconName = 'home' | 'shop' | 'learn' | 'live' | 'profile';
+type TabIconName = 'offers' | 'home' | 'shop' | 'learn' | 'live' | 'profile';
 
 interface TabItem {
   routeName: string;
-  label: string;
+  labelKey: TranslationKey;
   icon: TabIconName;
 }
 
 const TAB_ITEMS: TabItem[] = [
-  { routeName: 'index', label: 'Home', icon: 'home' },
-  { routeName: 'shop', label: 'Shop', icon: 'shop' },
-  { routeName: 'learn', label: 'Learn', icon: 'learn' },
-  { routeName: 'live', label: 'Live', icon: 'live' },
-  { routeName: 'profile', label: 'My VIVI', icon: 'profile' },
+  { routeName: 'offers', labelKey: 'tabs.offers', icon: 'offers' },
+  { routeName: 'index', labelKey: 'tabs.home', icon: 'home' },
+  { routeName: 'shop', labelKey: 'tabs.shop', icon: 'shop' },
+  { routeName: 'learn', labelKey: 'tabs.learn', icon: 'learn' },
+  { routeName: 'live', labelKey: 'tabs.live', icon: 'live' },
+  { routeName: 'profile', labelKey: 'tabs.profile', icon: 'profile' },
 ];
 
 const HAIRLINE = 'rgba(34, 26, 30, 0.12)';
@@ -68,36 +73,205 @@ interface IconProps {
   name: TabIconName;
   color: string;
   filled: boolean;
+  /** Soft pulse when Offers is not selected. */
+  animateOffers?: boolean;
 }
 
-function TabIcon({ name, color, filled }: IconProps) {
+function OffersTabIcon({
+  filled,
+  animate,
+}: {
+  filled: boolean;
+  animate: boolean;
+}) {
+  const color = colors.pinkDark;
+  const fill = filled ? color : 'transparent';
+  const spin = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!animate) {
+      spin.stopAnimation();
+      spin.setValue(0);
+      return;
+    }
+
+    spin.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 2400,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [animate, spin]);
+
+  const rotate = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <View style={iconStyles.box}>
+      <View style={iconStyles.offerBadgeWrap}>
+        <Animated.View
+          style={[
+            iconStyles.offerBadge,
+            animate
+              ? {
+                  borderTopColor: color,
+                  borderRightColor: color,
+                  borderBottomColor: color,
+                  borderLeftColor: 'transparent',
+                }
+              : { borderColor: color },
+            {
+              backgroundColor: fill,
+              transform: [{ rotate }],
+            },
+          ]}
+        />
+        <View style={iconStyles.offerPercentLayer} pointerEvents="none">
+          <Text
+            style={[
+              iconStyles.offerPercent,
+              { color: filled ? colors.white : color },
+            ]}
+          >
+            %
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/** Label slot: swaps Offers ↔ yellow Grab now so they never stack. */
+function OffersTabLabel({
+  offersLabel,
+  grabLabel,
+  animate,
+  fontFamily,
+  fontSize,
+  lineHeight,
+}: {
+  offersLabel: string;
+  grabLabel: string;
+  animate: boolean;
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+}) {
+  const phase = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!animate) {
+      phase.stopAnimation();
+      phase.setValue(0);
+      return;
+    }
+
+    phase.setValue(1);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1600),
+        Animated.timing(phase, {
+          toValue: 0,
+          duration: 320,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.delay(1400),
+        Animated.timing(phase, {
+          toValue: 1,
+          duration: 320,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [animate, phase]);
+
+  const offersOpacity = phase.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+  const grabOpacity = phase.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+  const grabScale = phase.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1],
+  });
+
+  return (
+    <View style={styles.offersLabelSlot}>
+      <Animated.Text
+        style={[
+          styles.offersLabelText,
+          styles.labelOffers,
+          {
+            fontFamily,
+            fontSize,
+            lineHeight,
+            opacity: offersOpacity,
+            transform: [{ translateY: 2 }],
+          },
+        ]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+      >
+        {offersLabel}
+      </Animated.Text>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.grabNowLabelLayer,
+          {
+            opacity: grabOpacity,
+            transform: [{ translateY: -3 }, { scale: grabScale }],
+          },
+        ]}
+      >
+        <View style={styles.grabNowChip}>
+          <Text
+            style={styles.grabNowText}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.65}
+          >
+            {grabLabel}
+          </Text>
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
+function TabIcon({ name, color, filled, animateOffers }: IconProps) {
   // Filled glyphs read as the active state, matching Instagram's tab bar.
   const fill = filled ? color : 'transparent';
   const knockout = filled ? colors.white : color;
 
   switch (name) {
+    case 'offers':
+      return (
+        <OffersTabIcon
+          filled={filled}
+          animate={Boolean(animateOffers) && !filled}
+        />
+      );
+
     case 'home':
       return (
         <View style={iconStyles.box}>
-          <View
-            style={[
-              iconStyles.homeRoof,
-              { borderBottomColor: color, borderLeftWidth: ICON * 0.42, borderRightWidth: ICON * 0.42, borderBottomWidth: ICON * 0.32 },
-            ]}
-          />
-          <View
-            style={[
-              iconStyles.homeBody,
-              {
-                borderColor: color,
-                backgroundColor: fill,
-                width: ICON * 0.66,
-                height: ICON * 0.42,
-              },
-            ]}
-          >
-            <View style={[iconStyles.homeDoor, { backgroundColor: knockout }]} />
-          </View>
+          <Text style={[iconStyles.homeLogo, { color }]}>V</Text>
         </View>
       );
 
@@ -180,16 +354,20 @@ function TabIcon({ name, color, filled }: IconProps) {
 
 export function PremiumTabBar({ state, descriptors, navigation }: PremiumTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { t, language } = useI18n();
+  const fontsUi = uiFonts(language);
+  const compactLabels = language !== 'en';
 
   return (
     <View style={[styles.shell, { paddingBottom: Math.max(insets.bottom, DOCK_MIN_BOTTOM) }]}>
       <View style={styles.dock}>
         {state.routes.map((route, index) => {
-          const item = TAB_ITEMS.find((t) => t.routeName === route.name);
+          const item = TAB_ITEMS.find((tab) => tab.routeName === route.name);
           if (!item) return null;
 
           const focused = state.index === index;
           const { options } = descriptors[route.key];
+          const label = t(item.labelKey);
 
           const onPress = () => {
             const event = navigation.emit({
@@ -211,16 +389,67 @@ export function PremiumTabBar({ state, descriptors, navigation }: PremiumTabBarP
               key={route.key}
               accessibilityRole="button"
               accessibilityState={focused ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel ?? options.title ?? item.label}
+              accessibilityLabel={options.tabBarAccessibilityLabel ?? options.title ?? label}
               onPress={onPress}
               onLongPress={onLongPress}
               hitSlop={6}
               style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
             >
-              <TabIcon name={item.icon} color={focused ? colors.pink : colors.muted} filled={focused} />
-              <Text style={[styles.label, focused && styles.labelActive]} numberOfLines={1}>
-                {item.label}
-              </Text>
+              {focused ? (
+                <View style={styles.tabTopAccent} pointerEvents="none">
+                  <View style={styles.tabTopLine} />
+                  <LinearGradient
+                    colors={[
+                      'rgba(232, 33, 91, 0.35)',
+                      'rgba(232, 33, 91, 0.12)',
+                      'rgba(232, 33, 91, 0)',
+                    ]}
+                    locations={[0, 0.45, 1]}
+                    style={styles.tabTopGlow}
+                  />
+                </View>
+              ) : null}
+              <TabIcon
+                name={item.icon}
+                color={
+                  item.icon === 'offers'
+                    ? colors.pinkDark
+                    : focused
+                      ? colors.pink
+                      : colors.muted
+                }
+                filled={focused}
+                animateOffers={item.icon === 'offers'}
+              />
+              {item.icon === 'offers' ? (
+                <OffersTabLabel
+                  offersLabel={label}
+                  grabLabel={t('tabs.grabNow')}
+                  animate={!focused}
+                  fontFamily={fontsUi.extraBold}
+                  fontSize={compactLabels ? 9 : 11}
+                  lineHeight={compactLabels ? 12 : 14}
+                />
+              ) : (
+                <Text
+                  style={[
+                    styles.label,
+                    {
+                      fontFamily: focused
+                        ? fontsUi.extraBold
+                        : fontsUi.decorative,
+                      fontSize: compactLabels ? 9 : 11,
+                      lineHeight: compactLabels ? 12 : 14,
+                    },
+                    focused && styles.labelActive,
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                >
+                  {label}
+                </Text>
+              )}
             </Pressable>
           );
         })}
@@ -236,22 +465,37 @@ const iconStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  homeRoof: {
-    width: 0,
-    height: 0,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    marginBottom: -1,
+  homeLogo: {
+    fontFamily: fonts.heading,
+    fontSize: 24,
+    lineHeight: 28,
+    includeFontPadding: false,
+    textAlign: 'center',
   },
-  homeBody: {
-    borderWidth: STROKE,
-    borderTopWidth: 0,
+  /** Circular % badge — reads as Offers / deals, not a price-tag. */
+  offerBadgeWrap: {
+    width: ICON * 0.82,
+    height: ICON * 0.82,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
-  homeDoor: {
-    width: 4,
-    height: 6,
+  offerBadge: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    borderWidth: STROKE,
+  },
+  offerPercentLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offerPercent: {
+    fontFamily: fonts.extraBold,
+    fontSize: 11,
+    lineHeight: 12,
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   bagHandle: {
     borderWidth: STROKE,
@@ -341,6 +585,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 8,
+    overflow: 'hidden',
   },
   tab: {
     flex: 1,
@@ -350,20 +595,81 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     paddingHorizontal: 2,
   },
+  tabTopAccent: {
+    position: 'absolute',
+    top: 0,
+    left: '10%',
+    right: '10%',
+    height: 16,
+    alignItems: 'center',
+  },
+  tabTopLine: {
+    width: '100%',
+    height: 2,
+    borderRadius: 999,
+    backgroundColor: colors.pink,
+    shadowColor: colors.pink,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.65,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  tabTopGlow: {
+    marginTop: -1,
+    width: '100%',
+    height: 14,
+  },
   tabPressed: {
     opacity: 0.55,
   },
   label: {
-    fontFamily: fonts.semiBold,
-    fontSize: 10,
-    lineHeight: 12,
-    letterSpacing: 0.2,
+    letterSpacing: 0,
     color: colors.muted,
-    marginTop: 3,
+    marginTop: 2,
     textAlign: 'center',
+    paddingHorizontal: 1,
+    width: '100%',
   },
   labelActive: {
-    fontFamily: fonts.extraBold,
     color: colors.pink,
+  },
+  labelOffers: {
+    color: colors.pinkDark,
+  },
+  offersLabelSlot: {
+    marginTop: 2,
+    height: 14,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offersLabelText: {
+    letterSpacing: 0,
+    textAlign: 'center',
+    paddingHorizontal: 1,
+    width: '100%',
+    includeFontPadding: false,
+  },
+  grabNowLabelLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grabNowChip: {
+    backgroundColor: colors.yellow,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    maxWidth: '100%',
+  },
+  grabNowText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 8,
+    lineHeight: 10,
+    letterSpacing: 0.2,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    color: colors.ink,
+    includeFontPadding: false,
   },
 });

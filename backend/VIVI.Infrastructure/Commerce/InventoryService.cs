@@ -81,4 +81,47 @@ public sealed class InventoryService
         product.AvailableStock -= quantity;
         product.UpdatedAt = DateTime.UtcNow;
     }
+
+    public async Task RestoreForOrderAsync(Order order, CancellationToken cancellationToken)
+    {
+        if (!order.InventoryDeducted)
+            return;
+
+        var lines = order.Items
+            .Where(i => i.ItemType == OrderItemType.Product && i.ProductId.HasValue && i.Quantity > 0)
+            .GroupBy(i => i.ProductId!.Value)
+            .Select(g => new { ProductId = g.Key, Quantity = g.Sum(i => i.Quantity) })
+            .ToList();
+
+        foreach (var line in lines)
+            await RestoreAsync(line.ProductId, line.Quantity, cancellationToken);
+
+        order.InventoryDeducted = false;
+    }
+
+    public async Task RestoreAsync(Guid productId, int quantity, CancellationToken cancellationToken)
+    {
+        if (quantity < 1)
+            return;
+
+        if (_db.Database.IsRelational())
+        {
+            var now = DateTime.UtcNow;
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                 UPDATE Products
+                 SET AvailableStock = AvailableStock + {quantity}, UpdatedAt = {now}
+                 WHERE Id = {productId}
+                 """,
+                cancellationToken);
+            return;
+        }
+
+        var product = await _db.Products.SingleOrDefaultAsync(p => p.Id == productId, cancellationToken);
+        if (product is null)
+            return;
+
+        product.AvailableStock += quantity;
+        product.UpdatedAt = DateTime.UtcNow;
+    }
 }

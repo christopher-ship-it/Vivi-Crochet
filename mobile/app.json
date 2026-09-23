@@ -1,16 +1,16 @@
-{
+﻿{
   "expo": {
     "name": "VIVI Crochet",
     "slug": "vivi-crochet",
     "scheme": "vivi",
-    "version": "1.0.2",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "androidStatusBar": {
       "barStyle": "dark-content",
-      "backgroundColor": "#fffaf9",
-      "translucent": false
+      "backgroundColor": "#00000000",
+      "translucent": true
     },
     "splash": {
       "image": "./assets/vivi-splash-logo.png",
@@ -24,7 +24,7 @@
     "android": {
       "package": "in.vivicrochet.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#fcf3ee",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

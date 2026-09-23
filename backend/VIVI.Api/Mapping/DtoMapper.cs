@@ -3,6 +3,7 @@ using VIVI.Api.DTOs.Categories;
 using VIVI.Api.DTOs.Courses;
 using VIVI.Api.DTOs.Products;
 using VIVI.Api.DTOs.Videos;
+using VIVI.Core.Enums;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 
@@ -71,6 +72,7 @@ public static class DtoMapper
             Name = course.Name,
             Type = course.Type,
             Level = course.Level,
+            Description = course.Description,
             About = course.About,
             Price = course.Price,
             Mrp = course.Mrp,
@@ -78,6 +80,7 @@ public static class DtoMapper
             RenewalPercentage = course.RenewalPercentage,
             Languages = course.Languages,
             ThumbnailUrl = course.ThumbnailUrl,
+            SortOrder = course.SortOrder,
             Status = course.Status,
             VideoCount = visible.Count(),
             CreatedAt = course.CreatedAt,
@@ -110,7 +113,8 @@ public static class DtoMapper
                     LaunchPrice = course.LaunchOffer.LaunchPrice,
                     LaunchLimit = course.LaunchOffer.LaunchLimit,
                     RegularPriceAfterLaunch = course.LaunchOffer.RegularPriceAfterLaunch,
-                    Mrp = course.LaunchOffer.Mrp
+                    Mrp = course.LaunchOffer.Mrp,
+                    CompletedPurchaseCount = course.LaunchOffer.CompletedPurchaseCount
                 }
                 : null
         };
@@ -126,6 +130,10 @@ public static class DtoMapper
         VideoFileName = video.VideoFileName,
         FileSizeBytes = video.FileSizeBytes,
         ContentType = video.ContentType,
+        PlayableFileSizeBytes = video.PlayableFileSizeBytes,
+        PlayableContentType = video.PlayableContentType,
+        TranscodeStatus = video.TranscodeStatus,
+        TranscodeError = video.TranscodeError,
         IsFreePreview = video.IsFreePreview,
         UploadConfirmed = video.UploadConfirmed,
         Status = video.Status,
@@ -198,7 +206,34 @@ public static class DtoMapper
             AvailableStock = product.AvailableStock,
             Status = product.Status,
             CreatedAt = product.CreatedAt,
-            UpdatedAt = product.UpdatedAt
+            UpdatedAt = product.UpdatedAt,
+            RecommendedEssentials = MapRecommendedEssentials(product, adminView)
         };
+    }
+
+    private static IReadOnlyList<RecommendedEssentialSummary> MapRecommendedEssentials(
+        Product product,
+        bool adminView)
+    {
+        if (product.EssentialLinks is null || product.EssentialLinks.Count == 0)
+            return Array.Empty<RecommendedEssentialSummary>();
+
+        return product.EssentialLinks
+            .OrderBy(l => l.SortOrder)
+            .Select(l => l.EssentialProduct)
+            .Where(p => p is not null)
+            .Cast<Product>()
+            .Where(p => adminView || (p.Status == ProductStatus.Published && p.AvailableStock > 0))
+            .Take(3)
+            .Select(p => new RecommendedEssentialSummary
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Category = p.Category,
+                Price = p.Price,
+                ImageUrl = p.ImageUrl,
+                AvailableStock = p.AvailableStock
+            })
+            .ToList();
     }
 }

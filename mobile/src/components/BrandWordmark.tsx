@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from '../theme';
 
-/** Typographic brand mark — Didot-style VIVI + tracked CROCHET. */
+/** Typographic brand mark — Nunito Bold VIVI + tracked CROCHET. */
 export function BrandWordmark({ size = 'md' }: { size?: 'sm' | 'md' }) {
   const compact = size === 'sm';
   return (

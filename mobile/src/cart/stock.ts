@@ -2,8 +2,8 @@ import { clampQuantity, MIN_CART_QUANTITY } from './calculations';
 
 export function clampQuantityToStock(quantity: number, availableStock: number): number {
   if (availableStock <= 0) return 0;
-  const capped = Math.min(quantity, availableStock);
-  return Math.max(MIN_CART_QUANTITY, capped);
+  if (quantity <= 0) return 0;
+  return Math.min(quantity, availableStock);
 }
 
 export function canIncreaseQuantity(quantity: number, availableStock: number): boolean {

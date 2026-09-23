@@ -17,8 +17,10 @@ interface AuthContextValue {
   user: AdminUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isFullAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  updateUser: (user: AdminUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -56,15 +58,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     navigate('/', { replace: true });
   }, [navigate]);
 
+  const updateUser = useCallback((next: AdminUser) => {
+    setUser(next);
+    const session = loadSession();
+    if (session) {
+      saveSession({ ...session, user: next });
+    }
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
       isAuthenticated: !!user,
       isLoading,
+      isFullAdmin: user?.role === 'Admin',
       login,
       logout,
+      updateUser,
     }),
-    [user, isLoading, login, logout],
+    [user, isLoading, login, logout, updateUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -66,29 +66,54 @@ public static class OrderConfirmationEmail
         Order order,
         IReadOnlyList<OrderItem> items)
     {
+        var pricing = OrderEmailPricing.FromOrder(order, items);
         var hasPhysical = items.Any(i => i.ItemType == OrderItemType.Product);
         var rows = new StringBuilder();
-        foreach (var item in items)
+        foreach (var line in pricing.Items)
         {
             rows.Append("<tr>");
-            rows.Append($"<td style=\"padding:8px 0;border-bottom:1px solid #eee;\">{WebUtility.HtmlEncode(item.ItemNameSnapshot)}</td>");
-            rows.Append($"<td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:center;\">{item.Quantity}</td>");
-            rows.Append($"<td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:right;\">{EmailLayout.FormatInr(item.TotalAmount)}</td>");
+            rows.Append("<td style=\"padding:8px 0;border-bottom:1px solid #eee;vertical-align:top;\">");
+            rows.Append(WebUtility.HtmlEncode(line.ProductName));
+            if (line.HasOffer)
+            {
+                rows.Append("<br/><span style=\"font-size:12px;color:#7a6d72;text-decoration:line-through;\">");
+                rows.Append(EmailLayout.FormatInr(line.OriginalLineTotal));
+                rows.Append("</span> <span style=\"font-size:14px;font-weight:700;color:");
+                rows.Append(EmailLayout.BrandPink);
+                rows.Append(";\">");
+                rows.Append(EmailLayout.FormatInr(line.PaidLineTotal));
+                rows.Append("</span>");
+            }
+            rows.Append("</td>");
+            rows.Append($"<td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:center;vertical-align:top;\">{line.Quantity}</td>");
+            rows.Append($"<td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:right;vertical-align:top;font-weight:{(line.HasOffer ? "700" : "400")};\">{EmailLayout.FormatInr(line.PaidLineTotal)}</td>");
             rows.Append("</tr>");
         }
 
         var deliveryBlock = BuildDeliveryBlock(order, hasPhysical);
 
+        var isBundle = items.Any(i => i.ItemType == OrderItemType.CourseBundle);
         var nextStep = hasPhysical
-            ? "<p style=\"margin:16px 0 0 0;\"><strong>Order confirmed.</strong> Your pieces enter production next. We will update you if the delivery date changes.</p>"
-            : "<p style=\"margin:16px 0 0 0;\"><strong>Order confirmed.</strong> Digital course access is activated — check your course-ready email for each class.</p>";
+            ? "<p style=\"margin:16px 0 0 0;\"><strong>Your order has been placed</strong> at the delivery address below. Your pieces enter production next. We will email you if the delivery date changes.</p>"
+            : isBundle
+                ? "<p style=\"margin:16px 0 0 0;\"><strong>Order confirmed.</strong> Your All-Access Crochet Pass is active — open the VIVI app to start learning.</p>"
+                : "<p style=\"margin:16px 0 0 0;\"><strong>Order confirmed.</strong> Your course access is activated — open the VIVI app to start learning.</p>";
 
-        var title = "Order confirmed";
-        var subject = "Your VIVI Crochet order is confirmed";
+        var title = hasPhysical ? "Order placed" : "Order confirmed";
+        var subject = hasPhysical
+            ? "Your VIVI Crochet order has been placed"
+            : "Your VIVI Crochet order is confirmed";
+        var intro = hasPhysical
+            ? "Thank you — your VIVI Crochet product order has been placed."
+            : "Thank you — your VIVI Crochet order is confirmed.";
+
+        var savingsRow = pricing.TotalSavings > 0
+            ? $"<tr><td>MRP savings</td><td align=\"right\">-{EmailLayout.FormatInr(pricing.TotalSavings)}</td></tr>"
+            : string.Empty;
 
         var body = $"""
 <p>Hi {WebUtility.HtmlEncode(customer.FullName)},</p>
-<p>Thank you — your VIVI Crochet order is confirmed.</p>
+<p>{intro}</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;font-size:14px;">
   <tr><td><strong>Order number</strong></td><td align="right">{WebUtility.HtmlEncode(order.OrderNumber)}</td></tr>
   <tr><td><strong>Order date</strong></td><td align="right">{EmailLayout.FormatDate(order.ConfirmedAt ?? order.CreatedAt)}</td></tr>
@@ -104,30 +129,50 @@ public static class OrderConfirmationEmail
   {rows}
 </table>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:8px 0 0 0;font-size:14px;">
-  <tr><td>Subtotal</td><td align="right">{EmailLayout.FormatInr(order.Subtotal)}</td></tr>
-  {(order.DiscountAmount > 0 ? $"<tr><td>MRP savings</td><td align=\"right\">-{EmailLayout.FormatInr(order.DiscountAmount)}</td></tr>" : "")}
-  <tr><td style="padding-top:8px;font-weight:700;">Total paid</td><td align="right" style="padding-top:8px;font-weight:700;color:{EmailLayout.BrandPink};">{EmailLayout.FormatInr(order.TotalAmount)}</td></tr>
+  <tr><td>Subtotal</td><td align="right">{EmailLayout.FormatInr(pricing.SubtotalBeforeDiscount)}</td></tr>
+  {savingsRow}
+  <tr><td style="padding-top:8px;font-weight:700;">Total paid</td><td align="right" style="padding-top:8px;font-weight:700;color:{EmailLayout.BrandPink};">{EmailLayout.FormatInr(pricing.TotalPaid)}</td></tr>
 </table>
 {deliveryBlock}
 {nextStep}
-<p style="margin:16px 0 0 0;font-size:13px;color:#7a6d72;">Keep this email for your records — it has your order summary.</p>
+<p style="margin:16px 0 0 0;font-size:13px;color:#7a6d72;">Keep this email for your records — it has your order summary{(hasPhysical ? " and delivery address" : "")}.</p>
 """;
 
-        var text = $"""
-Hi {customer.FullName},
+        var textLines = new StringBuilder();
+        textLines.AppendLine($"Hi {customer.FullName},");
+        textLines.AppendLine();
+        textLines.AppendLine(hasPhysical
+            ? "Your VIVI Crochet product order has been placed."
+            : "Your VIVI Crochet order is confirmed.");
+        textLines.AppendLine();
+        textLines.AppendLine($"Order number: {order.OrderNumber}");
+        textLines.AppendLine($"Order date: {EmailLayout.FormatDate(order.ConfirmedAt ?? order.CreatedAt)}");
+        textLines.AppendLine("Payment method: Online Payment");
+        textLines.AppendLine();
+        foreach (var line in pricing.Items)
+        {
+            if (line.HasOffer)
+            {
+                textLines.AppendLine(
+                    $"{line.ProductName} x{line.Quantity}: {EmailLayout.FormatInr(line.OriginalLineTotal)} → {EmailLayout.FormatInr(line.PaidLineTotal)}");
+            }
+            else
+            {
+                textLines.AppendLine(
+                    $"{line.ProductName} x{line.Quantity}: {EmailLayout.FormatInr(line.PaidLineTotal)}");
+            }
+        }
+        textLines.AppendLine();
+        textLines.AppendLine($"Subtotal: {EmailLayout.FormatInr(pricing.SubtotalBeforeDiscount)}");
+        if (pricing.TotalSavings > 0)
+            textLines.AppendLine($"MRP savings: -{EmailLayout.FormatInr(pricing.TotalSavings)}");
+        textLines.AppendLine($"Total paid: {EmailLayout.FormatInr(pricing.TotalPaid)}");
+        textLines.Append(BuildDeliveryText(order, hasPhysical));
+        textLines.AppendLine(
+            $"This email has your order summary{(hasPhysical ? " and delivery address" : "")} — keep it for your records.");
+        textLines.AppendLine("Open the VIVI app to view your order and course access.");
 
-Your VIVI Crochet order is confirmed.
-
-Order number: {order.OrderNumber}
-Order date: {EmailLayout.FormatDate(order.ConfirmedAt ?? order.CreatedAt)}
-Payment method: Online Payment
-Total paid: {EmailLayout.FormatInr(order.TotalAmount)}
-{BuildDeliveryText(order, hasPhysical)}
-This email has your order summary — keep it for your records.
-Open the VIVI app to view your order and course access.
-""";
-
-        return (subject, EmailLayout.Wrap(title, body), text);
+        return (subject, EmailLayout.Wrap(title, body), textLines.ToString());
     }
 
     private static string BuildDeliveryBlock(Order order, bool hasPhysical)
@@ -137,11 +182,18 @@ Open the VIVI app to view your order and course access.
 
         var address = FormatAddress(order);
         var expected = FormatExpectedDelivery(order);
+        var phone = string.IsNullOrWhiteSpace(order.ShipPhone)
+            ? string.Empty
+            : $"<tr><td><strong>Delivery phone</strong></td><td align=\"right\">{WebUtility.HtmlEncode(order.ShipPhone)}</td></tr>";
         return $"""
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;font-size:14px;">
-  <tr><td style="vertical-align:top;"><strong>Delivery address</strong></td><td align="right">{address}</td></tr>
-  <tr><td><strong>Expected delivery</strong></td><td align="right">{WebUtility.HtmlEncode(expected)}</td></tr>
-</table>
+<div style="margin:20px 0;padding:16px;border:2px solid {EmailLayout.BrandPink};background:#fff7fa;">
+  <p style="margin:0 0 10px 0;font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:{EmailLayout.BrandPink};">Delivery address for this order</p>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:14px;">
+    <tr><td style="vertical-align:top;"><strong>Ship to</strong></td><td align="right">{address}</td></tr>
+    {phone}
+    <tr><td><strong>Expected delivery</strong></td><td align="right">{WebUtility.HtmlEncode(expected)}</td></tr>
+  </table>
+</div>
 """;
     }
 
@@ -149,10 +201,13 @@ Open the VIVI app to view your order and course access.
     {
         if (!hasPhysical)
             return string.Empty;
+        var phoneLine = string.IsNullOrWhiteSpace(order.ShipPhone)
+            ? string.Empty
+            : $"\nDelivery phone: {order.ShipPhone}";
         return $"""
 
-Delivery address:
-{PlainAddress(order)}
+Delivery address for this order:
+{PlainAddress(order)}{phoneLine}
 
 Expected delivery: {FormatExpectedDelivery(order)}
 
@@ -356,6 +411,62 @@ See you in the Live Crochet Studio.
         return (
             "Your VIVI Crochet live booking is confirmed",
             EmailLayout.Wrap("Live booking confirmed", body),
+            text);
+    }
+}
+
+public static class PasswordResetEmail
+{
+    public static (string Subject, string Html, string Text) Render(string code, int expiresMinutes)
+    {
+        var body = $"""
+<p>We received a request to reset your VIVI Crochet password.</p>
+<p style="margin:20px 0;font-size:28px;font-weight:800;letter-spacing:0.2em;color:{EmailLayout.BrandPink};">{WebUtility.HtmlEncode(code)}</p>
+<p>Enter this code in the app to choose a new password. It expires in {expiresMinutes} minutes.</p>
+<p style="margin:16px 0 0 0;color:#7a6d72;font-size:13px;">If you did not request this, you can ignore this email — your password will stay the same.</p>
+""";
+
+        var text = $"""
+We received a request to reset your VIVI Crochet password.
+
+Your reset code: {code}
+
+Enter this code in the app to choose a new password. It expires in {expiresMinutes} minutes.
+
+If you did not request this, you can ignore this email.
+""";
+
+        return (
+            "Reset your VIVI Crochet password",
+            EmailLayout.Wrap("Password reset", body),
+            text);
+    }
+}
+
+public static class EmailVerificationEmail
+{
+    public static (string Subject, string Html, string Text) Render(string code, int expiresMinutes)
+    {
+        var body = $"""
+<p>Confirm this email for your VIVI Crochet account.</p>
+<p style="margin:20px 0;font-size:28px;font-weight:800;letter-spacing:0.2em;color:{EmailLayout.BrandPink};">{WebUtility.HtmlEncode(code)}</p>
+<p>Enter this code in the app to verify your email. It expires in {expiresMinutes} minutes.</p>
+<p style="margin:16px 0 0 0;color:#7a6d72;font-size:13px;">If you did not request this, you can ignore this email.</p>
+""";
+
+        var text = $"""
+Confirm this email for your VIVI Crochet account.
+
+Your verification code: {code}
+
+Enter this code in the app to verify your email. It expires in {expiresMinutes} minutes.
+
+If you did not request this, you can ignore this email.
+""";
+
+        return (
+            "Verify your VIVI Crochet email",
+            EmailLayout.Wrap("Verify email", body),
             text);
     }
 }

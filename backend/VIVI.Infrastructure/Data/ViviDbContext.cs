@@ -15,7 +15,10 @@ public sealed class ViviDbContext : DbContext
     public DbSet<Video> Videos => Set<Video>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+    public DbSet<ProductEssentialLink> ProductEssentialLinks => Set<ProductEssentialLink>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
+    public DbSet<PasswordResetChallenge> PasswordResetChallenges => Set<PasswordResetChallenge>();
+    public DbSet<EmailVerificationChallenge> EmailVerificationChallenges => Set<EmailVerificationChallenge>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
@@ -28,6 +31,8 @@ public sealed class ViviDbContext : DbContext
     public DbSet<LiveWeek> LiveWeeks => Set<LiveWeek>();
     public DbSet<LiveWeekSlot> LiveWeekSlots => Set<LiveWeekSlot>();
     public DbSet<LiveBooking> LiveBookings => Set<LiveBooking>();
+    public DbSet<SupportInquiry> SupportInquiries => Set<SupportInquiry>();
+    public DbSet<DevicePushToken> DevicePushTokens => Set<DevicePushToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -59,12 +64,15 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
             entity.Property(x => x.Type).HasConversion<int>().IsRequired();
             entity.Property(x => x.Level).HasMaxLength(80);
+            entity.Property(x => x.Description).HasMaxLength(400);
             entity.Property(x => x.About).HasMaxLength(2000);
             entity.Property(x => x.Languages).HasMaxLength(200);
             entity.Property(x => x.ThumbnailUrl).HasMaxLength(512);
+            entity.Property(x => x.SortOrder).IsRequired();
             entity.Property(x => x.Status).HasConversion<int>().IsRequired();
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.CategoryId);
+            entity.HasIndex(x => new { x.CategoryId, x.SortOrder });
             entity.HasIndex(x => x.Name);
 
             entity.HasOne(x => x.Category)
@@ -85,12 +93,17 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.BlobPath).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.OriginalBlobPath).HasMaxLength(512).IsRequired();
             entity.Property(x => x.ThumbnailBlobPath).HasMaxLength(512);
             entity.Property(x => x.VideoFileName).HasMaxLength(260).IsRequired();
             entity.Property(x => x.ContentType).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.PlayableContentType).HasMaxLength(80);
+            entity.Property(x => x.TranscodeStatus).HasConversion<int>().IsRequired();
+            entity.Property(x => x.TranscodeError).HasMaxLength(1000);
             entity.Property(x => x.PatternPdfBlobPath).HasMaxLength(512);
             entity.Property(x => x.Status).HasConversion<int>().IsRequired();
             entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.TranscodeStatus);
             entity.HasIndex(x => new { x.CourseId, x.SortOrder });
             entity.HasIndex(x => x.BlobPath).IsUnique();
 
@@ -144,6 +157,24 @@ public sealed class ViviDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<ProductEssentialLink>(entity =>
+        {
+            entity.ToTable("ProductEssentialLinks");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.SourceProductId, x.EssentialProductId }).IsUnique();
+            entity.HasIndex(x => new { x.SourceProductId, x.SortOrder });
+
+            entity.HasOne(x => x.SourceProduct)
+                .WithMany(x => x.EssentialLinks)
+                .HasForeignKey(x => x.SourceProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.EssentialProduct)
+                .WithMany()
+                .HasForeignKey(x => x.EssentialProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<OtpChallenge>(entity =>
         {
             entity.ToTable("OtpChallenges");
@@ -154,29 +185,75 @@ public sealed class ViviDbContext : DbContext
             entity.HasIndex(x => x.ExpiresAt);
         });
 
+        modelBuilder.Entity<PasswordResetChallenge>(entity =>
+        {
+            entity.ToTable("PasswordResetChallenges");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => x.Email);
+            entity.HasIndex(x => x.ExpiresAt);
+        });
+
+        modelBuilder.Entity<EmailVerificationChallenge>(entity =>
+        {
+            entity.ToTable("EmailVerificationChallenges");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => x.CustomerId);
+            entity.HasIndex(x => x.Email);
+            entity.HasIndex(x => x.ExpiresAt);
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<Customer>(entity =>
         {
             entity.ToTable("Customers");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.FullName).HasMaxLength(120).IsRequired();
-            entity.Property(x => x.PhoneNumber).HasMaxLength(10).IsRequired();
+            entity.Property(x => x.PhoneNumber).HasMaxLength(20);
             entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Country).HasMaxLength(80);
+            entity.Property(x => x.State).HasMaxLength(80);
+            entity.Property(x => x.City).HasMaxLength(80);
+            entity.Property(x => x.AuthMethod).HasConversion<int>().IsRequired();
             entity.Property(x => x.ShipFullName).HasMaxLength(120);
-            entity.Property(x => x.ShipPhone).HasMaxLength(10);
+            entity.Property(x => x.ShipPhone).HasMaxLength(20);
             entity.Property(x => x.ShipAddressLine1).HasMaxLength(200);
             entity.Property(x => x.ShipAddressLine2).HasMaxLength(200);
             entity.Property(x => x.ShipLandmark).HasMaxLength(120);
+            entity.Property(x => x.ShipAddressTag).HasMaxLength(40);
             entity.Property(x => x.ShipCity).HasMaxLength(80);
             entity.Property(x => x.ShipState).HasMaxLength(80);
-            entity.Property(x => x.ShipPinCode).HasMaxLength(6);
-            entity.Property(x => x.ShipCountry).HasMaxLength(40);
-            entity.HasIndex(x => x.PhoneNumber).IsUnique();
+            entity.Property(x => x.ShipPinCode).HasMaxLength(12);
+            entity.Property(x => x.ShipCountry).HasMaxLength(80);
+            entity.HasIndex(x => x.PhoneNumber)
+                .IsUnique()
+                .HasFilter("[PhoneNumber] IS NOT NULL");
             entity.HasIndex(x => x.UserId).IsUnique();
-            entity.HasIndex(x => x.Email);
+            entity.HasIndex(x => x.Email).IsUnique();
 
             entity.HasOne(x => x.User)
                 .WithOne(x => x.CustomerProfile)
                 .HasForeignKey<Customer>(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DevicePushToken>(entity =>
+        {
+            entity.ToTable("DevicePushTokens");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ExpoPushToken).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Platform).HasMaxLength(20).IsRequired();
+            entity.HasIndex(x => x.ExpoPushToken).IsUnique();
+            entity.HasIndex(x => x.CustomerId);
+            entity.HasOne(x => x.Customer)
+                .WithMany(c => c.DevicePushTokens)
+                .HasForeignKey(x => x.CustomerId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -195,14 +272,14 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.Status).HasConversion<int>().IsRequired();
             entity.Property(x => x.InventoryDeducted).IsRequired();
             entity.Property(x => x.ShipFullName).HasMaxLength(120);
-            entity.Property(x => x.ShipPhone).HasMaxLength(10);
+            entity.Property(x => x.ShipPhone).HasMaxLength(20);
             entity.Property(x => x.ShipAddressLine1).HasMaxLength(200);
             entity.Property(x => x.ShipAddressLine2).HasMaxLength(200);
             entity.Property(x => x.ShipLandmark).HasMaxLength(120);
             entity.Property(x => x.ShipCity).HasMaxLength(80);
             entity.Property(x => x.ShipState).HasMaxLength(80);
-            entity.Property(x => x.ShipPinCode).HasMaxLength(6);
-            entity.Property(x => x.ShipCountry).HasMaxLength(40);
+            entity.Property(x => x.ShipPinCode).HasMaxLength(12);
+            entity.Property(x => x.ShipCountry).HasMaxLength(80);
             entity.Property(x => x.DeliveryDateOverrideReason).HasMaxLength(400);
             entity.HasIndex(x => x.OrderNumber).IsUnique();
             entity.HasIndex(x => x.RazorpayOrderId).IsUnique().HasFilter("[RazorpayOrderId] IS NOT NULL");
@@ -274,6 +351,8 @@ public sealed class ViviDbContext : DbContext
             entity.ToTable("LiveWeeks");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.BreakWeekday).HasConversion<int?>();
+            entity.Property(x => x.TutorName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.TutorPhotoBlobPath).HasMaxLength(500);
             entity.HasIndex(x => new { x.SeasonYear, x.WeekNumber }).IsUnique();
             entity.HasIndex(x => x.StartDate);
         });
@@ -411,6 +490,22 @@ public sealed class ViviDbContext : DbContext
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.OrderId);
             entity.HasIndex(x => x.CourseEnrollmentId);
+        });
+
+        modelBuilder.Entity<SupportInquiry>(entity =>
+        {
+            entity.ToTable("SupportInquiries");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Message).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.IsRead).IsRequired();
+            entity.HasIndex(x => x.CustomerId);
+            entity.HasIndex(x => x.CreatedAt);
+            entity.HasIndex(x => x.IsRead);
+
+            entity.HasOne(x => x.Customer)
+                .WithMany(x => x.SupportInquiries)
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

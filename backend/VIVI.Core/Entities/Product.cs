@@ -24,4 +24,5 @@ public sealed class Product
 
     public Course? Course { get; set; }
     public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
+    public ICollection<ProductEssentialLink> EssentialLinks { get; set; } = new List<ProductEssentialLink>();
 }

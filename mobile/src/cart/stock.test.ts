@@ -19,6 +19,10 @@ describe('cart stock helpers', () => {
     assert.equal(canIncreaseQuantity(1, 1), false);
   });
 
+  test('quantity 0 clamps to 0 (removal path)', () => {
+    assert.equal(clampQuantityToStock(0, 10), 0);
+  });
+
   test('stock 0 is out of stock', () => {
     assert.equal(isOutOfStock(0), true);
     assert.equal(clampQuantityToStock(1, 0), 0);

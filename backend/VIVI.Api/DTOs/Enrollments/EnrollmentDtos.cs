@@ -27,4 +27,6 @@ public sealed class CoursePricingResponse
     public bool LaunchOfferActive { get; set; }
     public int? LaunchOfferRemaining { get; set; }
     public int AccessDays { get; set; }
+    public bool IsRenewalOffer { get; set; }
+    public int? RenewalPercentage { get; set; }
 }

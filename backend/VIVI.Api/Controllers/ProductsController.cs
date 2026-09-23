@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Products;
 using VIVI.Api.Extensions;
 using VIVI.Api.Mapping;
@@ -10,6 +11,7 @@ using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
 using VIVI.Core.Interfaces;
+using VIVI.Infrastructure.Commerce;
 using VIVI.Infrastructure.Data;
 
 namespace VIVI.Api.Controllers;
@@ -20,11 +22,13 @@ public sealed class ProductsController : ControllerBase
 {
     private readonly ViviDbContext _db;
     private readonly IBlobStorageService _blob;
+    private readonly ILogger<ProductsController> _logger;
 
-    public ProductsController(ViviDbContext db, IBlobStorageService blob)
+    public ProductsController(ViviDbContext db, IBlobStorageService blob, ILogger<ProductsController> logger)
     {
         _db = db;
         _blob = blob;
+        _logger = logger;
     }
 
     /// <summary>Lists shop products. Anonymous callers only receive published products.</summary>
@@ -34,9 +38,12 @@ public sealed class ProductsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<ProductResponse>>> List(
         [FromQuery] string? category,
         [FromQuery] string? q,
+        [FromQuery] ProductType? productType,
         CancellationToken cancellationToken)
     {
         var admin = User.IsAdmin();
+        // Do not Include EssentialLinks here — shop/home list must stay up even if
+        // ProductEssentialLinks is missing or bootstrap failed. Cart loads essentials via Get.
         var query = _db.Products
             .AsNoTracking()
             .Include(p => p.Images)
@@ -45,6 +52,9 @@ public sealed class ProductsController : ControllerBase
 
         if (!admin)
             query = query.Where(p => p.Status == ProductStatus.Published);
+
+        if (productType.HasValue)
+            query = query.Where(p => p.ProductType == productType.Value);
 
         if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
             query = query.Where(p => p.Category == category);
@@ -113,12 +123,17 @@ public sealed class ProductsController : ControllerBase
     [HttpGet("categories")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<string>>> Categories(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<string>>> Categories(
+        [FromQuery] ProductType? productType,
+        CancellationToken cancellationToken)
     {
         var admin = User.IsAdmin();
         var query = _db.Products.AsNoTracking().AsQueryable();
         if (!admin)
             query = query.Where(p => p.Status == ProductStatus.Published);
+
+        if (productType.HasValue)
+            query = query.Where(p => p.ProductType == productType.Value);
 
         var categories = await query
             .Select(p => p.Category)
@@ -136,12 +151,13 @@ public sealed class ProductsController : ControllerBase
     public async Task<ActionResult<ProductResponse>> Get(Guid id, CancellationToken cancellationToken)
     {
         var admin = User.IsAdmin();
-        var product = await _db.Products
-            .AsNoTracking()
-            .Include(p => p.Images)
-            .Include(p => p.Course!)
-            .ThenInclude(c => c.Videos)
-            .SingleOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var product = await LoadProductForReadAsync(id, includeEssentials: true, cancellationToken);
+
+        if (product is null)
+        {
+            // Retry without essentials if ProductEssentialLinks is unavailable.
+            product = await LoadProductForReadAsync(id, includeEssentials: false, cancellationToken);
+        }
 
         if (product is null || (!admin && product.Status != ProductStatus.Published))
             throw ViviException.NotFound("PRODUCT_NOT_FOUND", "Product was not found.");
@@ -151,9 +167,40 @@ public sealed class ProductsController : ControllerBase
         return Ok(dto);
     }
 
+    private async Task<Product?> LoadProductForReadAsync(
+        Guid id,
+        bool includeEssentials,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            IQueryable<Product> query = _db.Products
+                .AsNoTracking()
+                .Include(p => p.Images)
+                .Include(p => p.Course!)
+                .ThenInclude(c => c.Videos);
+
+            if (includeEssentials)
+            {
+                query = query
+                    .AsSplitQuery()
+                    .Include(p => p.EssentialLinks)
+                    .ThenInclude(l => l.EssentialProduct);
+            }
+
+            return await query.SingleOrDefaultAsync(p => p.Id == id, cancellationToken);
+        }
+        catch (Exception ex) when (includeEssentials)
+        {
+            // Missing ProductEssentialLinks table (or related schema) must not take detail down.
+            _logger.LogWarning(ex, "Product {ProductId} essentials include failed; retrying without links.", id);
+            return null;
+        }
+    }
+
     /// <summary>Creates a product as Draft. Admin only.</summary>
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status201Created)]
     public async Task<ActionResult<ProductResponse>> Create([FromBody] ProductRequest request, CancellationToken cancellationToken)
     {
@@ -168,7 +215,10 @@ public sealed class ProductsController : ControllerBase
 
         _db.Products.Add(product);
         await _db.SaveChangesAsync(cancellationToken);
+        await SyncEssentialLinks(product, request, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
         await LoadCourseNav(product, cancellationToken);
+        await LoadEssentialNav(product, cancellationToken);
 
         var dto = product.ToDto(adminView: true);
         await ProductImageResolver.ResolveProductAsync(dto, _blob, cancellationToken);
@@ -177,7 +227,7 @@ public sealed class ProductsController : ControllerBase
 
     /// <summary>Updates product metadata. Does not change publish status. Admin only.</summary>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductResponse>> Update(
         Guid id,
@@ -187,7 +237,9 @@ public sealed class ProductsController : ControllerBase
         var product = await Load(id, cancellationToken);
         await EnsureCourse(request.CourseId, cancellationToken);
         Apply(product, request, DateTime.UtcNow);
+        await SyncEssentialLinks(product, request, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
+        await LoadEssentialNav(product, cancellationToken);
 
         var dto = product.ToDto(adminView: true);
         await ProductImageResolver.ResolveProductAsync(dto, _blob, cancellationToken);
@@ -196,7 +248,7 @@ public sealed class ProductsController : ControllerBase
 
     /// <summary>Deletes a product and its image blobs. Admin only.</summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
@@ -214,6 +266,18 @@ public sealed class ProductsController : ControllerBase
         foreach (var item in orderItems)
             item.ProductId = null;
 
+        try
+        {
+            var links = await _db.ProductEssentialLinks
+                .Where(l => l.SourceProductId == id || l.EssentialProductId == id)
+                .ToListAsync(cancellationToken);
+            _db.ProductEssentialLinks.RemoveRange(links);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not clear essential links before deleting product {ProductId}.", id);
+        }
+
         _db.Products.Remove(product);
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -225,7 +289,7 @@ public sealed class ProductsController : ControllerBase
 
     /// <summary>Publishes a product. Admin only.</summary>
     [HttpPost("{id:guid}/publish")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductResponse>> Publish(Guid id, CancellationToken cancellationToken)
     {
@@ -241,7 +305,7 @@ public sealed class ProductsController : ControllerBase
 
     /// <summary>Unpublishes a product. Admin only.</summary>
     [HttpPost("{id:guid}/unpublish")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductResponse>> Unpublish(Guid id, CancellationToken cancellationToken)
     {
@@ -260,7 +324,7 @@ public sealed class ProductsController : ControllerBase
     /// Upload the file directly to blob storage, then call image-upload-complete. Admin only.
     /// </summary>
     [HttpPost("{id:guid}/image-upload-url")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(ProductImageUploadUrlResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductImageUploadUrlResponse>> CreateImageUploadUrl(
         Guid id,
@@ -298,7 +362,7 @@ public sealed class ProductsController : ControllerBase
 
     /// <summary>Confirms a finished image upload and adds it to the product gallery. Admin only.</summary>
     [HttpPost("{id:guid}/image-upload-complete")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductResponse>> CompleteImageUpload(
         Guid id,
@@ -367,7 +431,7 @@ public sealed class ProductsController : ControllerBase
 
     /// <summary>Marks one gallery image as the main shop image. Admin only.</summary>
     [HttpPost("{id:guid}/images/{imageId:guid}/set-main")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductResponse>> SetMainImage(
         Guid id,
@@ -392,7 +456,7 @@ public sealed class ProductsController : ControllerBase
 
     /// <summary>Removes one gallery image. Admin only.</summary>
     [HttpDelete("{id:guid}/images/{imageId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductResponse>> DeleteImage(
         Guid id,
@@ -450,6 +514,25 @@ public sealed class ProductsController : ControllerBase
     private async Task<Product> Load(Guid id, CancellationToken cancellationToken, bool tracking = true)
     {
         var query = tracking ? _db.Products.AsQueryable() : _db.Products.AsNoTracking();
+        try
+        {
+            var withLinks = await query
+                .AsSplitQuery()
+                .Include(p => p.Images)
+                .Include(p => p.Course!)
+                .ThenInclude(c => c.Videos)
+                .Include(p => p.EssentialLinks)
+                    .ThenInclude(l => l.EssentialProduct)
+                .SingleOrDefaultAsync(p => p.Id == id, cancellationToken);
+
+            if (withLinks is not null)
+                return withLinks;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Product {ProductId} load with essentials failed; retrying without links.", id);
+        }
+
         var product = await query
             .Include(p => p.Images)
             .Include(p => p.Course!)
@@ -467,6 +550,73 @@ public sealed class ProductsController : ControllerBase
         await _db.Entry(product).Reference(p => p.Course).LoadAsync(cancellationToken);
         if (product.Course is not null)
             await _db.Entry(product.Course).Collection(c => c.Videos).LoadAsync(cancellationToken);
+    }
+
+    private async Task LoadEssentialNav(Product product, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _db.Entry(product).Collection(p => p.EssentialLinks).LoadAsync(cancellationToken);
+            foreach (var link in product.EssentialLinks)
+                await _db.Entry(link).Reference(l => l.EssentialProduct).LoadAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not load essential links for product {ProductId}.", product.Id);
+            product.EssentialLinks = new List<ProductEssentialLink>();
+        }
+    }
+
+    private async Task SyncEssentialLinks(Product product, ProductRequest request, CancellationToken cancellationToken)
+    {
+        // Production may not have run the EF migration yet — create the table on demand.
+        await ProductEssentialSchemaBootstrapper.EnsureAsync(_db, cancellationToken, _logger);
+
+        List<ProductEssentialLink> existing;
+        try
+        {
+            existing = await _db.ProductEssentialLinks
+                .Where(l => l.SourceProductId == product.Id)
+                .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ProductEssentialLinks unavailable when syncing product {ProductId}.", product.Id);
+            throw new ViviException(
+                "ESSENTIAL_LINKS_UNAVAILABLE",
+                "Could not save recommended essentials. Redeploy after ProductEssentialLinks schema is ready.",
+                503);
+        }
+
+        _db.ProductEssentialLinks.RemoveRange(existing);
+
+        if (request.ProductType != ProductType.Handmade)
+            return;
+
+        var ids = (request.RecommendedEssentialIds ?? Array.Empty<Guid>())
+            .Where(id => id != Guid.Empty && id != product.Id)
+            .Distinct()
+            .Take(3)
+            .ToArray();
+        if (ids.Length == 0)
+            return;
+
+        var validIds = await _db.Products
+            .Where(p => ids.Contains(p.Id) && p.ProductType == ProductType.Resell)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        var ordered = ids.Where(id => validIds.Contains(id)).ToArray();
+        for (var i = 0; i < ordered.Length; i++)
+        {
+            _db.ProductEssentialLinks.Add(new ProductEssentialLink
+            {
+                Id = Guid.NewGuid(),
+                SourceProductId = product.Id,
+                EssentialProductId = ordered[i],
+                SortOrder = i
+            });
+        }
     }
 
     private async Task EnsureCourse(Guid? courseId, CancellationToken cancellationToken)
@@ -488,7 +638,7 @@ public sealed class ProductsController : ControllerBase
         product.Mrp = request.Mrp;
         product.Spec1 = request.Spec1?.Trim();
         product.Spec2 = request.Spec2?.Trim();
-        product.CourseId = request.CourseId;
+        product.CourseId = request.ProductType == ProductType.Handmade ? request.CourseId : null;
         product.SortOrder = request.SortOrder;
         product.ProductType = request.ProductType;
         product.AvailableStock = request.AvailableStock;

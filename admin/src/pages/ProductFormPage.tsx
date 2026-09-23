@@ -1,35 +1,56 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   completeProductImageUpload,
   createProduct,
   deleteProductImage,
   getProduct,
   listProductCategories,
+  listProducts,
   requestProductImageUploadUrl,
   setProductMainImage,
   updateProduct,
 } from '../api/products';
 import { listCourses } from '../api/courses';
 import { ApiClientError } from '../api/client';
-import type { Course, ProductImage, ProductRequest } from '../types';
+import type { Course, Product, ProductImage, ProductRequest, ProductType } from '../types';
 import { formatFileSize, validateImageFile } from '../utils/format';
+import {
+  prepareProductImage,
+  PRODUCT_IMAGE_EDGE_PX,
+} from '../utils/productImagePrepare';
 import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
 
 const MAX_PHOTOS = 5;
 
-const emptyForm: ProductRequest = {
+/** Lets admins clear a number field while typing (`Number('')` is 0 and traps the cursor). */
+type NumberDraft = number | '';
+
+type ProductFormState = Omit<ProductRequest, 'price' | 'availableStock' | 'sortOrder'> & {
+  price: NumberDraft;
+  availableStock: NumberDraft;
+  sortOrder: NumberDraft;
+};
+
+function parseNumberDraft(raw: string): NumberDraft {
+  if (raw.trim() === '') return '';
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : '';
+}
+
+const emptyForm: ProductFormState = {
   name: '',
   category: '',
   description: '',
-  price: 899,
+  price: '',
   mrp: null,
   spec1: '',
   spec2: '',
   courseId: null,
   sortOrder: 0,
   productType: 'Handmade',
-  availableStock: 10,
+  availableStock: '',
+  recommendedEssentialIds: [],
 };
 
 function imagesFromProduct(product: {
@@ -49,15 +70,25 @@ function imagesFromProduct(product: {
   }];
 }
 
+function initialProductType(searchParams: URLSearchParams): ProductType {
+  const raw = searchParams.get('type');
+  return raw === 'Resell' ? 'Resell' : 'Handmade';
+}
+
 export function ProductFormPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [form, setForm] = useState<ProductRequest>(emptyForm);
+  const [form, setForm] = useState<ProductFormState>(() => ({
+    ...emptyForm,
+    productType: initialProductType(searchParams),
+  }));
   const [categories, setCategories] = useState<string[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [essentialsCatalog, setEssentialsCatalog] = useState<Product[]>([]);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -74,6 +105,9 @@ export function ProductFormPage() {
     listCourses()
       .then(setCourses)
       .catch(() => setCourses([]));
+    listProducts('Resell')
+      .then(setEssentialsCatalog)
+      .catch(() => setEssentialsCatalog([]));
   }, []);
 
   useEffect(() => {
@@ -96,6 +130,7 @@ export function ProductFormPage() {
           sortOrder: product.sortOrder,
           productType: product.productType ?? 'Handmade',
           availableStock: product.availableStock ?? 0,
+          recommendedEssentialIds: (product.recommendedEssentials ?? []).map((e) => e.id),
         });
         setImages(imagesFromProduct(product));
       } catch (err) {
@@ -112,15 +147,30 @@ export function ProductFormPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (form.price === '' || form.price < 0) {
+      setError('Enter a valid price (₹).');
+      return;
+    }
+    if (form.availableStock === '' || form.availableStock < 0) {
+      setError('Enter available stock (0 or more).');
+      return;
+    }
     setSaving(true);
     setError(null);
     const payload: ProductRequest = {
       ...form,
+      price: form.price,
+      availableStock: Math.max(0, Math.floor(form.availableStock)),
+      sortOrder: form.sortOrder === '' ? 0 : form.sortOrder,
       description: form.description?.trim() || null,
       spec1: form.spec1?.trim() || null,
       spec2: form.spec2?.trim() || null,
       mrp: form.mrp || null,
-      courseId: form.courseId || null,
+      courseId: form.productType === 'Handmade' ? (form.courseId || null) : null,
+      recommendedEssentialIds:
+        form.productType === 'Handmade'
+          ? (form.recommendedEssentialIds ?? []).slice(0, 3)
+          : [],
     };
     try {
       if (isEdit && id) {
@@ -143,18 +193,25 @@ export function ProductFormPage() {
       throw new Error(validation.error ?? 'Invalid image');
     }
 
-    setUploadProgress({ loaded: 0, total: file.size, percent: 0 });
+    // Always store a fixed 1200×1200 JPEG for Handmade + Essentials shop photos.
+    const prepared = await prepareProductImage(file);
+    const preparedValidation = validateImageFile(prepared);
+    if (!preparedValidation.valid) {
+      throw new Error(preparedValidation.error ?? 'Prepared image is invalid');
+    }
+
+    setUploadProgress({ loaded: 0, total: prepared.size, percent: 0 });
 
     const ticket = await requestProductImageUploadUrl(id!, {
-      fileName: file.name,
-      contentType: validation.contentType!,
-      fileSizeBytes: file.size,
+      fileName: prepared.name,
+      contentType: preparedValidation.contentType!,
+      fileSizeBytes: prepared.size,
     });
 
     const uploadResult = await uploadToBlob(
       ticket.uploadUrl,
-      file,
-      validation.contentType!,
+      prepared,
+      preparedValidation.contentType!,
       setUploadProgress,
     );
 
@@ -164,8 +221,8 @@ export function ProductFormPage() {
 
     const product = await completeProductImageUpload(id!, {
       blobPath: ticket.blobPath,
-      fileSizeBytes: file.size,
-      contentType: validation.contentType!,
+      fileSizeBytes: prepared.size,
+      contentType: preparedValidation.contentType!,
       setAsMain: currentCount === 0,
     });
 
@@ -305,16 +362,21 @@ export function ProductFormPage() {
                   checked={form.productType === 'Handmade'}
                   onChange={() => setForm((f) => ({ ...f, productType: 'Handmade' }))}
                 />
-                Handmade
+                Handmade Collection
               </label>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
                   type="radio"
                   name="productType"
                   checked={form.productType === 'Resell'}
-                  onChange={() => setForm((f) => ({ ...f, productType: 'Resell' }))}
+                  onChange={() => setForm((f) => ({
+                    ...f,
+                    productType: 'Resell',
+                    courseId: null,
+                    recommendedEssentialIds: [],
+                  }))}
                 />
-                Resell
+                Crochet Essentials
               </label>
             </div>
           </div>
@@ -337,7 +399,7 @@ export function ProductFormPage() {
                 required
                 min={0}
                 value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))}
+                onChange={(e) => setForm((f) => ({ ...f, price: parseNumberDraft(e.target.value) }))}
               />
             </div>
             <div className="form-field form-field--narrow">
@@ -364,7 +426,7 @@ export function ProductFormPage() {
                 value={form.availableStock}
                 onChange={(e) => setForm((f) => ({
                   ...f,
-                  availableStock: Math.max(0, Math.floor(Number(e.target.value) || 0)),
+                  availableStock: parseNumberDraft(e.target.value),
                 }))}
               />
               <span className="form-hint">Maximum quantity customers can purchase.</span>
@@ -391,26 +453,81 @@ export function ProductFormPage() {
                 id="sortOrder"
                 type="number"
                 value={form.sortOrder}
-                onChange={(e) => setForm((f) => ({ ...f, sortOrder: Number(e.target.value) }))}
+                onChange={(e) => setForm((f) => ({ ...f, sortOrder: parseNumberDraft(e.target.value) }))}
               />
             </div>
           </div>
-          <div className="form-field">
-            <label htmlFor="courseId">Linked course</label>
-            <select
-              id="courseId"
-              value={form.courseId ?? ''}
-              onChange={(e) => setForm((f) => ({
-                ...f,
-                courseId: e.target.value || null,
-              }))}
-            >
-              <option value="">None</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+          {form.productType === 'Handmade' ? (
+            <div className="form-field">
+              <label htmlFor="courseId">Linked course</label>
+              <select
+                id="courseId"
+                value={form.courseId ?? ''}
+                onChange={(e) => setForm((f) => ({
+                  ...f,
+                  courseId: e.target.value || null,
+                }))}
+              >
+                <option value="">None</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {form.productType === 'Handmade' ? (
+            <div className="form-field form-grid--full">
+              <label>Recommended Crochet Essentials</label>
+              <span className="form-hint">
+                Shown under this product in the cart (max 3). Select Resell / Essentials products only.
+              </span>
+              {essentialsCatalog.length === 0 ? (
+                <p className="form-hint" style={{ marginTop: 8 }}>
+                  No Crochet Essentials products yet. Create some under Shop products → Crochet Essentials.
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                  {essentialsCatalog.map((essential) => {
+                    const selected = (form.recommendedEssentialIds ?? []).includes(essential.id);
+                    const selectedCount = (form.recommendedEssentialIds ?? []).length;
+                    const disabled = !selected && selectedCount >= 3;
+                    return (
+                      <label
+                        key={essential.id}
+                        style={{
+                          display: 'flex',
+                          gap: 10,
+                          alignItems: 'center',
+                          opacity: disabled ? 0.5 : 1,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          disabled={disabled}
+                          onChange={() => {
+                            setForm((f) => {
+                              const current = f.recommendedEssentialIds ?? [];
+                              const next = selected
+                                ? current.filter((id) => id !== essential.id)
+                                : [...current, essential.id].slice(0, 3);
+                              return { ...f, recommendedEssentialIds: next };
+                            });
+                          }}
+                        />
+                        <span>
+                          {essential.name}
+                          <span style={{ color: 'var(--vivi-muted)', marginLeft: 8 }}>
+                            {essential.category} · ₹{essential.price}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
 
         <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
@@ -423,8 +540,25 @@ export function ProductFormPage() {
       {isEdit && id && (
         <section className="card" style={{ marginTop: 24 }}>
           <h2 style={{ fontSize: 18, marginBottom: 8 }}>Product photos</h2>
-          <p className="page-header__subtitle" style={{ marginBottom: 16 }}>
-            JPG, PNG, or WebP up to 5 MB each. Upload up to {MAX_PHOTOS} photos and choose which one is the main image in the shop.
+          <p className="page-header__subtitle" style={{ marginBottom: 8 }}>
+            JPG, PNG, or WebP up to 5 MB each. Upload up to {MAX_PHOTOS} photos and choose which one is
+            the main image in the shop.
+          </p>
+          <p
+            style={{
+              marginBottom: 16,
+              padding: '10px 12px',
+              borderRadius: 8,
+              background: 'var(--vivi-pink-soft, #fff0f5)',
+              border: '1px solid var(--vivi-border-soft, #f0d4de)',
+              fontSize: 13,
+              lineHeight: 1.45,
+              color: 'var(--vivi-ink, #221a1e)',
+            }}
+          >
+            <strong>Recommended size: {PRODUCT_IMAGE_EDGE_PX}×{PRODUCT_IMAGE_EDGE_PX} px</strong>
+            {' '}(square). Any photo you upload is auto-cropped and saved at this size for Handmade and
+            Essentials.
           </p>
 
           <div

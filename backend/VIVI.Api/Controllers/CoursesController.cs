@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Enrollments;
 using VIVI.Api.DTOs.Courses;
 using VIVI.Api.Extensions;
@@ -23,17 +24,20 @@ public sealed class CoursesController : ControllerBase
 {
     private readonly ViviDbContext _db;
     private readonly PricingService _pricing;
+    private readonly CustomerResolver _customers;
     private readonly IBlobStorageService _blob;
     private readonly ILogger<CoursesController> _logger;
 
     public CoursesController(
         ViviDbContext db,
         PricingService pricing,
+        CustomerResolver customers,
         IBlobStorageService blob,
         ILogger<CoursesController> logger)
     {
         _db = db;
         _pricing = pricing;
+        _customers = customers;
         _blob = blob;
         _logger = logger;
     }
@@ -62,7 +66,8 @@ public sealed class CoursesController : ControllerBase
             query = query.Where(c => c.CategoryId == categoryId);
 
         var items = await query
-            .OrderBy(c => c.Name)
+            .OrderBy(c => c.SortOrder)
+            .ThenBy(c => c.Name)
             .ToListAsync(cancellationToken);
 
         var dtos = items.Select(c => c.ToDto(includeLessons: false, adminView: admin)).ToList();
@@ -95,7 +100,9 @@ public sealed class CoursesController : ControllerBase
         return Ok(dto);
     }
 
-    /// <summary>Returns the server-authoritative current price and launch-offer information.</summary>
+    /// <summary>
+    /// Returns the server-authoritative current price (launch and personal renewal when signed in).
+    /// </summary>
     [HttpGet("{id:guid}/pricing")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(CoursePricingResponse), StatusCodes.Status200OK)]
@@ -103,7 +110,15 @@ public sealed class CoursesController : ControllerBase
     {
         try
         {
-            var pricing = await _pricing.GetCoursePricingAsync(id, cancellationToken);
+            Guid? customerId = null;
+            if (User.Identity?.IsAuthenticated == true
+                && User.IsInRole(nameof(UserRole.Customer)))
+            {
+                var customer = await _customers.ResolveForUserAsync(User.GetUserId(), cancellationToken);
+                customerId = customer.Id;
+            }
+
+            var pricing = await _pricing.GetCoursePricingAsync(id, cancellationToken, customerId);
             return Ok(pricing.ToDto());
         }
         catch (KeyNotFoundException)
@@ -114,7 +129,7 @@ public sealed class CoursesController : ControllerBase
 
     /// <summary>Creates a course as Draft. Admin only.</summary>
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(CourseResponse), StatusCodes.Status201Created)]
     public async Task<ActionResult<CourseResponse>> Create([FromBody] CourseRequest request, CancellationToken cancellationToken)
     {
@@ -139,7 +154,7 @@ public sealed class CoursesController : ControllerBase
 
     /// <summary>Updates course metadata. Does not change publish status. Admin only.</summary>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(CourseResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CourseResponse>> Update(Guid id, [FromBody] CourseRequest request, CancellationToken cancellationToken)
     {
@@ -156,7 +171,7 @@ public sealed class CoursesController : ControllerBase
 
     /// <summary>Returns a short-lived write SAS URL for a course thumbnail. Admin only.</summary>
     [HttpPost("{id:guid}/thumbnail-upload-url")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(CourseThumbnailUploadUrlResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CourseThumbnailUploadUrlResponse>> CreateThumbnailUploadUrl(
         Guid id,
@@ -187,7 +202,7 @@ public sealed class CoursesController : ControllerBase
 
     /// <summary>Confirms a finished thumbnail upload and sets it on the course. Admin only.</summary>
     [HttpPost("{id:guid}/thumbnail-upload-complete")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(CourseResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CourseResponse>> CompleteThumbnailUpload(
         Guid id,
@@ -241,7 +256,7 @@ public sealed class CoursesController : ControllerBase
 
     /// <summary>Removes the course thumbnail. Admin only.</summary>
     [HttpDelete("{id:guid}/thumbnail")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(CourseResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CourseResponse>> DeleteThumbnail(Guid id, CancellationToken cancellationToken)
     {
@@ -270,7 +285,7 @@ public sealed class CoursesController : ControllerBase
 
     /// <summary>Deletes a course and its videos. Admin only.</summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
@@ -331,7 +346,7 @@ public sealed class CoursesController : ControllerBase
 
     /// <summary>Publishes a course. Requires at least one published or draft video. Admin only.</summary>
     [HttpPost("{id:guid}/publish")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(CourseResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CourseResponse>> Publish(Guid id, CancellationToken cancellationToken)
     {
@@ -356,7 +371,7 @@ public sealed class CoursesController : ControllerBase
 
     /// <summary>Unpublishes a course. Lessons stay as they are. Admin only.</summary>
     [HttpPost("{id:guid}/unpublish")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AuthRoles.Console)]
     [ProducesResponseType(typeof(CourseResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CourseResponse>> Unpublish(Guid id, CancellationToken cancellationToken)
     {
@@ -415,12 +430,14 @@ public sealed class CoursesController : ControllerBase
         course.CategoryId = request.CategoryId;
         course.Type = request.Type;
         course.Level = request.Level?.Trim();
+        course.Description = request.Description?.Trim();
         course.About = request.About?.Trim();
         course.Price = request.Price;
         course.Mrp = request.Mrp;
         course.AccessDays = request.AccessDays;
         course.RenewalPercentage = request.RenewalPercentage;
         course.Languages = request.Languages?.Trim();
+        course.SortOrder = request.SortOrder;
         course.UpdatedAt = now;
         return course;
     }
