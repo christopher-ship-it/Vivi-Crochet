@@ -3,12 +3,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const HREF_KEY = 'vivi.nav.lastHref';
 const BG_AT_KEY = 'vivi.nav.backgroundedAt';
 
-/** Routes that should never be restored (entry / auth chrome). */
-const SKIP_PREFIXES = ['/', '/login'] as const;
+/**
+ * Routes that should never be restored after a process kill.
+ * Legal / settings sub-screens are short-lived — restoring them makes Back exit the app.
+ */
+const SKIP_PREFIXES = [
+  '/',
+  '/login',
+  '/language-onboarding',
+  '/privacy-policy',
+  '/terms',
+  '/delete-account',
+  '/help-center',
+  '/support-chat',
+  '/profile-settings',
+  '/edit-account',
+] as const;
 
 function shouldSkip(pathname: string): boolean {
   if (!pathname || pathname === '/') return true;
-  return SKIP_PREFIXES.some((p) => p !== '/' && (pathname === p || pathname.startsWith(`${p}/`)));
+  const path = pathname.split('?')[0] ?? pathname;
+  return SKIP_PREFIXES.some((p) => p !== '/' && (path === p || path.startsWith(`${p}/`)));
 }
 
 export function buildHref(

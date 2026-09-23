@@ -1,8 +1,10 @@
-import { Stack } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import { BackHandler, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { LegalDocument } from '../legal/documents';
 import { colors, fonts, spacing } from '../theme';
+import { BackButton } from './BackButton';
 
 type Props = {
   document: LegalDocument;
@@ -10,10 +12,33 @@ type Props = {
 
 export function LegalDocumentScreen({ document }: Props) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)/profile');
+      }
+      return true;
+    });
+    return () => sub.remove();
+  }, [router]);
 
   return (
     <>
-      <Stack.Screen options={{ title: document.title, headerBackTitle: 'Back' }} />
+      <Stack.Screen
+        options={{
+          title: document.title,
+          headerBackTitle: 'Back',
+          headerLeft: () => (
+            <View style={{ marginLeft: 4 }}>
+              <BackButton fallbackHref="/(tabs)/profile" />
+            </View>
+          ),
+        }}
+      />
       <ScrollView
         style={styles.root}
         contentContainerStyle={[
@@ -21,8 +46,7 @@ export function LegalDocumentScreen({ document }: Props) {
           { paddingBottom: Math.max(insets.bottom, 16) + 28 },
         ]}
         showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.brandTitle}>VIVI CROCHET</Text>
+      >        <Text style={styles.brandTitle}>VIVI CROCHET</Text>
         <Text style={styles.docTitle}>{document.title}</Text>
         <Text style={styles.effective}>Effective Date: {document.effectiveDate}</Text>
 

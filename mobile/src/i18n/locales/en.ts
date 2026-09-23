@@ -670,6 +670,8 @@ export const en = {
     orderTracking: 'Order tracking',
     lesson: 'Lesson',
     profileSettings: 'Profile settings',
+    privacyPolicy: 'Privacy Policy',
+    terms: 'Terms & Conditions',
   },
   messages: {
     paymentSuccessful: 'Payment successful',

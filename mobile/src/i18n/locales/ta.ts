@@ -671,6 +671,8 @@ export const ta: EnTranslations = {
     orderTracking: 'ஆர்டர் கண்காணிப்பு',
     lesson: 'பாடம்',
     profileSettings: 'சுயவிவர அமைப்புகள்',
+    privacyPolicy: 'தனியுரிமைக் கொள்கை',
+    terms: 'விதிமுறைகள்',
   },
   messages: {
     paymentSuccessful: 'பணம் செலுத்துதல் வெற்றி',

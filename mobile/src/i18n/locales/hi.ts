@@ -671,6 +671,8 @@ export const hi: EnTranslations = {
     orderTracking: 'ऑर्डर ट्रैकिंग',
     lesson: 'पाठ',
     profileSettings: 'प्रोफ़ाइल सेटिंग्स',
+    privacyPolicy: 'गोपनीयता नीति',
+    terms: 'नियम और शर्तें',
   },
   messages: {
     paymentSuccessful: 'भुगतान सफल',

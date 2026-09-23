@@ -76,12 +76,13 @@ function AppStack() {
         animation: 'fade',
         headerShadowVisible: false,
         headerBackVisible: false,
-        headerLeft: ({ canGoBack }) =>
-          canGoBack ? (
-            <View style={{ marginLeft: 4 }}>
-              <BackButton />
-            </View>
-          ) : null,
+        // Always offer a back control — when history is empty (e.g. restored deep screen),
+        // BackButton falls back to Profile instead of exiting the app.
+        headerLeft: () => (
+          <View style={{ marginLeft: 4 }}>
+            <BackButton fallbackHref="/(tabs)/profile" />
+          </View>
+        ),
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
@@ -91,6 +92,8 @@ function AppStack() {
       <Stack.Screen name="edit-address" options={{ title: t('headers.address') }} />
       <Stack.Screen name="help-center" options={{ headerShown: false }} />
       <Stack.Screen name="support-chat" options={{ headerShown: false }} />
+      <Stack.Screen name="privacy-policy" options={{ title: t('headers.privacyPolicy') }} />
+      <Stack.Screen name="terms" options={{ title: t('headers.terms') }} />
       <Stack.Screen
         name="cart"
         options={{
