@@ -536,19 +536,19 @@ export default function LiveScreen() {
           <View style={styles.includedGrid}>
             <View style={styles.includedItem}>
               <Ionicons name="people-outline" size={13} color={colors.pink} />
-              <Text style={styles.includedText} numberOfLines={2}>
+              <Text style={styles.includedText}>
                 {t('live.includedGroup')}
               </Text>
             </View>
             <View style={styles.includedItem}>
               <Ionicons name="school-outline" size={13} color={colors.pink} />
-              <Text style={styles.includedText} numberOfLines={2}>
+              <Text style={styles.includedText}>
                 {t('live.includedBasic')}
               </Text>
             </View>
             <View style={styles.includedItem}>
               <Ionicons name="calendar-outline" size={13} color={colors.pink} />
-              <Text style={styles.includedText} numberOfLines={2}>
+              <Text style={styles.includedText}>
                 {t('live.includedSchedule', {
                   hours:
                     classHours === 1
@@ -561,7 +561,7 @@ export default function LiveScreen() {
             </View>
             <View style={styles.includedItem}>
               <Ionicons name="refresh-outline" size={13} color={colors.pink} />
-              <Text style={styles.includedText} numberOfLines={2}>
+              <Text style={styles.includedText}>
                 {t('live.includedReplacement')}
               </Text>
             </View>
@@ -867,7 +867,7 @@ function createStyles(fonts: UiFonts) {
   /* Hero — brand gradient, rounded base so the tutor card can float over it. */
   hero: {
     paddingHorizontal: spacing.md + 4,
-    paddingBottom: 56,
+    paddingBottom: 44,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     overflow: 'hidden',
@@ -985,9 +985,9 @@ function createStyles(fonts: UiFonts) {
   /* Tutor — white card floating over the hero, oval portrait. */
   studioWrap: {
     marginHorizontal: spacing.md,
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
-    padding: 12,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm + 2,
+    padding: 10,
     backgroundColor: colors.white,
     borderRadius: 22,
     borderWidth: 1,
@@ -1015,17 +1015,17 @@ function createStyles(fonts: UiFonts) {
     color: colors.muted,
   },
   studioFrame: {
-    width: 96,
-    height: 120,
-    padding: 4,
-    borderRadius: 48,
+    width: 108,
+    height: 132,
+    padding: 3,
+    borderRadius: 54,
     borderWidth: 2,
     borderColor: colors.pink,
     flexShrink: 0,
   },
   studioOval: {
     flex: 1,
-    borderRadius: 44,
+    borderRadius: 51,
     overflow: 'hidden',
     backgroundColor: colors.mediaWash,
   },

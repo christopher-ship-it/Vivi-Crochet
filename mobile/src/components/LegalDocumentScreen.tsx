@@ -46,7 +46,8 @@ export function LegalDocumentScreen({ document }: Props) {
           { paddingBottom: Math.max(insets.bottom, 16) + 28 },
         ]}
         showsVerticalScrollIndicator={false}
-      >        <Text style={styles.brandTitle}>VIVI CROCHET</Text>
+      >
+        <Text style={styles.brandTitle}>VIVI CROCHET</Text>
         <Text style={styles.docTitle}>{document.title}</Text>
         <Text style={styles.effective}>Effective Date: {document.effectiveDate}</Text>
 

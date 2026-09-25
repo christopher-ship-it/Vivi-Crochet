@@ -738,10 +738,6 @@ export const PRIVACY_DOCUMENT: LegalDocument = {
         'Email: support@vivicrochet01.com',
       ],
     },
-    {
-      type: 'paragraph',
-      text: 'Please use +91 8438034181 as the official business contact number for both WhatsApp and phone calls.',
-    },
     { type: 'paragraph', text: 'Customers outside India:' },
     { type: 'bullets', items: ['Email: support@vivicrochet01.com'] },
     {

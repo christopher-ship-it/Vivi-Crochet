@@ -25,7 +25,7 @@ import { useCart } from '../../src/cart/CartContext';
 import { LanguageSelector } from '../../src/components/LanguageSelector';
 import { LearnerJourney } from '../../src/components/LearnerJourney';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
-import { useI18n } from '../../src/i18n';
+import { useI18n, type TranslationKey } from '../../src/i18n';
 import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, myViviHeroGradient, shadows, spacing } from '../../src/theme';
 import { buildLearnerJourney } from '../../src/utils/learnerJourney';
@@ -81,6 +81,9 @@ type MenuItem = {
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
 };
+
+/** Soft peach → blush wash behind the brand footer, echoing the hero gradient. */
+const FOOTER_GRADIENT = ['#fdf1e4', '#fbe1ea', '#f8d6e4'] as const;
 
 /** Visual grouping of the My Vivi menu; every item keeps its own action. */
 const MENU_GROUPS: { id: string; labelKey: TranslationKey; keys: string[] }[] = [
@@ -557,7 +560,13 @@ export default function ProfileScreen() {
             </Pressable>
           )}
 
-          <View style={styles.brandFooter}>
+          <LinearGradient
+            colors={[...FOOTER_GRADIENT]}
+            locations={[0, 0.5, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.brandFooter}
+          >
             <Text style={styles.footerBrand}>vivi</Text>
             <Text style={styles.footerVersion}>{t('profile.version', { version: APP_VERSION })}</Text>
             <View style={styles.footerGrid}>
@@ -617,7 +626,7 @@ export default function ProfileScreen() {
                 </Pressable>
               ))}
             </View>
-          </View>
+          </LinearGradient>
         </View>
       </ScrollView>
     </View>
@@ -890,9 +899,14 @@ function createStyles(fonts: UiFonts) {
   },
   brandFooter: {
     marginTop: 18,
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingTop: 16,
+    paddingBottom: 18,
+    paddingHorizontal: 12,
     alignItems: 'center',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#f6cddb',
+    overflow: 'hidden',
   },
   footerBrand: {
     fontFamily: fonts.heading,
