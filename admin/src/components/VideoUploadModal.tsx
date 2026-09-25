@@ -15,6 +15,7 @@ import {
   validateVideoFile,
 } from '../utils/format';
 import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
+import { confirmDialog } from './AppDialog';
 
 interface VideoUploadModalProps {
   courseId: string;
@@ -135,9 +136,9 @@ export function VideoUploadModal({
     }
   }
 
-  function handleCancel() {
+  async function handleCancel() {
     if (step === 'uploading') {
-      const confirmed = window.confirm(
+      const confirmed = await confirmDialog(
         'Upload is in progress. Are you sure you want to cancel?',
       );
       if (!confirmed) return;

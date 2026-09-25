@@ -1,11 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -125,31 +123,6 @@ function SeatDots({
     </View>
   );
 }
-
-function LiveGlass({
-  children,
-  style,
-  intensity = 26,
-}: {
-  children: ReactNode;
-  style?: object;
-  intensity?: number;
-}) {
-  if (Platform.OS === 'ios') {
-    return (
-      <BlurView intensity={intensity} tint="light" style={style}>
-        {children}
-      </BlurView>
-    );
-  }
-  return <View style={[style, stylesLiveGlass.android]}>{children}</View>;
-}
-
-const stylesLiveGlass = StyleSheet.create({
-  android: {
-    backgroundColor: 'rgba(255, 248, 250, 0.78)',
-  },
-});
 
 export default function LiveScreen() {
   const router = useRouter();
@@ -550,20 +523,56 @@ export default function LiveScreen() {
           {packagePrice != null ? (
             <View style={styles.heroPriceRow}>
               <Text style={styles.heroPrice}>{formatInr(packagePrice)}</Text>
-              <Text style={styles.heroPriceMeta}>{t('live.perPackage')}</Text>
+              <View style={styles.heroPricePill}>
+                <Text style={styles.heroPriceMeta}>{t('live.perPackage')}</Text>
+              </View>
             </View>
           ) : null}
         </LinearGradient>
 
+        {/* What's included — compact 2x2 grid so it doesn't push the week selector down. */}
+        <View style={styles.includedCard}>
+          <Text style={styles.includedTitle}>{t('live.includedTitle')}</Text>
+          <View style={styles.includedGrid}>
+            <View style={styles.includedItem}>
+              <Ionicons name="people-outline" size={13} color={colors.pink} />
+              <Text style={styles.includedText} numberOfLines={2}>
+                {t('live.includedGroup')}
+              </Text>
+            </View>
+            <View style={styles.includedItem}>
+              <Ionicons name="school-outline" size={13} color={colors.pink} />
+              <Text style={styles.includedText} numberOfLines={2}>
+                {t('live.includedBasic')}
+              </Text>
+            </View>
+            <View style={styles.includedItem}>
+              <Ionicons name="calendar-outline" size={13} color={colors.pink} />
+              <Text style={styles.includedText} numberOfLines={2}>
+                {t('live.includedSchedule', {
+                  hours:
+                    classHours === 1
+                      ? t('live.oneHourDaily').toLowerCase()
+                      : classHours === 2
+                        ? t('live.twoHoursDaily').toLowerCase()
+                        : t('live.hoursDaily', { count: classHours }).toLowerCase(),
+                })}
+              </Text>
+            </View>
+            <View style={styles.includedItem}>
+              <Ionicons name="refresh-outline" size={13} color={colors.pink} />
+              <Text style={styles.includedText} numberOfLines={2}>
+                {t('live.includedReplacement')}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* Tutor — copy left, portrait right */}
         <View style={styles.studioWrap}>
           <View style={styles.tutorRow}>
-            <View style={styles.tutorCopy}>
-              <Text style={styles.tutorBadgeLabel}>{t('live.yourTutor')}</Text>
-              <Text style={styles.tutorBadgeName}>{tutorName}</Text>
-              <Text style={styles.tutorCopyHint}>{t('live.tutorLead')}</Text>
-            </View>
             <View style={styles.studioFrame}>
+              <View style={styles.studioOval}>
               {tutorPhotoUrl ? (
                 <AppImage
                   uri={tutorPhotoUrl}
@@ -583,6 +592,12 @@ export default function LiveScreen() {
                   <Text style={styles.tutorPlaceholderHint}>{t('live.tutorPlaceholderHint')}</Text>
                 </LinearGradient>
               )}
+              </View>
+            </View>
+            <View style={styles.tutorCopy}>
+              <Text style={styles.tutorBadgeLabel}>{t('live.yourTutor')}</Text>
+              <Text style={styles.tutorBadgeName}>{tutorName}</Text>
+              <Text style={styles.tutorCopyHint}>{t('live.tutorLead')}</Text>
             </View>
           </View>
         </View>
@@ -614,14 +629,14 @@ export default function LiveScreen() {
                     </Text>
                   </View>
                 ) : (
-                  <LiveGlass style={styles.weekChip} intensity={24}>
+                  <View style={styles.weekChip}>
                     <Text style={styles.weekChipTitle}>
                       {t('live.week', { number: week.weekNumber }).toUpperCase()}
                     </Text>
                     <Text style={styles.weekChipDates}>
                       {formatLiveClassWeekRange(week.startDate)}
                     </Text>
-                  </LiveGlass>
+                  </View>
                 )}
               </Pressable>
             );
@@ -663,10 +678,9 @@ export default function LiveScreen() {
           </View>
         ) : detail ? (
           <>
-            {/* Two-column morning | evening */}
-            <View style={styles.circlesPanelOuter}>
-              <LiveGlass style={styles.circlesPanel}>
-              {detail.slots.map((slot, index) => {
+            {/* Morning | evening circle cards */}
+            <View style={styles.circlesRow}>
+              {detail.slots.map((slot) => {
                 const type = slot.slotType as LiveSlotType;
                 const fallback = SLOT_FALLBACK[type] ?? {
                   label: String(slot.slotType).toUpperCase(),
@@ -680,80 +694,79 @@ export default function LiveScreen() {
                 const booked = unavailable && slot.status === 'FullyBooked'
                   ? capacity
                   : slot.seatsBooked;
+                const isEvening = type === 'Evening';
+                const isBlocked = unavailable && (slot.isBlocked || slot.status === 'Blocked');
 
                 return (
-                  <View key={slot.slotType} style={styles.circleColumnWrap}>
-                    {index > 0 ? <View style={styles.circleDivider} /> : null}
-                    <Pressable
-                      style={[
-                        styles.circleColumn,
-                        selected && styles.circleColumnSelected,
-                        unavailable && styles.circleColumnDisabled,
-                      ]}
-                      disabled={unavailable || bookingBusy}
-                      onPress={() => {
-                        if (!unavailable) setSelectedSlot(type);
-                      }}
-                    >
-                      <Text style={[styles.circleWeek, selected && styles.circleTextOnPink]}>
-                        {t('live.week', { number: detail.weekNumber }).toUpperCase()}
-                      </Text>
-                      <Text style={[styles.circleDates, selected && styles.circleDatesOnPink]}>
-                        {formatLiveClassWeekRange(detail.startDate)}
-                      </Text>
-
-                      <Text style={[styles.circleSlotLabel, selected && styles.circleMutedOnPink]}>
-                        {fallback.label}
-                      </Text>
-                      <View style={styles.circleTimeRow}>
-                        <Text style={[styles.circleTimeStart, selected && styles.circleTextOnPink]}>
-                          {clock.start}
+                  <Pressable
+                    key={slot.slotType}
+                    style={[
+                      styles.circleCard,
+                      selected && styles.circleCardSelected,
+                      unavailable && styles.circleCardDisabled,
+                    ]}
+                    disabled={unavailable || bookingBusy}
+                    onPress={() => {
+                      if (!unavailable) setSelectedSlot(type);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected, disabled: unavailable }}
+                  >
+                    <View style={styles.circleCardTop}>
+                      <View style={[styles.circleTag, isEvening && styles.circleTagEvening]}>
+                        <Ionicons
+                          name={isEvening ? 'moon-outline' : 'sunny-outline'}
+                          size={11}
+                          color={isEvening ? colors.white : colors.pinkDark}
+                        />
+                        <Text style={[styles.circleTagText, isEvening && styles.circleTagTextEvening]}>
+                          {fallback.label}
                         </Text>
-                        {clock.end ? (
-                          <Text style={[styles.circleTimeEnd, selected && styles.circleMutedOnPink]}>
-                            {' '}
-                            — {clock.end}
-                          </Text>
-                        ) : null}
                       </View>
-
-                      <Text style={[styles.circleMeta, selected && styles.circleTextOnPink]}>
-                        {t('live.monFri')}
-                      </Text>
-                      <Text style={[styles.circleMeta, selected && styles.circleTextOnPink]}>
-                        {classHours === 1
-                          ? t('live.oneHourDaily')
-                          : classHours === 2
-                            ? t('live.twoHoursDaily')
-                            : t('live.hoursDaily', { count: classHours })}
-                      </Text>
-
-                      <SeatDots
-                        booked={booked}
-                        capacity={capacity}
-                        styles={styles}
-                        selected={selected}
-                        a11yLabel={t('live.seatsTakenA11y', { filled: booked, total: capacity })}
-                      />
-                      <Text style={[styles.circleSeats, selected && styles.circleMutedOnPink]}>
-                        {unavailable && (slot.isBlocked || slot.status === 'Blocked')
-                          ? t('live.blocked')
-                          : unavailable
-                            ? t('live.fullyBookedCaps')
-                            : t('live.seatsOf', { booked, capacity }).toUpperCase()}
-                      </Text>
                       {selected && !unavailable ? (
-                        <Text style={styles.circleSelected}>{t('live.selected')}</Text>
+                        <View style={styles.circleCheck} accessibilityLabel={t('live.selected')}>
+                          <Ionicons name="checkmark" size={13} color={colors.white} />
+                        </View>
                       ) : null}
-                    </Pressable>
-                  </View>
+                    </View>
+
+                    <View style={styles.circleTimeRow}>
+                      <Text style={styles.circleTimeStart}>{clock.start}</Text>
+                      {clock.end ? (
+                        <Text style={styles.circleTimeEnd}> — {clock.end}</Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.circleMeta}>{t('live.monFri')}</Text>
+                    <Text style={styles.circleMeta}>
+                      {classHours === 1
+                        ? t('live.oneHourDaily')
+                        : classHours === 2
+                          ? t('live.twoHoursDaily')
+                          : t('live.hoursDaily', { count: classHours })}
+                    </Text>
+
+                    <SeatDots
+                      booked={booked}
+                      capacity={capacity}
+                      styles={styles}
+                      selected={selected}
+                      a11yLabel={t('live.seatsTakenA11y', { filled: booked, total: capacity })}
+                    />
+                    {unavailable ? (
+                      <View style={styles.circleFullChip}>
+                        <Text style={styles.circleFullChipText}>
+                          {isBlocked ? t('live.blocked') : t('live.fullyBookedCaps')}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.circleSeats, selected && styles.circleSeatsSelected]}>
+                        {t('live.seatsOf', { booked, capacity })}
+                      </Text>
+                    )}
+                  </Pressable>
                 );
               })}
-              </LiveGlass>
             </View>
-
-            <Text style={styles.planNote}>{t('live.planNote')}</Text>
-            <Text style={styles.replaceNote}>{t('live.replaceNote')}</Text>
 
             <Pressable
               style={[
@@ -779,11 +792,18 @@ export default function LiveScreen() {
                     : t('live.chooseYourCircle')}
               </Text>
               {!bookingBusy ? (
-                <Ionicons
-                  name="arrow-forward"
-                  size={18}
-                  color={bookingForSelectedWeek ? colors.pinkDark : colors.white}
-                />
+                <View
+                  style={[
+                    styles.chooseCtaArrow,
+                    bookingForSelectedWeek ? styles.chooseCtaArrowBooked : null,
+                  ]}
+                >
+                  <Ionicons
+                    name="arrow-forward"
+                    size={18}
+                    color={bookingForSelectedWeek ? colors.white : colors.pink}
+                  />
+                </View>
               ) : null}
             </Pressable>
 
@@ -844,17 +864,19 @@ function createStyles(fonts: UiFonts) {
     flex: 1,
   },
 
+  /* Hero — brand gradient, rounded base so the tutor card can float over it. */
   hero: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    alignItems: 'center',
+    paddingHorizontal: spacing.md + 4,
+    paddingBottom: 56,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   heroBrandRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 8,
-    alignSelf: 'flex-start',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   heroBrand: {
     fontFamily: fonts.heading,
@@ -864,88 +886,148 @@ function createStyles(fonts: UiFonts) {
   },
   heroBrandSub: {
     fontFamily: fonts.semiBold,
-    fontSize: 8,
-    letterSpacing: 1.2,
-    color: colors.ink,
-    opacity: 0.72,
+    fontSize: 9,
+    letterSpacing: 1.4,
+    color: colors.pinkDark,
   },
   heroTitle: {
     fontFamily: fonts.display,
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: 28,
+    lineHeight: 33,
     color: colors.ink,
-    textAlign: 'center',
   },
   heroTitleLive: {
     fontFamily: fonts.heading,
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 32,
+    lineHeight: 36,
     color: colors.pinkDark,
   },
   heroRule: {
-    width: 40,
-    height: StyleSheet.hairlineWidth,
+    width: 36,
+    height: 2,
+    borderRadius: 1,
     backgroundColor: colors.pinkDark,
-    opacity: 0.45,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
+    opacity: 0.5,
+    marginTop: spacing.sm + 2,
+    marginBottom: spacing.sm + 2,
   },
   heroPriceRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: 10,
     flexWrap: 'wrap',
-    justifyContent: 'center',
   },
   heroPrice: {
     fontFamily: fonts.display,
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: 28,
+    lineHeight: 32,
     color: colors.ink,
+  },
+  heroPricePill: {
+    backgroundColor: 'rgba(255, 240, 245, 0.85)',
+    borderRadius: radii.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   heroPriceMeta: {
     fontFamily: fonts.semiBold,
-    fontSize: 8,
-    letterSpacing: 1,
-    color: colors.ink,
-    opacity: 0.72,
-    maxWidth: 110,
+    fontSize: 9,
+    letterSpacing: 0.9,
+    color: colors.pinkDark,
   },
 
+  /* What's included — floats over the hero's rounded base, sets the ₹price expectation.
+     Kept compact (2x2 grid) so the week selector below isn't pushed off-screen. */
+  includedCard: {
+    marginHorizontal: spacing.md,
+    marginTop: -28,
+    marginBottom: spacing.sm + 2,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.pinkMist,
+    shadowColor: colors.pinkDark,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  includedTitle: {
+    fontFamily: fonts.semiBold,
+    fontSize: 9,
+    letterSpacing: 1,
+    color: colors.muted,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  includedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  includedItem: {
+    width: '50%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+    paddingRight: 4,
+    marginBottom: 4,
+  },
+  includedText: {
+    flex: 1,
+    fontFamily: fonts.semiBold,
+    fontSize: 11,
+    lineHeight: 14,
+    color: colors.ink,
+  },
+
+  /* Tutor — white card floating over the hero, oval portrait. */
   studioWrap: {
-    backgroundColor: colors.pinkSoft,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+    padding: 12,
+    backgroundColor: colors.white,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.pinkMist,
+    shadowColor: colors.pinkDark,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   tutorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 14,
   },
   tutorCopy: {
     flex: 1,
-    paddingRight: spacing.xs,
     justifyContent: 'center',
   },
   tutorCopyHint: {
-    marginTop: 6,
+    marginTop: 4,
     fontFamily: fonts.regular,
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.ink,
-    opacity: 0.72,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: colors.muted,
   },
   studioFrame: {
-    width: 104,
-    height: 128,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    borderRadius: radii.md,
+    width: 96,
+    height: 120,
+    padding: 4,
+    borderRadius: 48,
+    borderWidth: 2,
+    borderColor: colors.pink,
+    flexShrink: 0,
+  },
+  studioOval: {
+    flex: 1,
+    borderRadius: 44,
     overflow: 'hidden',
     backgroundColor: colors.mediaWash,
-    flexShrink: 0,
   },
   studioImage: {
     width: '100%',
@@ -957,21 +1039,21 @@ function createStyles(fonts: UiFonts) {
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.sm,
+    padding: spacing.xs,
   },
   tutorPlaceholderMark: {
     fontFamily: fonts.extraBold,
-    fontSize: 22,
-    letterSpacing: 2,
+    fontSize: 19,
+    letterSpacing: 1.5,
     color: colors.white,
   },
   tutorPlaceholderHint: {
-    marginTop: 4,
+    marginTop: 3,
     fontFamily: fonts.semiBold,
     fontSize: 8,
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
     color: colors.white,
-    opacity: 0.88,
+    opacity: 0.9,
     textTransform: 'uppercase',
     textAlign: 'center',
   },
@@ -983,36 +1065,88 @@ function createStyles(fonts: UiFonts) {
     textTransform: 'uppercase',
   },
   tutorBadgeName: {
-    marginTop: 4,
+    marginTop: 2,
     fontFamily: fonts.extraBold,
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: 22,
+    lineHeight: 26,
     color: colors.ink,
   },
 
+  /* Section label + week chips */
   sectionLabel: {
     fontFamily: fonts.semiBold,
     fontSize: 11,
-    letterSpacing: 1.6,
-    color: colors.pink,
+    letterSpacing: 1.4,
+    color: colors.pinkDark,
     paddingHorizontal: spacing.md,
-    marginTop: 2,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   weekRail: {
     paddingHorizontal: spacing.md,
     gap: 8,
-    paddingBottom: 6,
+    paddingBottom: spacing.md,
   },
+  weekChipOuter: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.pinkMist,
+    backgroundColor: colors.white,
+    minWidth: 124,
+  },
+  weekChipOuterActive: {
+    borderColor: colors.pink,
+    backgroundColor: colors.pink,
+    shadowColor: colors.pink,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  weekChip: {
+    backgroundColor: colors.white,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 124,
+  },
+  weekChipActiveFill: {
+    backgroundColor: colors.pink,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 124,
+  },
+  weekChipTitle: {
+    fontFamily: fonts.extraBold,
+    fontSize: 12,
+    color: colors.ink,
+  },
+  weekChipTitleActive: {
+    fontFamily: fonts.extraBold,
+    fontSize: 12,
+    color: colors.white,
+  },
+  weekChipDates: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  weekChipDatesActive: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.pinkMist,
+    marginTop: 2,
+  },
+
+  /* Booked banner */
   bookedBanner: {
     marginHorizontal: spacing.md,
-    marginTop: 2,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: radii.md,
+    borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: colors.pinkDark,
+    borderColor: colors.pink,
     backgroundColor: colors.pinkSoft,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1044,126 +1178,91 @@ function createStyles(fonts: UiFonts) {
     color: colors.muted,
     marginTop: 2,
   },
-  weekChipOuter: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.55)',
-    minWidth: 96,
-  },
-  weekChipOuterActive: {
-    borderColor: colors.pink,
-    borderWidth: 2.5,
-    backgroundColor: colors.pink,
-    shadowColor: colors.pink,
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
-  },
-  weekChip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    minWidth: 96,
-  },
-  weekChipActiveFill: {
-    backgroundColor: colors.pink,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    minWidth: 96,
-  },
-  weekChipTitle: {
-    fontFamily: fonts.extraBold,
-    fontSize: 11,
-    color: colors.ink,
-  },
-  weekChipTitleActive: {
-    fontFamily: fonts.extraBold,
-    fontSize: 11,
-    color: colors.white,
-  },
-  weekChipDates: {
-    fontFamily: fonts.regular,
-    fontSize: 10,
-    color: colors.muted,
-    marginTop: 2,
-  },
-  weekChipDatesActive: {
-    fontFamily: fonts.regular,
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.92)',
-    marginTop: 2,
-  },
   detailLoading: {
     minHeight: 120,
   },
 
-  circlesPanelOuter: {
+  /* Morning | evening circle cards */
+  circlesRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginHorizontal: spacing.md,
-    marginTop: 2,
-    marginBottom: spacing.sm,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.55)',
+    marginBottom: spacing.md,
   },
-  circlesPanel: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-    overflow: 'hidden',
-  },
-  circleColumnWrap: {
+  circleCard: {
     flex: 1,
+    padding: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.pinkMist,
+    backgroundColor: colors.white,
+    shadowColor: colors.pinkDark,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  circleCardSelected: {
+    borderWidth: 2,
+    borderColor: colors.pink,
+    padding: 11,
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  circleCardDisabled: {
+    opacity: 0.62,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  circleCardTop: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    minHeight: 22,
   },
-  circleDivider: {
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(234, 223, 227, 0.7)',
+  circleTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.pinkMist,
+    backgroundColor: colors.pinkSoft,
   },
-  circleColumn: {
-    flex: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    alignItems: 'flex-start',
-  },
-  circleColumnSelected: {
+  circleTagEvening: {
+    borderColor: colors.pink,
     backgroundColor: colors.pink,
   },
-  circleColumnDisabled: {
-    opacity: 0.5,
-  },
-  circleWeek: {
+  circleTagText: {
     fontFamily: fonts.extraBold,
-    fontSize: 10,
-    letterSpacing: 0.6,
-    color: colors.ink,
-  },
-  circleDates: {
-    fontFamily: fonts.display,
-    fontSize: 12,
-    fontStyle: 'italic',
-    color: colors.muted,
-    marginTop: 1,
-    marginBottom: 8,
-  },
-  circleSlotLabel: {
-    fontFamily: fonts.semiBold,
     fontSize: 9,
-    letterSpacing: 1.1,
-    color: colors.muted,
-    marginBottom: 2,
+    letterSpacing: 0.9,
+    color: colors.pinkDark,
+  },
+  circleTagTextEvening: {
+    color: colors.white,
+  },
+  circleCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.pink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   circleTimeRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     flexWrap: 'wrap',
-    marginBottom: 6,
   },
   circleTimeStart: {
     fontFamily: fonts.display,
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 26,
+    lineHeight: 30,
     color: colors.ink,
   },
   circleTimeEnd: {
@@ -1174,106 +1273,106 @@ function createStyles(fonts: UiFonts) {
   },
   circleMeta: {
     fontFamily: fonts.regular,
-    fontSize: 11,
-    lineHeight: 14,
-    color: colors.ink,
-  },
-  circleTextOnPink: {
-    color: colors.white,
-  },
-  circleDatesOnPink: {
-    color: 'rgba(255,255,255,0.88)',
-  },
-  circleMutedOnPink: {
-    color: 'rgba(255,255,255,0.82)',
+    fontSize: 11.5,
+    lineHeight: 15,
+    color: colors.muted,
   },
   seatDots: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 5,
-    marginTop: 10,
-    marginBottom: 6,
+    gap: 3,
+    marginTop: 12,
+    marginBottom: 8,
   },
   seatDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    flex: 1,
+    height: 5,
+    borderRadius: 3,
   },
   seatDotFilled: {
     backgroundColor: colors.pinkDark,
   },
   seatDotEmpty: {
-    borderWidth: 1.5,
-    borderColor: colors.pinkDark,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.pinkMist,
   },
   seatDotFilledOnPink: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pink,
   },
   seatDotEmptyOnPink: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.9)',
-    backgroundColor: 'transparent',
+    backgroundColor: colors.pinkMist,
   },
   circleSeats: {
     fontFamily: fonts.semiBold,
-    fontSize: 8,
-    letterSpacing: 0.9,
+    fontSize: 9,
+    letterSpacing: 0.8,
     color: colors.muted,
   },
-  circleSelected: {
-    fontFamily: fonts.semiBold,
-    fontSize: 8,
+  circleSeatsSelected: {
+    color: colors.pinkDark,
+  },
+  circleFullChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    backgroundColor: colors.pinkDark,
+  },
+  circleFullChipText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 8.5,
     letterSpacing: 0.8,
     color: colors.white,
-    marginTop: 6,
   },
 
-  planNote: {
-    fontFamily: fonts.semiBold,
-    fontSize: 9,
-    letterSpacing: 1.2,
-    color: colors.muted,
-    textAlign: 'center',
-    paddingHorizontal: spacing.lg,
-    marginBottom: 6,
-  },
-  replaceNote: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.ink,
-    textAlign: 'center',
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
+  /* CTA — pill with arrow in a white circle */
   chooseCta: {
     marginHorizontal: spacing.md,
     backgroundColor: colors.pink,
-    borderRadius: radii.sm,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    borderRadius: radii.pill,
+    paddingVertical: 6,
+    paddingLeft: 24,
+    paddingRight: 6,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     gap: 10,
+    shadowColor: colors.pink,
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   chooseCtaDisabled: {
     opacity: 0.45,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   chooseCtaBooked: {
     backgroundColor: colors.white,
     borderWidth: 1.5,
-    borderColor: colors.pinkDark,
+    borderColor: colors.pink,
+    shadowOpacity: 0.12,
   },
   chooseCtaText: {
+    flex: 1,
     fontFamily: fonts.extraBold,
     fontSize: 13,
-    letterSpacing: 1.4,
+    letterSpacing: 1.2,
     color: colors.white,
   },
   chooseCtaTextBooked: {
     color: colors.pinkDark,
+  },
+  chooseCtaArrow: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chooseCtaArrowBooked: {
+    backgroundColor: colors.pink,
   },
   cancelNote: {
     fontFamily: fonts.regular,

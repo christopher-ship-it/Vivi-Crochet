@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -70,12 +68,13 @@ function SectionHeader({
   styles: ReturnType<typeof createStyles>;
 }) {
   return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionNum}>{number}</Text>
+    <View style={styles.sectionHeader} accessibilityLabel={`${eyebrow}. ${title}`}>
+      <View style={styles.sectionNum}>
+        <Text style={styles.sectionNumText}>{number}</Text>
+      </View>
       <View style={styles.sectionHeaderCopy}>
-        <Text style={styles.sectionEyebrow}>{eyebrow}</Text>
-        <Text style={styles.sectionTitle} numberOfLines={2}>
-          {title}
+        <Text style={styles.sectionTitle} numberOfLines={1}>
+          {eyebrow}
         </Text>
       </View>
       <Pressable
@@ -87,7 +86,7 @@ function SectionHeader({
       >
         <Text style={styles.viewAllText}>{linkLabel}</Text>
         <View style={styles.viewAllArrow}>
-          <Ionicons name="arrow-forward" size={14} color={colors.white} />
+          <Ionicons name="arrow-forward" size={12} color={colors.white} />
         </View>
       </Pressable>
     </View>
@@ -130,50 +129,25 @@ function LiveSlotPreviewCard({
       : slot.name || slot.slotType;
 
   return (
-    <View style={[styles.liveSlotOuter, !available && styles.liveSlotCardMuted]}>
-      {Platform.OS === 'ios' ? (
-        <BlurView intensity={26} tint="light" style={styles.liveSlotCard}>
-          <View style={styles.liveSlotTop}>
-            <Ionicons
-              name={isMorning ? 'sunny-outline' : 'moon-outline'}
-              size={16}
-              color={colors.pink}
-            />
-            <Text style={styles.liveSlotLabel} numberOfLines={1}>
-              {label}
-            </Text>
-          </View>
-          {hours ? (
-            <Text style={styles.liveSlotHours} numberOfLines={1}>
-              {hours}
-            </Text>
-          ) : null}
-          <Text style={[styles.liveSeatsText, !available && styles.liveSeatsMuted]} numberOfLines={1}>
-            {seatsLabel(slot, t)}
-          </Text>
-        </BlurView>
-      ) : (
-        <View style={[styles.liveSlotCard, styles.liveSlotCardAndroid]}>
-          <View style={styles.liveSlotTop}>
-            <Ionicons
-              name={isMorning ? 'sunny-outline' : 'moon-outline'}
-              size={16}
-              color={colors.pink}
-            />
-            <Text style={styles.liveSlotLabel} numberOfLines={1}>
-              {label}
-            </Text>
-          </View>
-          {hours ? (
-            <Text style={styles.liveSlotHours} numberOfLines={1}>
-              {hours}
-            </Text>
-          ) : null}
-          <Text style={[styles.liveSeatsText, !available && styles.liveSeatsMuted]} numberOfLines={1}>
-            {seatsLabel(slot, t)}
-          </Text>
-        </View>
-      )}
+    <View style={[styles.liveSlotCard, !available && styles.liveSlotCardMuted]}>
+      <View style={styles.liveSlotTop}>
+        <Ionicons
+          name={isMorning ? 'sunny-outline' : 'moon-outline'}
+          size={14}
+          color={colors.pink}
+        />
+        <Text style={styles.liveSlotLabel} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      {hours ? (
+        <Text style={styles.liveSlotHours} numberOfLines={1}>
+          {hours}
+        </Text>
+      ) : null}
+      <Text style={[styles.liveSeatsText, !available && styles.liveSeatsMuted]} numberOfLines={1}>
+        {seatsLabel(slot, t)}
+      </Text>
     </View>
   );
 }
@@ -543,7 +517,9 @@ export default function HomeScreen() {
                     </Text>
                   ) : null}
                 </View>
-                <Ionicons name="arrow-forward" size={16} color={colors.pink} />
+                <View style={styles.preBookArrow}>
+                  <Ionicons name="arrow-forward" size={16} color={colors.white} />
+                </View>
               </Pressable>
             </View>
           )}
@@ -636,48 +612,45 @@ function createStyles(fonts: UiFonts, compactHero = false) {
     color: colors.white,
   },
   section: {
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: spacing.md,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   sectionNum: {
-    fontFamily: fonts.extraBold,
-    fontSize: 28,
-    lineHeight: 30,
-    color: colors.pink,
     width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.pink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionNumText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 11,
+    lineHeight: 14,
+    color: colors.white,
   },
   sectionHeaderCopy: {
     flex: 1,
     minWidth: 0,
-    paddingTop: 2,
-  },
-  sectionEyebrow: {
-    fontFamily: fonts.semiBold,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    color: colors.pink,
   },
   sectionTitle: {
     fontFamily: fonts.extraBold,
-    fontSize: compactHero ? 14 : 17,
-    lineHeight: compactHero ? 19 : 21,
-    letterSpacing: -0.3,
+    fontSize: compactHero ? 12 : 13,
+    lineHeight: 17,
+    letterSpacing: 0.8,
     color: colors.ink,
-    marginTop: 2,
-    flexShrink: 1,
   },
   viewAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingTop: 2,
+    gap: 6,
   },
   viewAllText: {
     fontFamily: fonts.semiBold,
@@ -685,9 +658,9 @@ function createStyles(fonts: UiFonts, compactHero = false) {
     color: colors.pink,
   },
   viewAllArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: colors.pink,
     alignItems: 'center',
     justifyContent: 'center',
@@ -727,14 +700,19 @@ function createStyles(fonts: UiFonts, compactHero = false) {
     color: colors.muted,
   },
   livePreview: {
-    paddingHorizontal: spacing.md,
-    gap: 10,
+    marginHorizontal: spacing.md,
+    padding: 12,
+    gap: 8,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.pinkMist,
   },
   liveWeekRange: {
     fontFamily: fonts.semiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.ink,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.muted,
   },
   liveSlotsRow: {
     flexDirection: 'row',
@@ -743,20 +721,13 @@ function createStyles(fonts: UiFonts, compactHero = false) {
   liveSlotWrap: {
     flex: 1,
   },
-  liveSlotOuter: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.55)',
-  },
   liveSlotCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  liveSlotCardAndroid: {
-    backgroundColor: 'rgba(255, 248, 250, 0.78)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.pinkMist,
+    backgroundColor: colors.pinkSoft,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
   },
   liveSlotCardMuted: {
     opacity: 0.72,
@@ -764,14 +735,13 @@ function createStyles(fonts: UiFonts, compactHero = false) {
   liveSlotTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    gap: 5,
   },
   liveSlotLabel: {
     flex: 1,
     fontFamily: fonts.semiBold,
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.ink,
   },
   liveSlotName: {
@@ -782,16 +752,16 @@ function createStyles(fonts: UiFonts, compactHero = false) {
   },
   liveSlotHours: {
     fontFamily: fonts.regular,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 14,
     color: colors.muted,
-    marginTop: 2,
+    marginTop: 1,
   },
   liveSeatsText: {
     fontFamily: fonts.semiBold,
-    fontSize: 11,
+    fontSize: 10.5,
     color: colors.success,
-    marginTop: 8,
+    marginTop: 3,
   },
   liveSeatsMuted: {
     color: colors.muted,
@@ -800,14 +770,18 @@ function createStyles(fonts: UiFonts, compactHero = false) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.55)',
-    overflow: 'hidden',
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.pinkMist,
     gap: 8,
+  },
+  preBookArrow: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.pink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   preBookCtaCopy: {
     flex: 1,
@@ -816,8 +790,8 @@ function createStyles(fonts: UiFonts, compactHero = false) {
   },
   preBookCtaText: {
     fontFamily: fonts.semiBold,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 17,
     color: colors.pink,
   },
   preBookCtaSub: {
@@ -827,12 +801,9 @@ function createStyles(fonts: UiFonts, compactHero = false) {
     color: colors.muted,
   },
   liveWeekFallback: {
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.55)',
-    padding: 14,
-    overflow: 'hidden',
+    borderRadius: 12,
+    backgroundColor: colors.pinkSoft,
+    padding: 10,
   },
   liveWeekLabel: {
     fontFamily: fonts.extraBold,

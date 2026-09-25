@@ -4,6 +4,7 @@ import { ApiClientError } from '../api/client';
 import type { AdminOrderListItem } from '../types';
 import { formatInr } from '../utils/format';
 import { RowActionsMenu } from './RowActionsMenu';
+import { confirmDialog } from './AppDialog';
 
 interface OrderListProps {
   title: string;
@@ -65,7 +66,7 @@ export function OrderList({
   }, [loadErrorMessage]);
 
   async function handleDelete(order: AdminOrderListItem) {
-    const ok = window.confirm(
+    const ok = await confirmDialog(
       `Delete order ${order.orderNumber}?\n\nThis permanently removes the order, payments, and any linked course access or live bookings. Product stock is restored when it was deducted. This cannot be undone.`,
     );
     if (!ok) return;

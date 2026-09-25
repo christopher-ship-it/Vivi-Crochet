@@ -3,7 +3,7 @@
     "name": "VIVI Crochet",
     "slug": "vivi-crochet",
     "scheme": "vivi",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,11 +11,6 @@
       "barStyle": "dark-content",
       "backgroundColor": "#00000000",
       "translucent": true
-    },
-    "splash": {
-      "image": "./assets/vivi-splash-logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,

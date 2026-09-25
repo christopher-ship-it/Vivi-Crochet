@@ -40,7 +40,9 @@ function PushNotificationNavigator() {
   useEffect(() => {
     const sub = addNotificationResponseListener((screen) => {
       try {
-        router.push(screen as never);
+        const target =
+          screen === '/(tabs)/index' || screen === '/(tabs)/' ? '/(tabs)' : screen;
+        router.push(target as never);
       } catch {
         // Ignore invalid deep links from push payload.
       }
@@ -77,15 +79,16 @@ function AppStack() {
         headerShadowVisible: false,
         headerBackVisible: false,
         // Always offer a back control — when history is empty (e.g. restored deep screen),
-        // BackButton falls back to Profile instead of exiting the app.
+        // BackButton falls back to Home instead of exiting the app.
         headerLeft: () => (
           <View style={{ marginLeft: 4 }}>
-            <BackButton fallbackHref="/(tabs)/profile" />
+            <BackButton fallbackHref="/(tabs)" />
           </View>
         ),
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="+not-found" options={{ headerShown: false }} />
       <Stack.Screen name="language-onboarding" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />

@@ -119,7 +119,7 @@ public sealed class CourseRequestValidator : AbstractValidator<CourseRequest>
     public CourseRequestValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(160);
-        RuleFor(x => x.Level).MaximumLength(80);
+        RuleFor(x => x.Level).MaximumLength(160);
         RuleFor(x => x.Description).MaximumLength(400);
         RuleFor(x => x.About).MaximumLength(2000);
         RuleFor(x => x.Price).GreaterThanOrEqualTo(0);

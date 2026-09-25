@@ -45,11 +45,11 @@ export function AccountPage() {
         </div>
       </header>
 
-      <section className="card" style={{ maxWidth: 520 }}>
+      <section className="card card--xs">
         <form className="form-stack" onSubmit={(e) => void handleSubmit(e)}>
           {error ? <div className="form-error">{error}</div> : null}
           {saved ? (
-            <div className="form-error" style={{ background: '#e8f6ee', color: '#1a7a4a', borderColor: '#b7dfc6' }}>
+            <div className="alert alert--success">
               Name updated.
             </div>
           ) : null}
@@ -83,7 +83,7 @@ export function AccountPage() {
             />
           </div>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div className="form-actions form-actions--flush">
             <button type="submit" className="btn" disabled={saving}>
               {saving ? 'Saving…' : 'Save name'}
             </button>

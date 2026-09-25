@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
+import { AppDialogHost } from './components/AppDialog';
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute';
 import { AdminLayout } from './layouts/AdminLayout';
 import { CategoriesPage } from './pages/CategoriesPage';
@@ -63,6 +64,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <AppDialogHost />
       </AuthProvider>
     </BrowserRouter>
   );

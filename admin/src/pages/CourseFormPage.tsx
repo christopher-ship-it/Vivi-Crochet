@@ -14,6 +14,7 @@ import { ApiClientError } from '../api/client';
 import type { Category, Course, CourseRequest, CourseType } from '../types';
 import { LANGUAGE_OPTIONS, validateImageFile } from '../utils/format';
 import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
+import { confirmDialog } from '../components/AppDialog';
 
 const COURSE_TYPES: { value: CourseType; label: string }[] = [
   { value: 'DigitalCourse', label: 'Course' },
@@ -60,6 +61,17 @@ const emptyForm: CourseFormState = {
   regularPriceAfterLaunch: 1699,
 };
 
+/** Single admin field powers app "What you get" (+ Home hero fallback). */
+function whatYouGetFromCourse(course: Pick<Course, 'about' | 'description'>): string {
+  return (course.about?.trim() || course.description?.trim() || '');
+}
+
+function descriptionFromWhatYouGet(whatYouGet: string): string | null {
+  const trimmed = whatYouGet.trim();
+  if (!trimmed) return null;
+  return trimmed.length > 400 ? trimmed.slice(0, 400) : trimmed;
+}
+
 export function CourseFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
@@ -99,8 +111,8 @@ export function CourseFormPage() {
           categoryId: course.categoryId ?? null,
           type: course.type,
           level: course.level ?? '',
-          description: course.description ?? '',
-          about: course.about ?? '',
+          description: '',
+          about: whatYouGetFromCourse(course),
           price: course.price,
           mrp: course.mrp ?? null,
           accessDays: course.accessDays,
@@ -154,8 +166,8 @@ export function CourseFormPage() {
       sortOrder: form.sortOrder === '' ? 0 : form.sortOrder,
       languages: selectedLangs.join(', ') || null,
       level: form.level || null,
-      description: form.description || null,
-      about: form.about || null,
+      about: form.about?.trim() || null,
+      description: descriptionFromWhatYouGet(form.about ?? ''),
       mrp: form.mrp || null,
       includedCourseIds: form.type === 'Bundle' ? (form.includedCourseIds ?? []) : [],
       launchPrice: form.type === 'Bundle'
@@ -226,7 +238,7 @@ export function CourseFormPage() {
 
   async function handleRemoveThumbnail() {
     if (!id || !thumbnailUrl) return;
-    if (!window.confirm('Remove this course thumbnail?')) return;
+    if (!await confirmDialog('Remove this course thumbnail?')) return;
     setUploadError(null);
     try {
       const course = await deleteCourseThumbnail(id);
@@ -246,7 +258,7 @@ export function CourseFormPage() {
 
   return (
     <>
-      <header className="page-header">
+      <header className="page-header page-header--compact">
         <div>
           <h1 className="page-header__title">{isEdit ? 'Edit course' : 'New course'}</h1>
           <p className="page-header__subtitle">
@@ -262,11 +274,11 @@ export function CourseFormPage() {
         </div>
       </header>
 
-      <form className="card" onSubmit={handleSubmit}>
-        {error && <div className="form-error" style={{ marginBottom: 20 }}>{error}</div>}
+      <form className="card form-dense" onSubmit={handleSubmit}>
+        {error && <div className="form-error">{error}</div>}
 
-        <div className="form-grid">
-          <div className="form-field form-grid--full">
+        <div className="form-grid-6">
+          <div className="form-field span-4">
             <label htmlFor="name">Name</label>
             <input
               id="name"
@@ -274,6 +286,7 @@ export function CourseFormPage() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
               maxLength={160}
+              placeholder="e.g. Amigurumi for beginners"
             />
           </div>
 
@@ -291,7 +304,23 @@ export function CourseFormPage() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="category">Category</label>
+            <label htmlFor="level">Level</label>
+            <input
+              id="level"
+              value={form.level ?? ''}
+              onChange={(e) => setForm({ ...form, level: e.target.value })}
+              maxLength={160}
+              placeholder="Beginner Level — From First Hook Hold to Your First Projects"
+            />
+          </div>
+
+          <div className="form-field span-2">
+            <label
+              htmlFor="category"
+              title="Use Viral projects or Trending Tutorials to show this on Home / Learn. Publish to make it active; Draft hides it from the app."
+            >
+              Category
+            </label>
             <select
               id="category"
               value={form.categoryId ?? ''}
@@ -304,60 +333,55 @@ export function CourseFormPage() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <p className="form-hint">
-              Use <strong>Viral projects</strong> or <strong>Trending Tutorials</strong> to show
-              this on Home / Learn. Publish to make it active; Draft hides it from the app.
-            </p>
           </div>
 
           <div className="form-field">
-            <label htmlFor="sortOrder">Display order</label>
+            <label htmlFor="sortOrder" title="Lower numbers appear first (0 = top).">
+              Display order
+            </label>
             <input
               id="sortOrder"
               type="number"
               min={0}
               max={10000}
+              title="Lower numbers appear first (0 = top)."
               value={form.sortOrder}
               onChange={(e) =>
                 setForm({ ...form, sortOrder: parseNumberDraft(e.target.value) })
               }
             />
-            <p className="form-hint">Lower numbers appear first (0 = top).</p>
           </div>
 
           <div className="form-field">
-            <label htmlFor="level">Level</label>
-            <input
-              id="level"
-              value={form.level ?? ''}
-              onChange={(e) => setForm({ ...form, level: e.target.value })}
-              placeholder="Beginner"
-            />
+            <label htmlFor="price">Price</label>
+            <div className="input-affix">
+              <span className="input-affix__prefix">₹</span>
+              <input
+                id="price"
+                type="number"
+                min={0}
+                value={form.price}
+                onChange={(e) => setForm({ ...form, price: parseNumberDraft(e.target.value) })}
+                required
+              />
+            </div>
           </div>
 
           <div className="form-field">
-            <label htmlFor="price">Price (₹)</label>
-            <input
-              id="price"
-              type="number"
-              min={0}
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: parseNumberDraft(e.target.value) })}
-              required
-            />
-          </div>
-
-          <div className="form-field">
-            <label htmlFor="mrp">MRP / strike-through (₹)</label>
-            <input
-              id="mrp"
-              type="number"
-              min={0}
-              value={form.mrp ?? ''}
-              onChange={(e) =>
-                setForm({ ...form, mrp: e.target.value ? Number(e.target.value) : null })
-              }
-            />
+            <label htmlFor="mrp">MRP / strike-through</label>
+            <div className="input-affix">
+              <span className="input-affix__prefix">₹</span>
+              <input
+                id="mrp"
+                type="number"
+                min={0}
+                placeholder="Optional"
+                value={form.mrp ?? ''}
+                onChange={(e) =>
+                  setForm({ ...form, mrp: e.target.value ? Number(e.target.value) : null })
+                }
+              />
+            </div>
           </div>
 
           <div className="form-field">
@@ -385,13 +409,14 @@ export function CourseFormPage() {
             />
           </div>
 
-          <div className="form-field form-grid--full">
-            <label>Audio languages</label>
+          <div className="form-field span-5">
+            <span className="form-label">Audio languages</span>
             <div className="lang-chips">
               {LANGUAGE_OPTIONS.map((lang) => (
                 <button
                   key={lang}
                   type="button"
+                  aria-pressed={selectedLangs.includes(lang)}
                   className={`lang-chip${selectedLangs.includes(lang) ? ' lang-chip--selected' : ''}`}
                   onClick={() => toggleLang(lang)}
                 >
@@ -401,139 +426,154 @@ export function CourseFormPage() {
             </div>
           </div>
 
-          <div className="form-field form-grid--full">
-            <label htmlFor="description">Description</label>
-            <textarea
-              id="description"
-              value={form.description ?? ''}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              maxLength={400}
-              rows={3}
-              placeholder="Short text for the Home Viral / Trending slides"
-            />
-            <p className="form-hint">
-              Shown on the Home hero for Viral projects and Trending Tutorials (max 400 characters).
-            </p>
-          </div>
+          <p className="form-hint span-6 form-hint--note">
+            <strong>Category:</strong> use <strong>Viral projects</strong> or <strong>Trending Tutorials</strong> to
+            show this on Home / Learn. Publish to make it active; Draft hides it from the app.
+          </p>
 
-          <div className="form-field form-grid--full">
-            <label htmlFor="about">About</label>
+          <div className="form-field span-6">
+            <div className="form-label-row">
+              <label
+                htmlFor="whatYouGet"
+                title="Shown as What you get on the course page in the app (also used on Home Viral / Trending slides)."
+              >
+                What you get
+              </label>
+              <span className="form-hint">{(form.about ?? '').length}/2000</span>
+            </div>
             <textarea
-              id="about"
+              id="whatYouGet"
               value={form.about ?? ''}
               onChange={(e) => setForm({ ...form, about: e.target.value })}
               maxLength={2000}
+              rows={5}
+              placeholder={
+                '7 guided lessons + 5 mini cute projects.\nBeginner Level - From First Hook Hold to Creating Your First Crochet Projects'
+              }
             />
-            <p className="form-hint">Longer course details shown on the course page.</p>
           </div>
+
+          {form.type === 'Bundle' && (
+            <>
+              <div className="form-field span-6">
+                <div className="form-label-row">
+                  <span className="form-label">Included courses</span>
+                  <span className="form-hint">
+                    The bundle references these courses. Lessons are not duplicated ·{' '}
+                    {(form.includedCourseIds ?? []).length} selected
+                  </span>
+                </div>
+                <div className="check-list check-list--compact">
+                  {catalog
+                    .filter((c) => c.type !== 'Bundle' && c.id !== id)
+                    .map((c) => {
+                      const checked = (form.includedCourseIds ?? []).includes(c.id);
+                      return (
+                        <label key={c.id} className="choice">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setForm((f) => {
+                                const current = f.includedCourseIds ?? [];
+                                return {
+                                  ...f,
+                                  includedCourseIds: checked
+                                    ? current.filter((x) => x !== c.id)
+                                    : [...current, c.id],
+                                };
+                              });
+                            }}
+                          />
+                          <span className="cell-clip">{c.name}</span>
+                        </label>
+                      );
+                    })}
+                </div>
+              </div>
+              <div className="form-field span-2">
+                <label htmlFor="standardPrice">Standard bundle price</label>
+                <div className="input-affix">
+                  <span className="input-affix__prefix">₹</span>
+                  <input
+                    id="standardPrice"
+                    type="number"
+                    min={0}
+                    value={form.price}
+                    onChange={(e) => {
+                      const next = parseNumberDraft(e.target.value);
+                      setForm({
+                        ...form,
+                        price: next,
+                        regularPriceAfterLaunch: next,
+                      });
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="form-field span-2">
+                <label htmlFor="launchPrice">Launch price</label>
+                <div className="input-affix">
+                  <span className="input-affix__prefix">₹</span>
+                  <input
+                    id="launchPrice"
+                    type="number"
+                    min={0}
+                    value={form.launchPrice}
+                    onChange={(e) => setForm({ ...form, launchPrice: parseNumberDraft(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <div className="form-field span-2">
+                <label htmlFor="launchLimit">Maximum launch purchases</label>
+                <input
+                  id="launchLimit"
+                  type="number"
+                  min={1}
+                  value={form.launchLimit}
+                  onChange={(e) => setForm({ ...form, launchLimit: parseNumberDraft(e.target.value) })}
+                />
+              </div>
+            </>
+          )}
         </div>
 
-        {form.type === 'Bundle' && (
-          <div className="form-grid" style={{ marginTop: 24 }}>
-            <div className="form-field form-grid--full">
-              <label>Included courses</label>
-              <p className="page-header__subtitle" style={{ marginBottom: 8 }}>
-                The bundle references these courses. Lessons are not duplicated.
-              </p>
-              {catalog
-                .filter((c) => c.type !== 'Bundle' && c.id !== id)
-                .map((c) => {
-                  const checked = (form.includedCourseIds ?? []).includes(c.id);
-                  return (
-                    <label key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {
-                          setForm((f) => {
-                            const current = f.includedCourseIds ?? [];
-                            return {
-                              ...f,
-                              includedCourseIds: checked
-                                ? current.filter((x) => x !== c.id)
-                                : [...current, c.id],
-                            };
-                          });
-                        }}
-                      />
-                      <span>{c.name}</span>
-                    </label>
-                  );
-                })}
-            </div>
-            <div className="form-field">
-              <label htmlFor="standardPrice">Standard bundle price (₹)</label>
-              <input
-                id="standardPrice"
-                type="number"
-                min={0}
-                value={form.price}
-                onChange={(e) => {
-                  const next = parseNumberDraft(e.target.value);
-                  setForm({
-                    ...form,
-                    price: next,
-                    regularPriceAfterLaunch: next,
-                  });
-                }}
-              />
-            </div>
-            <div className="form-field">
-              <label htmlFor="launchPrice">Launch price (₹)</label>
-              <input
-                id="launchPrice"
-                type="number"
-                min={0}
-                value={form.launchPrice}
-                onChange={(e) => setForm({ ...form, launchPrice: parseNumberDraft(e.target.value) })}
-              />
-            </div>
-            <div className="form-field">
-              <label htmlFor="launchLimit">Maximum launch purchases</label>
-              <input
-                id="launchLimit"
-                type="number"
-                min={1}
-                value={form.launchLimit}
-                onChange={(e) => setForm({ ...form, launchLimit: parseNumberDraft(e.target.value) })}
-              />
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
+        <div className="form-actions form-actions--sticky">
           <button type="submit" className="btn btn--primary" disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create course'}
           </button>
+          <Link to={isEdit && id ? `/courses/${id}` : '/courses'} className="btn btn--ghost">
+            Cancel
+          </Link>
+          {!isEdit ? (
+            <span className="form-hint form-actions__note">
+              Created as Draft. Add a thumbnail after creating.
+            </span>
+          ) : null}
         </div>
       </form>
 
       {isEdit && id && (
-        <section className="card" style={{ marginTop: 24 }}>
-          <h2 style={{ fontSize: 18, marginBottom: 8 }}>Course thumbnail</h2>
-          <p className="page-header__subtitle" style={{ marginBottom: 16 }}>
-            Shown on Learn & Loop course cards. JPG, PNG, or WebP up to 5 MB.
-          </p>
+        <section className="card">
+          <div className="card__header">
+            <div>
+              <h2 className="card__title">Course thumbnail</h2>
+              <p className="card__subtitle">
+                Shown on Learn &amp; Loop course cards. JPG, PNG, or WebP up to 5 MB.
+              </p>
+            </div>
+          </div>
 
-          {uploadError && (
-            <div className="form-error" style={{ marginBottom: 16 }}>{uploadError}</div>
-          )}
+          {uploadError && <div className="form-error">{uploadError}</div>}
 
           {thumbnailUrl ? (
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16 }}>
+            <div className="thumb-editor">
               <img
                 src={thumbnailUrl}
                 alt={form.name || 'Course thumbnail'}
-                style={{
-                  width: 180,
-                  height: 180,
-                  objectFit: 'cover',
-                  borderRadius: 12,
-                  border: '1px solid var(--vivi-border-soft)',
-                  background: '#fff7f9',
-                }}
+                className="thumb-editor__img"
               />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="thumb-editor__actions">
                 <label className="btn btn--ghost" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
                   {uploading ? 'Uploading…' : 'Replace image'}
                   <input
@@ -549,7 +589,7 @@ export function CourseFormPage() {
                 </label>
                 <button
                   type="button"
-                  className="btn btn--ghost"
+                  className="btn btn--danger"
                   disabled={uploading}
                   onClick={() => void handleRemoveThumbnail()}
                 >
@@ -558,25 +598,33 @@ export function CourseFormPage() {
               </div>
             </div>
           ) : (
-            <label className="btn btn--primary" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
-              {uploading ? 'Uploading…' : 'Upload thumbnail'}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                hidden
-                disabled={uploading}
-                onChange={(e) => {
-                  void handleThumbnailSelect(e.target.files);
-                  e.target.value = '';
-                }}
-              />
-            </label>
+            <div className="upload-drop">
+              <p className="form-hint">No thumbnail yet. A square image works best.</p>
+              <label className="btn btn--primary" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+                {uploading ? 'Uploading…' : 'Upload thumbnail'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                  hidden
+                  disabled={uploading}
+                  onChange={(e) => {
+                    void handleThumbnailSelect(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
           )}
 
           {uploadProgress && (
-            <p className="page-header__subtitle" style={{ marginTop: 12 }}>
-              Uploading… {Math.round(uploadProgress.percent)}%
-            </p>
+            <div style={{ marginTop: 14, maxWidth: 360 }}>
+              <p className="form-hint" style={{ marginBottom: 6 }}>
+                Uploading… {Math.round(uploadProgress.percent)}%
+              </p>
+              <div className="progress-bar">
+                <div className="progress-bar__fill" style={{ width: `${uploadProgress.percent}%` }} />
+              </div>
+            </div>
           )}
         </section>
       )}

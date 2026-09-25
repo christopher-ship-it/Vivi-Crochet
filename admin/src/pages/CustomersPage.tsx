@@ -4,6 +4,7 @@ import { ApiClientError } from '../api/client';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { AdminCustomerListItem } from '../types';
 import { formatDate } from '../utils/format';
+import { confirmDialog } from '../components/AppDialog';
 
 export function CustomersPage() {
   const [customers, setCustomers] = useState<AdminCustomerListItem[]>([]);
@@ -37,7 +38,7 @@ export function CustomersPage() {
 
   async function handleDelete(customer: AdminCustomerListItem) {
     const label = customer.fullName || customer.phoneNumber || customer.email || 'this customer';
-    const ok = window.confirm(
+    const ok = await confirmDialog(
       `Delete ${label} entirely?\n\nThis permanently removes their account, orders, course access, live bookings, and support messages. This cannot be undone.`,
     );
     if (!ok) return;
@@ -66,14 +67,13 @@ export function CustomersPage() {
       </header>
 
       <form
-        className="toolbar"
-        style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}
+        className="toolbar inline-form page-toolbar"
         onSubmit={(e) => {
           e.preventDefault();
           setSubmittedQuery(query.trim());
         }}
       >
-        <label htmlFor="customer-search" style={{ fontWeight: 600 }}>
+        <label htmlFor="customer-search" className="sr-only">
           Search
         </label>
         <input
@@ -84,7 +84,7 @@ export function CustomersPage() {
           placeholder="Name or phone"
           style={{ minWidth: 220 }}
         />
-        <button type="submit" className="btn btn--sm">
+        <button type="submit" className="btn">
           Search
         </button>
         {submittedQuery ? (
@@ -159,7 +159,7 @@ export function CustomersPage() {
             <tbody>
               {customers.map((customer) => (
                 <tr key={customer.id}>
-                  <td className="col-name col-clip" style={{ fontWeight: 600 }}>
+                  <td className="col-name col-clip cell-strong">
                     {customer.fullName || '—'}
                   </td>
                   <td className="col-track">{customer.track || '—'}</td>

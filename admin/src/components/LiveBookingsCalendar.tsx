@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import type { AdminLiveBookingListItem, AdminLiveWeek, LiveBookingStatus } from '../types';
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
-const MAX_VISIBLE_NAMES = 3;
+const MAX_VISIBLE_NAMES = 4;
 
 type DayKind = 'Class' | 'Break' | 'Replacement' | 'NoReplacement' | 'Off';
 
@@ -46,12 +46,11 @@ function addDays(date: Date, days: number): Date {
 
 function formatWeekRange(start: Date, end: Date): string {
   const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  // `{ day, year }` without a month renders as "2026 (day: 27)" in Chrome, so a
+  // same-month range uses the bare day number on the left instead.
+  const right = end.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  if (sameMonth) return `${start.getDate()} – ${right}`;
   const left = start.toLocaleDateString('en-IN', { month: 'long', day: 'numeric' });
-  const right = end.toLocaleDateString('en-IN', {
-    month: sameMonth ? undefined : 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
   return `${left} – ${right}`;
 }
 
@@ -106,14 +105,6 @@ function holdsSeat(status: string): boolean {
   return key === 'confirmed' || key === 'pendingpayment';
 }
 
-function badgeClass(status: string): string {
-  const key = status.toLowerCase();
-  if (key === 'pendingpayment') return 'badge badge--pending';
-  if (key === 'confirmed') return 'badge badge--published';
-  if (key === 'cancelled' || key === 'expired') return 'badge badge--inactive';
-  return `badge badge--${key}`;
-}
-
 function SlotCard({
   slotType,
   week,
@@ -143,8 +134,6 @@ function SlotCard({
   const capacity = meta.seatCapacity;
   const blocked = meta.isBlocked;
   const fullyBooked = !blocked && displayBooked >= capacity && capacity > 0;
-  const fillPct =
-    capacity > 0 ? Math.min(100, Math.round((displayBooked / capacity) * 100)) : 0;
   const shortLabel = slotType === 'Morning' ? 'Morning' : 'Evening';
   const icon = slotType === 'Morning' ? '☀' : '☾';
 
@@ -156,98 +145,106 @@ function SlotCard({
   else if (statusFilter && statusFilter !== 'Confirmed') stateLabel = 'FILTER';
   else stateLabel = 'AVAILABLE';
 
+  const stateText =
+    stateLabel === 'BLOCKED'
+      ? 'Blocked'
+      : stateLabel === 'FULLY BOOKED'
+        ? 'Full'
+        : stateLabel === 'BOOKED'
+          ? `${Math.max(0, capacity - displayBooked)} left`
+          : stateLabel === 'FILTER'
+            ? String(statusFilter)
+            : 'Open';
+
   return (
     <div
       className={[
-        'live-cal__slot',
-        slotType === 'Morning' ? 'live-cal__slot--morning' : 'live-cal__slot--evening',
-        fullyBooked ? 'live-cal__slot--full' : '',
-        blocked ? 'live-cal__slot--blocked' : '',
-        displayBooked > 0 ? 'live-cal__slot--has-bookings' : '',
+        'slot-card',
+        slotType === 'Morning' ? 'slot-card--morning' : 'slot-card--evening',
+        fullyBooked ? 'slot-card--full' : '',
+        blocked ? 'slot-card--blocked' : '',
+        displayBooked > 0 ? 'slot-card--booked' : '',
       ]
         .filter(Boolean)
         .join(' ')}
     >
-      <div className="live-cal__slot-top">
-        <div className="live-cal__slot-label">
-          <span className="live-cal__slot-icon" aria-hidden>
+      <div className="slot-card__head">
+        <span className="slot-card__tag">
+          <span className="slot-card__icon" aria-hidden>
             {icon}
           </span>
           {shortLabel}
-        </div>
-        <div className="live-cal__slot-hours">{meta.hours}</div>
+        </span>
+        <span className="slot-card__hours">{meta.hours}</span>
       </div>
 
-      <div className="live-cal__names">
-        {slotBookings.length === 0 ? (
-          <p className="live-cal__empty-slot">{blocked ? 'Blocked for booking' : 'No bookings'}</p>
-        ) : (
-          <>
-            {visible.map((booking) => {
-              const fullName = booking.customerName?.trim() || 'VIVI Customer';
-              return (
+      {slotBookings.length === 0 ? (
+        <p className="slot-card__empty">{blocked ? 'Blocked for booking' : 'No bookings yet'}</p>
+      ) : (
+        <ul className="slot-card__people">
+          {visible.map((booking) => {
+            const fullName = booking.customerName?.trim() || 'VIVI Customer';
+            const statusKey = String(booking.status).toLowerCase();
+            return (
+              <li key={booking.id}>
                 <Link
-                  key={booking.id}
                   to={`/live/bookings/${booking.id}`}
-                  className="live-cal__name"
+                  className="slot-card__person"
                   title={`${fullName} · ${booking.status}`}
-                  data-tooltip={`${fullName} · ${booking.status}`}
                 >
-                  <span className="live-cal__name-text">{fullName}</span>
-                  <span className={badgeClass(String(booking.status))}>{booking.status}</span>
+                  <span className="slot-card__avatar" aria-hidden>
+                    {fullName.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="slot-card__name">{fullName}</span>
+                  <span
+                    className={`slot-card__status slot-card__status--${statusKey}`}
+                    aria-label={String(booking.status)}
+                  />
                 </Link>
-              );
-            })}
-            {hiddenCount > 0 ? (
+              </li>
+            );
+          })}
+          {hiddenCount > 0 ? (
+            <li>
               <Link
                 to={`/live/bookings/${slotBookings[MAX_VISIBLE_NAMES]?.id}`}
-                className="live-cal__more"
+                className="slot-card__more"
               >
                 +{hiddenCount} more
               </Link>
-            ) : null}
-          </>
-        )}
-      </div>
+            </li>
+          ) : null}
+        </ul>
+      )}
 
-      <div className="live-cal__seat-row">
-        <div className="live-cal__seat">
-          <strong>
-            {displayBooked}/{capacity}
-          </strong>{' '}
-          booked
+      <div className="slot-card__foot">
+        <div className="slot-card__seats">
+          <span className="slot-card__count">
+            <strong>{displayBooked}</strong>/{capacity} seats
+          </span>
+          <span className={`slot-card__state slot-card__state--${stateLabel.toLowerCase().replace(' ', '-')}`}>
+            {stateText}
+          </span>
         </div>
         <div
-          className={`live-cal__meter${fullyBooked ? ' live-cal__meter--full' : ''}${blocked ? ' live-cal__meter--blocked' : ''}`}
+          className="slot-card__meter"
           role="meter"
           aria-valuenow={displayBooked}
           aria-valuemin={0}
           aria-valuemax={capacity}
         >
-          <span style={{ width: `${fillPct}%` }} />
+          {Array.from({ length: Math.max(capacity, 0) }, (_, i) => (
+            <span key={i} className={i < displayBooked ? 'is-filled' : undefined} />
+          ))}
         </div>
       </div>
 
-      {stateLabel === 'BLOCKED' ? (
-        <div className="live-cal__state live-cal__state--blocked">Blocked</div>
-      ) : stateLabel === 'FULLY BOOKED' ? (
-        <div className="live-cal__state live-cal__state--full">Fully booked</div>
-      ) : stateLabel === 'FILTER' ? (
-        <div className="live-cal__state">
-          <span className={badgeClass(String(statusFilter))}>{statusFilter}</span>
-        </div>
-      ) : stateLabel === 'BOOKED' ? (
-        <div className="live-cal__state live-cal__state--booked">Booked</div>
-      ) : (
-        <div className="live-cal__state">Available</div>
-      )}
-
       {showActions && (onBlockSlot || onModifyCapacity) ? (
-        <div className="live-cal__slot-actions">
+        <div className="slot-card__actions">
           {onModifyCapacity ? (
             <button
               type="button"
-              className="btn btn--ghost live-cal__slot-btn"
+              className="slot-card__action"
               disabled={busy}
               onClick={() => onModifyCapacity(slotType, capacity)}
             >
@@ -257,7 +254,7 @@ function SlotCard({
           {onBlockSlot ? (
             <button
               type="button"
-              className={`btn live-cal__slot-btn${blocked ? '' : ' btn--ghost'}`}
+              className={`slot-card__action${blocked ? ' slot-card__action--on' : ''}`}
               disabled={busy}
               onClick={() => onBlockSlot(slotType, !blocked)}
             >
@@ -354,6 +351,10 @@ export function LiveBookingsCalendar({
             <span>
               Evening {eveningBooked}/{eveningCap}
             </span>
+          </div>
+          <div className="live-cal__legend" aria-hidden>
+            <span><i className="slot-card__status slot-card__status--confirmed" />Confirmed</span>
+            <span><i className="slot-card__status slot-card__status--pendingpayment" />Pending payment</span>
           </div>
         </div>
         <button

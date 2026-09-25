@@ -120,8 +120,8 @@ function CourseHeroSlide({
               styles.courseTitle,
               {
                 fontFamily: fonts.extraBold,
-                fontSize: compact ? 18 : 22,
-                lineHeight: compact ? 22 : 26,
+                fontSize: compact ? 17 : 20,
+                lineHeight: compact ? 21 : 24,
               },
             ]}
             numberOfLines={2}
@@ -135,6 +135,7 @@ function CourseHeroSlide({
                 styles.courseAboutExpanded,
                 { fontFamily: fonts.regular },
               ]}
+              numberOfLines={3}
             >
               {slideDescription}
             </Text>
@@ -283,8 +284,8 @@ export function HomeHeroCarousel({
                       styles.brandTitle,
                       {
                         fontFamily: fonts.heading,
-                        fontSize: compact ? 20 : 26,
-                        lineHeight: compact ? 26 : 30,
+                        fontSize: compact ? 19 : 23,
+                        lineHeight: compact ? 24 : 27,
                       },
                     ]}
                   >
@@ -295,8 +296,8 @@ export function HomeHeroCarousel({
                         styles.brandAccent,
                         {
                           fontFamily: fonts.heading,
-                          fontSize: compact ? 22 : 28,
-                          lineHeight: compact ? 28 : 32,
+                          fontSize: compact ? 21 : 25,
+                          lineHeight: compact ? 26 : 29,
                         },
                       ]}
                     >
@@ -489,8 +490,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   courseMediaLarge: {
-    width: 128,
-    height: 148,
+    width: 104,
+    height: 120,
     borderRadius: radii.md,
   },
   courseMediaFallback: {
@@ -527,7 +528,7 @@ const styles = StyleSheet.create({
   },
   cta: {
     alignSelf: 'flex-start',
-    marginTop: 14,
+    marginTop: 10,
     marginBottom: 0,
     maxWidth: '92%',
   },
@@ -565,7 +566,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    marginTop: 8,
+    marginTop: 6,
     paddingTop: 0,
     paddingBottom: 0,
   },

@@ -19,6 +19,7 @@ import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { AdminLiveBookingListItem, AdminLiveWeek, LiveBookingStatus } from '../types';
 import { formatDate, formatInr, validateImageFile } from '../utils/format';
 import { uploadToBlob } from '../utils/videoUpload';
+import { confirmDialog } from '../components/AppDialog';
 
 const STATUS_OPTIONS: Array<LiveBookingStatus | ''> = [
   '',
@@ -316,7 +317,7 @@ export function LiveBookingsPage() {
 
   async function handleRemoveTutorPhoto() {
     if (!selectedWeek?.tutorPhotoUrl) return;
-    if (!window.confirm('Remove this tutor photo? The app will show the placeholder again.')) {
+    if (!await confirmDialog('Remove this tutor photo? The app will show the placeholder again.')) {
       return;
     }
     setTutorUploading(true);
@@ -363,6 +364,43 @@ export function LiveBookingsPage() {
           <p className="page-header__subtitle">
             Track Morning and Evening Crochet Circle bookings from the app.
           </p>
+          <div className="toolbar live-bookings-toolbar">
+            <div className="live-view-switch" role="tablist" aria-label="Live classes view">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'table'}
+                className={`live-view-switch__btn${view === 'table' ? ' live-view-switch__btn--active' : ''}`}
+                onClick={() => setView('table')}
+              >
+                Table
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'calendar'}
+                className={`live-view-switch__btn${view === 'calendar' ? ' live-view-switch__btn--active' : ''}`}
+                onClick={() => setView('calendar')}
+              >
+                Calendar
+              </button>
+            </div>
+
+            <label htmlFor="live-status-filter" className="live-bookings-toolbar__label">
+              Status
+            </label>
+            <select
+              id="live-status-filter"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as LiveBookingStatus | '')}
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt || 'all'} value={opt}>
+                  {opt || 'All'}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {view === 'calendar' && selectedWeek ? (
@@ -442,44 +480,6 @@ export function LiveBookingsPage() {
           </div>
         ) : null}
       </header>
-
-      <div className="toolbar live-bookings-toolbar">
-        <div className="live-view-switch" role="tablist" aria-label="Live classes view">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === 'table'}
-            className={`live-view-switch__btn${view === 'table' ? ' live-view-switch__btn--active' : ''}`}
-            onClick={() => setView('table')}
-          >
-            Table
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === 'calendar'}
-            className={`live-view-switch__btn${view === 'calendar' ? ' live-view-switch__btn--active' : ''}`}
-            onClick={() => setView('calendar')}
-          >
-            Calendar
-          </button>
-        </div>
-
-        <label htmlFor="live-status-filter" style={{ fontWeight: 600 }}>
-          Status
-        </label>
-        <select
-          id="live-status-filter"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as LiveBookingStatus | '')}
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt || 'all'} value={opt}>
-              {opt || 'All'}
-            </option>
-          ))}
-        </select>
-      </div>
 
       {view === 'calendar' ? (
         <>

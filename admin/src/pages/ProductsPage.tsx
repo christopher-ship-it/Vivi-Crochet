@@ -10,6 +10,7 @@ import { ApiClientError } from '../api/client';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { Product, ProductType } from '../types';
 import { formatDate, formatInr } from '../utils/format';
+import { confirmDialog, alertDialog } from '../components/AppDialog';
 
 const ROOM_OPTIONS: { id: ProductType; label: string; subtitle: string; emptyHint: string }[] = [
   {
@@ -58,13 +59,13 @@ export function ProductsPage() {
   }, [room]);
 
   async function handleDelete(product: Product) {
-    if (!window.confirm(`Delete "${product.name}"? This cannot be undone.`)) return;
+    if (!await confirmDialog(`Delete "${product.name}"? This cannot be undone.`)) return;
     setActionId(product.id);
     try {
       await deleteProduct(product.id);
       await loadProducts();
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Delete failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Delete failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
@@ -80,7 +81,7 @@ export function ProductsPage() {
       }
       await loadProducts();
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Status change failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Status change failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
@@ -156,12 +157,12 @@ export function ProductsPage() {
               {products.map((product) => (
                 <tr key={product.id}>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div className="cell-media">
                       {product.imageUrl ? (
                         <img
                           src={product.imageUrl}
                           alt=""
-                          style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 8, border: '1px solid #eadfe3' }}
+                          className="thumb-sm"
                         />
                       ) : (
                         <div

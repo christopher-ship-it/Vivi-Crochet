@@ -4,6 +4,7 @@ import { deleteAdminOrder, getAdminOrder, updateOrderDeliveryDate, updateOrderSt
 import { ApiClientError } from '../api/client';
 import type { AdminOrderDetail, OrderStatus } from '../types';
 import { formatDate, formatDay, formatInr } from '../utils/format';
+import { confirmDialog } from '../components/AppDialog';
 
 function toDateInput(iso: string): string {
   const date = new Date(iso);
@@ -36,6 +37,18 @@ function nextStatuses(current: OrderStatus): OrderStatus[] {
     default:
       return [];
   }
+}
+
+/** Physical-order progress shown as a stepper on the detail page. */
+const PRODUCTION_STEPS: OrderStatus[] = ['Confirmed', 'InProduction', 'Shipped', 'Delivered'];
+
+/** Maps an order / payment status to a badge colour modifier. */
+function statusTone(status: string): string {
+  const key = status.toLowerCase();
+  if (['delivered', 'paid', 'captured', 'confirmed', 'success', 'succeeded'].includes(key)) return 'published';
+  if (['cancelled', 'paymentfailed', 'failed', 'refunded'].includes(key)) return 'failed';
+  if (['pendingpayment', 'pending', 'created'].includes(key)) return 'pending';
+  return 'yes';
 }
 
 export function OrderDetailPage() {
@@ -146,7 +159,7 @@ export function OrderDetailPage() {
 
   async function handleDelete() {
     if (!id || !order) return;
-    const ok = window.confirm(
+    const ok = await confirmDialog(
       `Delete order ${order.orderNumber}?\n\nThis permanently removes the order, payments, and any linked course access or live bookings. Product stock is restored when it was deducted. This cannot be undone.`,
     );
     if (!ok) return;
@@ -186,195 +199,271 @@ export function OrderDetailPage() {
   const backLabel = hasPhysicalItems ? 'Back to product orders' : 'Back to course & video orders';
   const statusOptions = nextStatuses(order.status);
 
+  const currentStep = PRODUCTION_STEPS.indexOf(order.status);
+  const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
     <>
-      <header className="page-header">
+      <header className="page-header page-header--compact order-head">
         <div>
-          <h1 className="page-header__title">{order.orderNumber}</h1>
+          <div className="order-head__title-row">
+            <h1 className="page-header__title">{order.orderNumber}</h1>
+            <span className={`badge badge--${statusTone(order.status)}`}>
+              {STATUS_LABELS[order.status] ?? order.status}
+            </span>
+            {order.paymentStatus ? (
+              <span className={`badge badge--${statusTone(order.paymentStatus)}`}>
+                {order.paymentStatus}
+              </span>
+            ) : null}
+          </div>
           <p className="page-header__subtitle">
-            {order.customerName} · {order.customerPhone} · {order.paymentMethod}
+            Placed {formatDate(order.createdAt)} · {order.paymentMethod}
           </p>
         </div>
         <div className="page-header__actions">
+          <Link to={backTo} className="btn btn--ghost btn--sm">← {backLabel}</Link>
           <button
             type="button"
-            className="btn btn--ghost"
-            style={{ color: 'var(--vivi-danger, #b42318)' }}
+            className="btn btn--danger btn--sm"
             disabled={deleting}
             onClick={() => void handleDelete()}
           >
             {deleting ? 'Deleting…' : 'Delete order'}
           </button>
-          <Link to={backTo} className="btn btn--ghost">{backLabel}</Link>
         </div>
       </header>
 
-      {error && <div className="form-error" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && <div className="form-error">{error}</div>}
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <dl style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '12px 24px' }}>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Status</dt>
-          <dd>{STATUS_LABELS[order.status] ?? order.status}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Payment</dt>
-          <dd>{order.paymentStatus ?? '—'} · {order.paymentMethod}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Amount</dt>
-          <dd>{formatInr(order.totalAmount)}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Placed</dt>
-          <dd>{formatDate(order.createdAt)}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Customer</dt>
-          <dd>{order.customerName} · {order.customerEmail}</dd>
-        </dl>
+      <div className="order-stats">
+        <div className="order-stat">
+          <span className="order-stat__label">Amount</span>
+          <span className="order-stat__value">{formatInr(order.totalAmount)}</span>
+        </div>
+        <div className="order-stat">
+          <span className="order-stat__label">Payment</span>
+          <span className="order-stat__value order-stat__value--sm">
+            {order.paymentStatus ?? '—'} · {order.paymentMethod}
+          </span>
+        </div>
+        <div className="order-stat">
+          <span className="order-stat__label">Placed</span>
+          <span className="order-stat__value order-stat__value--sm">{formatDate(order.createdAt)}</span>
+        </div>
+        <div className="order-stat">
+          <span className="order-stat__label">Items</span>
+          <span className="order-stat__value">{itemCount}</span>
+        </div>
       </div>
 
-      {hasPhysicalItems && statusOptions.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h2 style={{ marginTop: 0, fontSize: 16 }}>Production status</h2>
-          <p className="page-header__subtitle" style={{ marginTop: 0 }}>
-            Current: <strong>{STATUS_LABELS[order.status] ?? order.status}</strong>
-            {' · '}
-            Mark dispatched when the parcel leaves Vivi.
-          </p>
-          <form onSubmit={(e) => void handleStatusUpdate(e)} className="form-grid" style={{ marginTop: 12 }}>
-            <div className="form-field">
-              <label htmlFor="status">Move to</label>
-              <select
-                id="status"
-                value={nextStatus}
-                onChange={(e) => setNextStatus(e.target.value as OrderStatus)}
-              >
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {STATUS_LABELS[status] ?? status}
-                  </option>
+      <div className="order-layout">
+        <div className="order-layout__main">
+          <section className="card card--tight">
+            <h2 className="card__title card__title--sm">Items</h2>
+            <table className="data-table order-items">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th className="num">Qty</th>
+                  <th className="num">Unit price</th>
+                  <th className="num">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {order.items.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <span className="cell-strong">{item.itemNameSnapshot}</span>
+                      <span className="order-items__type">{item.itemType}</span>
+                    </td>
+                    <td className="num">{item.quantity}</td>
+                    <td className="num">{formatInr(item.unitPrice)}</td>
+                    <td className="num cell-strong">{formatInr(item.totalAmount)}</td>
+                  </tr>
                 ))}
-              </select>
-            </div>
-            <div className="form-grid--full" style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" className="btn btn--primary" disabled={statusSaving || !nextStatus}>
-                {statusSaving ? 'Updating…' : 'Update status'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={3}>Order total</td>
+                  <td className="num">{formatInr(order.totalAmount)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </section>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>Items</h2>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Qty</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {order.items.map((item) => (
-              <tr key={item.id}>
-                <td>{item.itemNameSnapshot}</td>
-                <td>{item.quantity}</td>
-                <td>{formatInr(item.totalAmount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          {delivery && (
+            <section className="card card--tight">
+              <div className="card__header card__header--tight">
+                <h2 className="card__title card__title--sm">Delivery date</h2>
+                {!editing && (
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={openEdit}>
+                    Edit delivery date
+                  </button>
+                )}
+              </div>
+              <div className="order-dates">
+                <div className="order-date">
+                  <span className="order-stat__label">Default system estimate</span>
+                  <strong>
+                    {formatDay(delivery.systemFrom)}
+                    {delivery.systemFrom !== delivery.systemTo ? ` – ${formatDay(delivery.systemTo)}` : ''}
+                  </strong>
+                  <span className="form-hint">{delivery.estimateSummary}, {delivery.locationLabel}</span>
+                </div>
+                <div className={`order-date order-date--current${delivery.isOverridden ? ' order-date--override' : ''}`}>
+                  <span className="order-stat__label">
+                    Current customer-facing date
+                    {delivery.isOverridden ? <span className="badge badge--yes">Manually overridden</span> : null}
+                  </span>
+                  <strong>
+                    {formatDay(delivery.expectedFrom)}
+                    {delivery.expectedFrom !== delivery.expectedTo ? ` – ${formatDay(delivery.expectedTo)}` : ''}
+                  </strong>
+                  {delivery.isOverridden && order.overriddenByName ? (
+                    <span className="form-hint">
+                      Changed by {order.overriddenByName}
+                      {order.overriddenAt ? ` on ${formatDate(order.overriddenAt)}` : ''}
+                      {order.overrideReason ? ` — ${order.overrideReason}` : ''}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              {editing && (
+                <form onSubmit={handleSave} className="order-date-form">
+                  <div className="form-field">
+                    <label htmlFor="from">Expected from</label>
+                    <input id="from" type="date" required value={from} onChange={(e) => setFrom(e.target.value)} />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="to">Expected to</label>
+                    <input id="to" type="date" min={from || undefined} value={to} onChange={(e) => setTo(e.target.value)} />
+                  </div>
+                  <div className="form-field order-date-form__reason">
+                    <label htmlFor="reason">Reason (optional)</label>
+                    <input
+                      id="reason"
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="Handmade production delay"
+                      maxLength={400}
+                    />
+                  </div>
+                  <div className="order-date-form__actions">
+                    <button type="submit" className="btn btn--primary" disabled={saving}>
+                      {saving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button type="button" className="btn btn--ghost" disabled={saving} onClick={cancelEdit}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </section>
+          )}
+
+          {order.deliveryHistory.length > 0 && (
+            <section className="card card--tight">
+              <h2 className="card__title card__title--sm">Delivery date history</h2>
+              <ol className="order-timeline">
+                {order.deliveryHistory.map((entry) => (
+                  <li key={entry.id}>
+                    <div className="order-timeline__change">
+                      <span className="muted">
+                        {formatDay(entry.previousFrom)}
+                        {entry.previousFrom !== entry.previousTo ? ` – ${formatDay(entry.previousTo)}` : ''}
+                      </span>
+                      {' → '}
+                      <strong>
+                        {formatDay(entry.newFrom)}
+                        {entry.newFrom !== entry.newTo ? ` – ${formatDay(entry.newTo)}` : ''}
+                      </strong>
+                    </div>
+                    <div className="form-hint">
+                      {entry.changedByName || 'Admin'} · {formatDate(entry.changedAt)}
+                      {entry.reason ? ` — ${entry.reason}` : ''}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+        </div>
+
+        <aside className="order-layout__side">
+          {hasPhysicalItems && (
+            <section className="card card--tight">
+              <h2 className="card__title card__title--sm">Production status</h2>
+              <ol className="order-steps">
+                {PRODUCTION_STEPS.map((step, index) => (
+                  <li
+                    key={step}
+                    className={[
+                      'order-steps__step',
+                      currentStep >= 0 && index < currentStep ? 'is-done' : '',
+                      index === currentStep ? 'is-current' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    <span className="order-steps__dot" aria-hidden />
+                    {STATUS_LABELS[step] ?? step}
+                  </li>
+                ))}
+              </ol>
+              {statusOptions.length > 0 ? (
+                <form onSubmit={(e) => void handleStatusUpdate(e)} className="order-status-form">
+                  <div className="form-field">
+                    <label htmlFor="status">Move to</label>
+                    <select
+                      id="status"
+                      value={nextStatus}
+                      onChange={(e) => setNextStatus(e.target.value as OrderStatus)}
+                    >
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {STATUS_LABELS[status] ?? status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button type="submit" className="btn btn--primary" disabled={statusSaving || !nextStatus}>
+                    {statusSaving ? 'Updating…' : 'Update status'}
+                  </button>
+                  <p className="form-hint order-status-form__hint">Mark dispatched when the parcel leaves Vivi.</p>
+                </form>
+              ) : null}
+            </section>
+          )}
+
+          <section className="card card--tight">
+            <h2 className="card__title card__title--sm">Customer</h2>
+            <dl className="detail-list detail-list--stacked">
+              <dt>Name</dt>
+              <dd>{order.customerName || '—'}</dd>
+              <dt>Phone</dt>
+              <dd>{order.customerPhone || '—'}</dd>
+              <dt>Email</dt>
+              <dd className="cell-clip" title={order.customerEmail}>{order.customerEmail || '—'}</dd>
+            </dl>
+          </section>
+
+          {order.shippingAddress && (
+            <section className="card card--tight">
+              <h2 className="card__title card__title--sm">Delivery address</h2>
+              <address className="order-address">
+                <strong>{order.shippingAddress.fullName}</strong>
+                {order.shippingAddress.addressLine1}<br />
+                {order.shippingAddress.addressLine2 ? <>{order.shippingAddress.addressLine2}<br /></> : null}
+                {order.shippingAddress.landmark ? <>{order.shippingAddress.landmark}<br /></> : null}
+                {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.pinCode}<br />
+                {order.shippingAddress.country}
+              </address>
+            </section>
+          )}
+        </aside>
       </div>
-
-      {order.shippingAddress && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h2 style={{ marginTop: 0, fontSize: 16 }}>Delivery address</h2>
-          <p>
-            {order.shippingAddress.fullName}<br />
-            {order.shippingAddress.addressLine1}<br />
-            {order.shippingAddress.addressLine2 ? <>{order.shippingAddress.addressLine2}<br /></> : null}
-            {order.shippingAddress.landmark ? <>{order.shippingAddress.landmark}<br /></> : null}
-            {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.pinCode}<br />
-            {order.shippingAddress.country}
-          </p>
-        </div>
-      )}
-
-      {delivery && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h2 style={{ marginTop: 0, fontSize: 16 }}>Delivery date</h2>
-          <p>
-            Default system estimate:{' '}
-            <strong>{formatDay(delivery.systemFrom)}{delivery.systemFrom !== delivery.systemTo ? ` – ${formatDay(delivery.systemTo)}` : ''}</strong>
-            {' '}({delivery.estimateSummary}, {delivery.locationLabel})
-          </p>
-          <p>
-            Current customer-facing date:{' '}
-            <strong>{formatDay(delivery.expectedFrom)}{delivery.expectedFrom !== delivery.expectedTo ? ` – ${formatDay(delivery.expectedTo)}` : ''}</strong>
-            {delivery.isOverridden ? ' · Manually overridden' : ''}
-          </p>
-          {delivery.isOverridden && order.overriddenByName && (
-            <p className="page-header__subtitle">
-              Changed by {order.overriddenByName}
-              {order.overriddenAt ? ` on ${formatDate(order.overriddenAt)}` : ''}
-              {order.overrideReason ? ` — ${order.overrideReason}` : ''}
-            </p>
-          )}
-
-          {!editing && (
-            <button type="button" className="btn btn--primary" style={{ marginTop: 4 }} onClick={openEdit}>
-              Edit delivery date
-            </button>
-          )}
-
-          {editing && (
-            <form onSubmit={handleSave} className="form-grid" style={{ marginTop: 16 }}>
-              <div className="form-field">
-                <label htmlFor="from">Expected from</label>
-                <input id="from" type="date" required value={from} onChange={(e) => setFrom(e.target.value)} />
-              </div>
-              <div className="form-field">
-                <label htmlFor="to">Expected to</label>
-                <input id="to" type="date" min={from || undefined} value={to} onChange={(e) => setTo(e.target.value)} />
-              </div>
-              <div className="form-field form-grid--full">
-                <label htmlFor="reason">Reason (optional)</label>
-                <input
-                  id="reason"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Handmade production delay"
-                  maxLength={400}
-                />
-              </div>
-              <div className="form-grid--full" style={{ display: 'flex', gap: 8 }}>
-                <button type="submit" className="btn btn--primary" disabled={saving}>
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-                <button type="button" className="btn btn--ghost" disabled={saving} onClick={cancelEdit}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      )}
-
-      {order.deliveryHistory.length > 0 && (
-        <div className="card">
-          <h2 style={{ marginTop: 0, fontSize: 16 }}>Delivery date history</h2>
-          <ul>
-            {order.deliveryHistory.map((entry) => (
-              <li key={entry.id}>
-                {formatDay(entry.previousFrom)}
-                {entry.previousFrom !== entry.previousTo ? ` – ${formatDay(entry.previousTo)}` : ''}
-                {' → '}
-                {formatDay(entry.newFrom)}
-                {entry.newFrom !== entry.newTo ? ` – ${formatDay(entry.newTo)}` : ''}
-                {' · '}
-                {entry.changedByName || 'Admin'}
-                {' · '}
-                {formatDate(entry.changedAt)}
-                {entry.reason ? ` — ${entry.reason}` : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </>
   );
 }

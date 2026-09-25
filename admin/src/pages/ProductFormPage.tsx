@@ -20,6 +20,7 @@ import {
   PRODUCT_IMAGE_EDGE_PX,
 } from '../utils/productImagePrepare';
 import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
+import { confirmDialog } from '../components/AppDialog';
 
 const MAX_PHOTOS = 5;
 
@@ -286,7 +287,7 @@ export function ProductFormPage() {
       setUploadError('Redeploy the API to manage gallery photos. This photo is from an older single-image save.');
       return;
     }
-    if (!window.confirm('Remove this photo from the product?')) return;
+    if (!await confirmDialog('Remove this photo from the product?')) return;
     setBusyImageId(imageId);
     setUploadError(null);
     try {
@@ -311,9 +312,13 @@ export function ProductFormPage() {
 
   return (
     <>
-      <header className="page-header">
+      <header className="page-header page-header--compact">
         <div>
-          <h1 className="page-header__title">{isEdit ? 'Edit product' : 'New product'}</h1>
+          <h1 className="page-header__title">
+            {isEdit ? 'Edit product' : 'New product'}
+            {' · '}
+            {form.productType === 'Resell' ? 'Crochet Essentials' : 'Handmade Collection'}
+          </h1>
           <p className="page-header__subtitle">
             {isEdit ? 'Update shop listing details and photos' : 'Products are created as Draft until you publish'}
           </p>
@@ -323,26 +328,28 @@ export function ProductFormPage() {
         </div>
       </header>
 
-      <form className="card" onSubmit={handleSubmit}>
-        {error && <div className="form-error" style={{ marginBottom: 20 }}>{error}</div>}
+      <form className="card form-dense" onSubmit={handleSubmit}>
+        {error && <div className="form-error">{error}</div>}
 
-        <div className="form-grid">
-          <div className="form-field form-grid--full">
+        <div className="form-grid-6">
+          <div className="form-field span-4">
             <label htmlFor="name">Name</label>
             <input
               id="name"
               required
               maxLength={160}
+              placeholder="e.g. Sunflower tote bag"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
           </div>
-          <div className="form-field">
+          <div className="form-field span-2">
             <label htmlFor="category">Category</label>
             <input
               id="category"
               required
               list="product-categories"
+              placeholder="Pick or type a category"
               value={form.category}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
             />
@@ -352,113 +359,9 @@ export function ProductFormPage() {
               ))}
             </datalist>
           </div>
-          <div className="form-field">
-            <label>Product type</label>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center', minHeight: 32 }}>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="radio"
-                  name="productType"
-                  checked={form.productType === 'Handmade'}
-                  onChange={() => setForm((f) => ({ ...f, productType: 'Handmade' }))}
-                />
-                Handmade Collection
-              </label>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="radio"
-                  name="productType"
-                  checked={form.productType === 'Resell'}
-                  onChange={() => setForm((f) => ({
-                    ...f,
-                    productType: 'Resell',
-                    courseId: null,
-                    recommendedEssentialIds: [],
-                  }))}
-                />
-                Crochet Essentials
-              </label>
-            </div>
-          </div>
-          <div className="form-field form-grid--full">
-            <label htmlFor="description">Description</label>
-            <textarea
-              id="description"
-              rows={4}
-              maxLength={2000}
-              value={form.description ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            />
-          </div>
-          <div className="form-grid--full form-row">
-            <div className="form-field form-field--narrow">
-              <label htmlFor="price">Price (₹)</label>
-              <input
-                id="price"
-                type="number"
-                required
-                min={0}
-                value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: parseNumberDraft(e.target.value) }))}
-              />
-            </div>
-            <div className="form-field form-field--narrow">
-              <label htmlFor="mrp">MRP (₹)</label>
-              <input
-                id="mrp"
-                type="number"
-                min={0}
-                value={form.mrp ?? ''}
-                onChange={(e) => setForm((f) => ({
-                  ...f,
-                  mrp: e.target.value === '' ? null : Number(e.target.value),
-                }))}
-              />
-            </div>
-            <div className="form-field form-field--narrow">
-              <label htmlFor="availableStock">Available Stock</label>
-              <input
-                id="availableStock"
-                type="number"
-                required
-                min={0}
-                step={1}
-                value={form.availableStock}
-                onChange={(e) => setForm((f) => ({
-                  ...f,
-                  availableStock: parseNumberDraft(e.target.value),
-                }))}
-              />
-              <span className="form-hint">Maximum quantity customers can purchase.</span>
-            </div>
-            <div className="form-field form-field--narrow">
-              <label htmlFor="spec1">Spec 1</label>
-              <input
-                id="spec1"
-                value={form.spec1 ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, spec1: e.target.value }))}
-              />
-            </div>
-            <div className="form-field form-field--narrow">
-              <label htmlFor="spec2">Spec 2</label>
-              <input
-                id="spec2"
-                value={form.spec2 ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, spec2: e.target.value }))}
-              />
-            </div>
-            <div className="form-field form-field--narrow">
-              <label htmlFor="sortOrder">Sort order</label>
-              <input
-                id="sortOrder"
-                type="number"
-                value={form.sortOrder}
-                onChange={(e) => setForm((f) => ({ ...f, sortOrder: parseNumberDraft(e.target.value) }))}
-              />
-            </div>
-          </div>
+
           {form.productType === 'Handmade' ? (
-            <div className="form-field">
+            <div className="form-field span-6">
               <label htmlFor="courseId">Linked course</label>
               <select
                 id="courseId"
@@ -475,32 +378,120 @@ export function ProductFormPage() {
               </select>
             </div>
           ) : null}
+
+          <div className="form-field">
+            <label htmlFor="price">Price</label>
+            <div className="input-affix">
+              <span className="input-affix__prefix">₹</span>
+              <input
+                id="price"
+                type="number"
+                required
+                min={0}
+                value={form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: parseNumberDraft(e.target.value) }))}
+              />
+            </div>
+          </div>
+          <div className="form-field">
+            <label htmlFor="mrp">MRP</label>
+            <div className="input-affix">
+              <span className="input-affix__prefix">₹</span>
+              <input
+                id="mrp"
+                type="number"
+                min={0}
+                placeholder="Strike-through"
+                value={form.mrp ?? ''}
+                onChange={(e) => setForm((f) => ({
+                  ...f,
+                  mrp: e.target.value === '' ? null : Number(e.target.value),
+                }))}
+              />
+            </div>
+          </div>
+          <div className="form-field">
+            <label htmlFor="availableStock" title="Maximum quantity customers can purchase.">
+              Stock
+            </label>
+            <input
+              id="availableStock"
+              type="number"
+              required
+              min={0}
+              step={1}
+              title="Maximum quantity customers can purchase."
+              value={form.availableStock}
+              onChange={(e) => setForm((f) => ({
+                ...f,
+                availableStock: parseNumberDraft(e.target.value),
+              }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="spec1">Spec 1</label>
+            <input
+              id="spec1"
+              placeholder="e.g. 30 × 40 cm"
+              value={form.spec1 ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, spec1: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="spec2">Spec 2</label>
+            <input
+              id="spec2"
+              placeholder="e.g. 100% cotton"
+              value={form.spec2 ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, spec2: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="sortOrder" title="Lower numbers appear first.">Sort order</label>
+            <input
+              id="sortOrder"
+              type="number"
+              title="Lower numbers appear first."
+              value={form.sortOrder}
+              onChange={(e) => setForm((f) => ({ ...f, sortOrder: parseNumberDraft(e.target.value) }))}
+            />
+          </div>
+
+          <div className="form-field span-6">
+            <div className="form-label-row">
+              <label htmlFor="description">Description</label>
+              <span className="form-hint">{(form.description ?? '').length}/2000</span>
+            </div>
+            <textarea
+              id="description"
+              rows={2}
+              maxLength={2000}
+              placeholder="Materials, size, care instructions…"
+              value={form.description ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            />
+          </div>
+
           {form.productType === 'Handmade' ? (
-            <div className="form-field form-grid--full">
-              <label>Recommended Crochet Essentials</label>
-              <span className="form-hint">
-                Shown under this product in the cart (max 3). Select Resell / Essentials products only.
-              </span>
+            <div className="form-field span-6">
+              <div className="form-label-row">
+                <span className="form-label">Recommended Crochet Essentials</span>
+                <span className="form-hint">
+                  Shown in the cart · {(form.recommendedEssentialIds ?? []).length}/3 selected
+                </span>
+              </div>
               {essentialsCatalog.length === 0 ? (
-                <p className="form-hint" style={{ marginTop: 8 }}>
+                <div className="alert alert--info">
                   No Crochet Essentials products yet. Create some under Shop products → Crochet Essentials.
-                </p>
+                </div>
               ) : (
-                <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                <div className="check-list check-list--compact">
                   {essentialsCatalog.map((essential) => {
                     const selected = (form.recommendedEssentialIds ?? []).includes(essential.id);
                     const selectedCount = (form.recommendedEssentialIds ?? []).length;
                     const disabled = !selected && selectedCount >= 3;
                     return (
-                      <label
-                        key={essential.id}
-                        style={{
-                          display: 'flex',
-                          gap: 10,
-                          alignItems: 'center',
-                          opacity: disabled ? 0.5 : 1,
-                        }}
-                      >
+                      <label key={essential.id} className="choice">
                         <input
                           type="checkbox"
                           checked={selected}
@@ -515,12 +506,8 @@ export function ProductFormPage() {
                             });
                           }}
                         />
-                        <span>
-                          {essential.name}
-                          <span style={{ color: 'var(--vivi-muted)', marginLeft: 8 }}>
-                            {essential.category} · ₹{essential.price}
-                          </span>
-                        </span>
+                        <span className="cell-clip">{essential.name}</span>
+                        <span className="choice__meta">₹{essential.price}</span>
                       </label>
                     );
                   })}
@@ -530,113 +517,74 @@ export function ProductFormPage() {
           ) : null}
         </div>
 
-        <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
+        <div className="form-actions form-actions--sticky">
           <button type="submit" className="btn btn--primary" disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create product'}
           </button>
+          <Link to="/products" className="btn btn--ghost">Cancel</Link>
+          {!isEdit ? (
+            <span className="form-hint form-actions__note">
+              Save first, then add photos on the edit screen.
+            </span>
+          ) : null}
         </div>
       </form>
 
       {isEdit && id && (
-        <section className="card" style={{ marginTop: 24 }}>
-          <h2 style={{ fontSize: 18, marginBottom: 8 }}>Product photos</h2>
-          <p className="page-header__subtitle" style={{ marginBottom: 8 }}>
-            JPG, PNG, or WebP up to 5 MB each. Upload up to {MAX_PHOTOS} photos and choose which one is
-            the main image in the shop.
-          </p>
-          <p
-            style={{
-              marginBottom: 16,
-              padding: '10px 12px',
-              borderRadius: 8,
-              background: 'var(--vivi-pink-soft, #fff0f5)',
-              border: '1px solid var(--vivi-border-soft, #f0d4de)',
-              fontSize: 13,
-              lineHeight: 1.45,
-              color: 'var(--vivi-ink, #221a1e)',
-            }}
-          >
-            <strong>Recommended size: {PRODUCT_IMAGE_EDGE_PX}×{PRODUCT_IMAGE_EDGE_PX} px</strong>
-            {' '}(square). Any photo you upload is auto-cropped and saved at this size for Handmade and
-            Essentials.
-          </p>
+        <section className="card">
+          <div className="card__header">
+            <div>
+              <h2 className="card__title">Product photos</h2>
+              <p className="card__subtitle">
+                JPG, PNG, or WebP up to 5 MB each. Upload up to {MAX_PHOTOS} photos and choose which one is
+                the main image in the shop.
+              </p>
+            </div>
+            <span className="badge badge--draft">{images.length}/{MAX_PHOTOS}</span>
+          </div>
+          <div className="alert alert--info alert--spaced">
+            <span>
+              <strong>Recommended size: {PRODUCT_IMAGE_EDGE_PX}×{PRODUCT_IMAGE_EDGE_PX} px</strong>
+              {' '}(square). Any photo you upload is auto-cropped and saved at this size for Handmade and
+              Essentials.
+            </span>
+          </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-              gap: 16,
-              marginBottom: 16,
-            }}
-          >
-            {images.map((image) => (
-              <div
-                key={image.id}
-                style={{
-                  border: image.isMain
-                    ? '2px solid var(--vivi-pink)'
-                    : '1px solid var(--vivi-border-soft)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: 10,
-                  background: '#fff',
-                  boxShadow: 'var(--shadow-xs)',
-                }}
-              >
-                <div style={{ position: 'relative' }}>
-                  <img
-                    src={image.url}
-                    alt={form.name || 'Product'}
-                    style={{
-                      width: '100%',
-                      aspectRatio: '1',
-                      objectFit: 'cover',
-                      borderRadius: 8,
-                      display: 'block',
-                    }}
-                  />
-                  {image.isMain && (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: 8,
-                        left: 8,
-                        background: '#e8215b',
-                        color: '#fff',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                      }}
-                    >
-                      Main
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-                  {!image.isMain && (
+          {images.length > 0 ? (
+            <div className="photo-grid">
+              {images.map((image) => (
+                <div
+                  key={image.id}
+                  className={`photo-card${image.isMain ? ' photo-card--main' : ''}`}
+                >
+                  <div className="photo-card__media">
+                    <img src={image.url} alt={form.name || 'Product'} />
+                    {image.isMain && <span className="photo-card__tag">Main</span>}
+                  </div>
+                  <div className="photo-card__actions">
+                    {!image.isMain && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm btn--block"
+                        disabled={busyImageId === image.id || uploading}
+                        onClick={() => void handleSetMain(image.id)}
+                      >
+                        {busyImageId === image.id ? 'Saving…' : 'Set as main'}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className="btn btn--ghost"
-                      style={{ width: '100%' }}
+                      className="btn btn--danger btn--sm btn--block"
                       disabled={busyImageId === image.id || uploading}
-                      onClick={() => void handleSetMain(image.id)}
+                      onClick={() => void handleRemove(image.id)}
                     >
-                      {busyImageId === image.id ? 'Saving…' : 'Set as main'}
+                      Remove
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    style={{ width: '100%' }}
-                    disabled={busyImageId === image.id || uploading}
-                    onClick={() => void handleRemove(image.id)}
-                  >
-                    Remove
-                  </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : null}
 
           <input
             ref={fileInputRef}
@@ -647,30 +595,35 @@ export function ProductFormPage() {
             onChange={(e) => void handleImageSelect(e.target.files)}
           />
 
-          {uploadError && <div className="form-error" style={{ marginBottom: 12 }}>{uploadError}</div>}
+          {uploadError && <div className="form-error">{uploadError}</div>}
 
-          {uploading && uploadProgress && (
-            <p style={{ marginBottom: 12, color: 'var(--muted)' }}>
-              Uploading… {uploadProgress.percent}% ({formatFileSize(uploadProgress.loaded)} / {formatFileSize(uploadProgress.total)})
-            </p>
-          )}
-
-          <button
-            type="button"
-            className="btn btn--ghost"
-            disabled={uploading || !canAddMore}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {canAddMore ? `Add photos (${images.length}/${MAX_PHOTOS})` : `Photo limit reached (${MAX_PHOTOS})`}
-          </button>
+          <div className="upload-drop">
+            {uploading && uploadProgress ? (
+              <div style={{ width: '100%' }}>
+                <p className="form-hint" style={{ marginBottom: 8 }}>
+                  Uploading… {uploadProgress.percent}% ({formatFileSize(uploadProgress.loaded)} / {formatFileSize(uploadProgress.total)})
+                </p>
+                <div className="progress-bar">
+                  <div className="progress-bar__fill" style={{ width: `${uploadProgress.percent}%` }} />
+                </div>
+              </div>
+            ) : (
+              <p className="form-hint">
+                {images.length === 0 ? 'No photos yet. ' : ''}Select one or more images to add to the gallery.
+              </p>
+            )}
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={uploading || !canAddMore}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {canAddMore ? `Add photos (${images.length}/${MAX_PHOTOS})` : `Photo limit reached (${MAX_PHOTOS})`}
+            </button>
+          </div>
         </section>
       )}
 
-      {!isEdit && (
-        <p className="page-header__subtitle" style={{ marginTop: 16 }}>
-          Save the product first, then you can upload photos on the edit screen.
-        </p>
-      )}
     </>
   );
 }

@@ -15,7 +15,7 @@ type BackButtonProps = {
 
 /**
  * Circular back control — white arrow on brand pink (app colour).
- * Always navigates somewhere: history → fallback → Profile tab (never a no-op that exits the app).
+ * Always navigates somewhere: history → fallback → Home tab (never a no-op that exits the app).
  */
 export function BackButton({
   onPress,
@@ -43,7 +43,7 @@ export function BackButton({
           router.back();
           return;
         }
-        router.replace(fallbackHref ?? '/(tabs)/profile');
+        router.replace(fallbackHref ?? '/(tabs)');
       }}
       hitSlop={8}
       accessibilityRole="button"

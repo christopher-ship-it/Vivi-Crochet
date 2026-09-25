@@ -1,7 +1,7 @@
 import { useRouter, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AnimatedSplash } from '../src/components/AnimatedSplash';
 import { loadStoredLanguage } from '../src/i18n/storage';
@@ -19,6 +19,8 @@ async function hideNativeSplash() {
 export default function SplashRoute() {
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(false);
+  /** Screen to restore after the splash when the process was killed while backgrounded. */
+  const resumeHref = useRef<string | null>(null);
 
   useEffect(() => {
     // Starts SQL resume during splash so Learn / Live / Shop rarely hit a cold DB.
@@ -30,14 +32,10 @@ export default function SplashRoute() {
       const [lastHref, resume] = await Promise.all([loadLastHref(), wasRecentlyBackgrounded()]);
       if (cancelled) return;
 
-      // Process was killed while backgrounded — skip branding splash and restore place.
-      if (resume && lastHref) {
-        router.replace(lastHref as Href);
-        await hideNativeSplash();
-        return;
-      }
+      // Process was killed while backgrounded — play the splash, then restore place.
+      resumeHref.current = resume && lastHref ? lastHref : null;
 
-      // Cold start: reveal animated splash; native splash stays up until onReady.
+      // Every cold start: reveal animated splash; native splash stays up until onReady.
       setShowSplash(true);
     })();
 
@@ -52,6 +50,10 @@ export default function SplashRoute() {
 
   const handleFinish = useCallback(() => {
     setShowSplash(false);
+    if (resumeHref.current) {
+      router.replace(resumeHref.current as Href);
+      return;
+    }
     void (async () => {
       const stored = await loadStoredLanguage();
       if (stored) {

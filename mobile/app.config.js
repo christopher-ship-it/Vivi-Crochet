@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Expo config. Cleartext HTTP is disabled unless EXPO_PUBLIC_ALLOW_HTTP=true (local dev only).
  * Production builds must set EXPO_PUBLIC_API_BASE_URL to an HTTPS API URL.
  *
@@ -16,7 +16,7 @@ module.exports = ({ config }) => {
     slug: 'vivi-crochet',
     owner: 'chris88navi',
     scheme: 'vivi',
-    version: '1.0.7',
+    version: '1.0.8',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
@@ -39,9 +39,21 @@ module.exports = ({ config }) => {
       'expo-font',
       'expo-status-bar',
       [
+        // Plain blush launch screen (no logo): the animated splash
+        // (src/components/AnimatedSplash.tsx, SPLASH_STAGE_COLOR) starts on the same colour.
+        // The plugin's Android theme always references @drawable/splashscreen_logo, so an image
+        // is required; a fully transparent one keeps the screen plain.
+        'expo-splash-screen',
+        {
+          backgroundColor: '#ffd0e0',
+          image: './assets/splash-blank.png',
+          imageWidth: 200,
+        },
+      ],
+      [
         'expo-notifications',
         {
-          icon: './assets/icon.png',
+          icon: './assets/notification-icon-android.png',
           color: '#e8215b',
           defaultChannel: 'default',
         },
@@ -65,14 +77,15 @@ module.exports = ({ config }) => {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'in.vivicrochet.app',
-      buildNumber: '7',
+      buildNumber: '8',
       infoPlist: {
         UIBackgroundModes: ['remote-notification'],
       },
     },
     android: {
       package: 'in.vivicrochet.app',
-      versionCode: 8,
+      versionCode: 9,
+      googleServicesFile: './google-services.json',
       adaptiveIcon: {
         backgroundColor: '#fcf3ee',
         foregroundImage: './assets/android-icon-foreground.png',

@@ -8,6 +8,7 @@ import {
 import { ApiClientError } from '../api/client';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { Category, CategoryRequest } from '../types';
+import { confirmDialog, alertDialog } from '../components/AppDialog';
 
 type CategoryFormState = Omit<CategoryRequest, 'sortOrder'> & { sortOrder: number | '' };
 
@@ -77,20 +78,20 @@ export function CategoriesPage() {
       setShowForm(false);
       await load();
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Save failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Save failed.', { title: 'Something went wrong' });
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(category: Category) {
-    if (!window.confirm(`Delete category "${category.name}"?`)) return;
+    if (!await confirmDialog(`Delete category "${category.name}"?`)) return;
     setActionId(category.id);
     try {
       await deleteCategory(category.id);
       await load();
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Delete failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Delete failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }

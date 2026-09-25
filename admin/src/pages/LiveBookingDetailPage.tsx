@@ -4,6 +4,7 @@ import { cancelAdminLiveBooking, getAdminLiveBooking } from '../api/live';
 import { ApiClientError } from '../api/client';
 import type { AdminLiveBookingDetail } from '../types';
 import { formatDate, formatInr } from '../utils/format';
+import { confirmDialog } from '../components/AppDialog';
 
 function canCancel(status: string): boolean {
   // Confirmed bookings are final (studio rule). Only unpaid holds can be released.
@@ -37,7 +38,7 @@ export function LiveBookingDetailPage() {
 
   async function handleCancel() {
     if (!id || !booking) return;
-    const ok = window.confirm(
+    const ok = await confirmDialog(
       'Release this unpaid seat hold? Confirmed bookings cannot be cancelled.',
     );
     if (!ok) return;
@@ -102,69 +103,69 @@ export function LiveBookingDetailPage() {
       </header>
 
       {error && (
-        <div className="form-error" style={{ marginBottom: 16 }}>
+        <div className="form-error">
           {error}
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>Customer</h2>
-        <dl style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '12px 24px' }}>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Name</dt>
+      <div className="card">
+        <h2 className="card__title" style={{ marginBottom: 14 }}>Customer</h2>
+        <dl className="detail-list">
+          <dt>Name</dt>
           <dd>{booking.customerName || '—'}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Phone</dt>
+          <dt>Phone</dt>
           <dd>{booking.customerPhone || '—'}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Email</dt>
+          <dt>Email</dt>
           <dd>{booking.customerEmail || '—'}</dd>
         </dl>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>Booking</h2>
-        <dl style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '12px 24px' }}>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Status</dt>
+      <div className="card">
+        <h2 className="card__title" style={{ marginBottom: 14 }}>Booking</h2>
+        <dl className="detail-list">
+          <dt>Status</dt>
           <dd>{booking.status}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Week</dt>
+          <dt>Week</dt>
           <dd>
             W{booking.weekNumber} · {booking.seasonYear} ({booking.startDate} → {booking.endDate})
           </dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Slot</dt>
+          <dt>Slot</dt>
           <dd>
             {booking.slotName} · {booking.seatsBooked}/{booking.seatCapacity} seats used (
             {booking.seatsRemaining} left)
           </dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Break day</dt>
+          <dt>Break day</dt>
           <dd>{booking.breakWeekday || 'None'}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Bookable</dt>
+          <dt>Bookable</dt>
           <dd>{booking.isBookable ? 'Yes' : 'No'}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Created</dt>
+          <dt>Created</dt>
           <dd>{formatDate(booking.createdAt)}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Confirmed</dt>
+          <dt>Confirmed</dt>
           <dd>{booking.confirmedAt ? formatDate(booking.confirmedAt) : '—'}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Hold expires</dt>
+          <dt>Hold expires</dt>
           <dd>
             {booking.reservationExpiresAt ? formatDate(booking.reservationExpiresAt) : '—'}
           </dd>
         </dl>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>Order</h2>
-        <dl style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '12px 24px' }}>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Order</dt>
+      <div className="card">
+        <h2 className="card__title" style={{ marginBottom: 14 }}>Order</h2>
+        <dl className="detail-list">
+          <dt>Order</dt>
           <dd>
             <Link to={`/orders/${booking.orderId}`}>{booking.orderNumber || booking.orderId}</Link>
           </dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Amount</dt>
+          <dt>Amount</dt>
           <dd>{formatInr(booking.totalAmount)}</dd>
-          <dt style={{ fontWeight: 600, color: 'var(--vivi-muted)' }}>Payment</dt>
+          <dt>Payment</dt>
           <dd>{booking.paymentStatus ?? '—'}</dd>
         </dl>
       </div>
 
       {booking.days.length > 0 && (
         <div className="card">
-          <h2 style={{ marginTop: 0, fontSize: 16 }}>Week plan</h2>
+          <h2 className="card__title" style={{ marginBottom: 14 }}>Week plan</h2>
           <table className="data-table">
             <thead>
               <tr>

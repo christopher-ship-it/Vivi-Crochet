@@ -75,7 +75,7 @@ export function DashboardPage() {
         </div>
       </header>
 
-      <div className="form-grid" style={{ marginBottom: 32 }}>
+      <div className="stat-grid">
         <div className="card card--stat">
           <span className="card__label">Total courses</span>
           <span className="card__value">{courses.length}</span>
@@ -94,8 +94,11 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <section>
-        <h2 style={{ fontSize: 18, marginBottom: 16 }}>Recent courses</h2>
+      <section className="section-block">
+        <div className="section-block__head">
+          <h2 className="section-title" style={{ marginBottom: 0 }}>Recent courses</h2>
+          <Link to="/courses" className="btn btn--ghost btn--sm">View all</Link>
+        </div>
         {recentCourses.length === 0 ? (
           <div className="empty-state">
             <h3>No courses yet</h3>
@@ -117,7 +120,7 @@ export function DashboardPage() {
                 {recentCourses.map((course) => (
                   <tr key={course.id}>
                     <td>
-                      <Link to={`/courses/${course.id}`} style={{ fontWeight: 600 }}>
+                      <Link to={`/courses/${course.id}`} className="cell-link">
                         {course.name}
                       </Link>
                     </td>
@@ -137,11 +140,24 @@ export function DashboardPage() {
       </section>
 
       {videos.length > 0 && (
-        <section style={{ marginTop: 32 }}>
-          <h2 style={{ fontSize: 18, marginBottom: 8 }}>Published videos</h2>
-          <p className="page-header__subtitle" style={{ marginBottom: 16 }}>
-            {publishedVideos} of {videos.length} videos published
-          </p>
+        <section className="section-block card">
+          <div className="card__header" style={{ marginBottom: 12 }}>
+            <div>
+              <h2 className="card__title">Published videos</h2>
+              <p className="card__subtitle">
+                {publishedVideos} of {videos.length} videos published
+              </p>
+            </div>
+            <span className="card__value" style={{ fontSize: 24 }}>
+              {Math.round((publishedVideos / videos.length) * 100)}%
+            </span>
+          </div>
+          <div className="progress-bar">
+            <div
+              className="progress-bar__fill"
+              style={{ width: `${(publishedVideos / videos.length) * 100}%` }}
+            />
+          </div>
         </section>
       )}
     </>

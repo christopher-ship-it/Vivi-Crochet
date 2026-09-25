@@ -82,6 +82,14 @@ type MenuItem = {
   onPress: () => void;
 };
 
+/** Visual grouping of the My Vivi menu; every item keeps its own action. */
+const MENU_GROUPS: { id: string; labelKey: TranslationKey; keys: string[] }[] = [
+  { id: 'shopping', labelKey: 'profile.groupShopping', keys: ['orders', 'buy-again', 'coupons', 'address'] },
+  { id: 'live', labelKey: 'profile.groupLive', keys: ['live'] },
+  { id: 'preferences', labelKey: 'profile.groupPreferences', keys: ['account'] },
+  { id: 'support', labelKey: 'profile.groupSupport', keys: ['help'] },
+];
+
 function MenuRow({
   title,
   subtitle,
@@ -104,11 +112,18 @@ function MenuRow({
       accessibilityRole="button"
       accessibilityLabel={title}
     >
-      <View style={styles.menuCopy}>
-        <Text style={styles.menuTitle}>{title}</Text>
-        <Text style={styles.menuSubtitle}>{subtitle}</Text>
+      <View style={styles.menuIcon}>
+        <Ionicons name={icon} size={17} color={colors.pink} />
       </View>
-      <Ionicons name={icon} size={22} color="#9a8f93" />
+      <View style={styles.menuCopy}>
+        <Text style={styles.menuTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.menuSubtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color="#b0a4a8" />
     </Pressable>
   );
 }
@@ -498,18 +513,30 @@ export default function ProfileScreen() {
           )}
 
           <View style={styles.menuBlock}>
-            <LanguageSelector variant="menu" />
-            {menuItems.map((item, index) => (
-              <MenuRow
-                key={item.key}
-                title={item.title}
-                subtitle={item.subtitle}
-                icon={item.icon}
-                onPress={item.onPress}
-                isLast={index === menuItems.length - 1}
-                styles={styles}
-              />
-            ))}
+            {MENU_GROUPS.map((group) => {
+              const rows = group.keys
+                .map((key) => menuItems.find((item) => item.key === key))
+                .filter((item): item is MenuItem => Boolean(item));
+              return (
+                <View key={group.id} style={styles.menuGroupWrap}>
+                  <Text style={styles.menuGroupLabel}>{t(group.labelKey).toUpperCase()}</Text>
+                  <View style={styles.menuGroup}>
+                    {group.id === 'preferences' ? <LanguageSelector variant="menu" /> : null}
+                    {rows.map((item, index) => (
+                      <MenuRow
+                        key={item.key}
+                        title={item.title}
+                        subtitle={item.subtitle}
+                        icon={item.icon}
+                        onPress={item.onPress}
+                        isLast={index === rows.length - 1}
+                        styles={styles}
+                      />
+                    ))}
+                  </View>
+                </View>
+              );
+            })}
           </View>
 
           {isAuthenticated ? (
@@ -583,14 +610,10 @@ export default function ProfileScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={item.label.replace('\n', ' ')}
                 >
-                  <View style={styles.footerIconCircle}>
-                    {item.key === 'about' ? (
-                      <Text style={styles.footerAboutGlyph}>V</Text>
-                    ) : (
-                      <Ionicons name={item.icon} size={18} color={colors.white} />
-                    )}
-                  </View>
-                  <Text style={styles.footerItemLabel}>{item.label}</Text>
+                  <Ionicons name={item.icon} size={13} color={colors.pink} />
+                  <Text style={styles.footerItemLabel} numberOfLines={1}>
+                    {item.label.replace('\n', ' ')}
+                  </Text>
                 </Pressable>
               ))}
             </View>
@@ -780,15 +803,42 @@ function createStyles(fonts: UiFonts) {
     backgroundColor: '#e8e0e3',
   },
   menuBlock: {
-    marginTop: 4,
+    marginTop: 8,
+    gap: 14,
+  },
+  menuGroupWrap: {
+    gap: 6,
+  },
+  menuGroupLabel: {
+    fontFamily: fonts.semiBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.pinkDark,
+    paddingHorizontal: 4,
+  },
+  menuGroup: {
+    backgroundColor: colors.white,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.pinkMist,
+    overflow: 'hidden',
   },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 18,
+    gap: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e8e0e3',
+    borderBottomColor: '#f6e4ea',
+  },
+  menuIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: colors.pinkSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menuRowLast: {
     borderBottomWidth: 0,
@@ -800,34 +850,36 @@ function createStyles(fonts: UiFonts) {
   },
   menuTitle: {
     fontFamily: fonts.nunitoBold,
-    fontSize: 16,
+    fontSize: 14,
     color: colors.ink,
   },
   menuSubtitle: {
-    marginTop: 4,
+    marginTop: 1,
     fontFamily: fonts.decorative,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11.5,
+    lineHeight: 15,
     color: '#9a8f93',
   },
   logoutBtn: {
-    marginTop: 8,
+    marginTop: 16,
     marginBottom: 8,
     borderRadius: 14,
-    paddingVertical: 15,
+    paddingVertical: 13,
     alignItems: 'center',
-    backgroundColor: colors.pinkDark,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: '#f6cddb',
   },
   logoutText: {
     fontFamily: fonts.nunitoBold,
-    color: colors.white,
+    color: colors.pinkDark,
     fontSize: 14,
   },
   signInBtn: {
-    marginTop: 8,
+    marginTop: 16,
     marginBottom: 8,
     borderRadius: 14,
-    paddingVertical: 15,
+    paddingVertical: 14,
     alignItems: 'center',
     backgroundColor: colors.pink,
   },
@@ -837,61 +889,46 @@ function createStyles(fonts: UiFonts) {
     fontSize: 14,
   },
   brandFooter: {
-    marginTop: 20,
-    marginHorizontal: -spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingTop: 28,
-    paddingBottom: 36,
-    backgroundColor: colors.ink,
+    marginTop: 18,
+    paddingTop: 8,
+    paddingBottom: 20,
     alignItems: 'center',
   },
   footerBrand: {
     fontFamily: fonts.heading,
-    fontSize: 40,
-    color: colors.white,
+    fontSize: 30,
+    color: colors.ink,
     letterSpacing: 1,
   },
   footerVersion: {
-    marginTop: 4,
+    marginTop: 2,
     fontFamily: fonts.regular,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    color: '#a0939a',
   },
   footerGrid: {
-    marginTop: 22,
+    marginTop: 12,
     width: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    rowGap: 18,
+    gap: 6,
   },
   footerItem: {
-    width: '25%',
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  footerIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  footerAboutGlyph: {
-    fontFamily: fonts.heading,
-    fontSize: 18,
-    color: colors.white,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.pinkMist,
   },
   footerItemLabel: {
-    marginTop: 6,
     fontFamily: fonts.semiBold,
-    fontSize: 10,
-    lineHeight: 13,
-    color: colors.white,
-    textAlign: 'center',
+    fontSize: 11,
+    color: colors.ink,
   },
   pressed: {
     opacity: 0.72,

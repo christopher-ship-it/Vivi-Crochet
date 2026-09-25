@@ -5,6 +5,7 @@ import { ApiClientError } from '../api/client';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { Course } from '../types';
 import { COURSE_TYPE_LABELS, formatDate, formatInr } from '../utils/format';
+import { confirmDialog, alertDialog } from '../components/AppDialog';
 
 export function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -29,13 +30,13 @@ export function CoursesPage() {
   }, []);
 
   async function handleDelete(course: Course) {
-    if (!window.confirm(`Delete "${course.name}" and all its videos? This cannot be undone.`)) return;
+    if (!await confirmDialog(`Delete "${course.name}" and all its videos? This cannot be undone.`)) return;
     setActionId(course.id);
     try {
       await deleteCourse(course.id);
       await loadCourses();
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Delete failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Delete failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
@@ -51,7 +52,7 @@ export function CoursesPage() {
       }
       await loadCourses();
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Status change failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Status change failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }

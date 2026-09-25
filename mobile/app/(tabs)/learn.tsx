@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { BlurTargetView, BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   Image,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -25,7 +25,6 @@ import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { AppImage, prefetchImages } from '../../src/components/AppImage';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
-import { CourseCard } from '../../src/components/CourseCard';
 import { LearnerJourney } from '../../src/components/LearnerJourney';
 import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
@@ -48,17 +47,19 @@ import {
   type DiscoverFilter,
 } from '../../src/utils/mainCourses';
 import { applyStatusBar } from '../../src/utils/statusBar';
+import { formatInr } from '../../src/utils/format';
 
-const HERO_LEARN = require('../../assets/learn-hero-section.png');
 const SCREEN_WIDTH = Dimensions.get('window').width;
 /**
  * Large decorative art — positioned absolutely so it does not expand
  * the hero section layout height (section height follows the glass copy).
  */
-const HERO_IMAGE_WIDTH = Math.min(280, Math.round(SCREEN_WIDTH * 0.68));
-const HERO_IMAGE_HEIGHT = HERO_IMAGE_WIDTH * (800 / 1200);
 /** Compact hero strip — independent of image size. */
-const HERO_SECTION_HEIGHT = 72;
+/** 900×600 compressed copy of assets/learn-hero.png (the designer's source file). */
+const HERO_LEARN = require('../../assets/learn-hero-banner.png');
+
+/** Three main-course tiles fit across one screen; more scroll sideways. */
+const MAIN_TILE_WIDTH = Math.floor((SCREEN_WIDTH - 32 - 16) / 3);
 
 type CourseProgress = {
   progressPct: number;
@@ -105,11 +106,6 @@ function TrendingCard({
   styles: ReturnType<typeof createStyles>;
 }) {
   const thumb = course.thumbnailUrl?.trim();
-  const level = course.level?.trim() || course.categoryName?.trim() || t('learn.courseFallback');
-  const lessonMeta =
-    course.videoCount === 1
-      ? t('learn.lessonOne')
-      : t('learn.lessonsCount', { count: course.videoCount });
 
   return (
     <Pressable
@@ -127,15 +123,78 @@ function TrendingCard({
           </View>
         )}
         <View style={styles.trendPlay}>
-          <Ionicons name="play" size={14} color={colors.white} />
+          <Ionicons name="play" size={13} color={colors.white} />
         </View>
       </View>
       <Text style={styles.trendTitle} numberOfLines={2}>
         {course.name}
       </Text>
-      <Text style={styles.trendMeta} numberOfLines={1}>
-        {lessonMeta} · {level}
+    </Pressable>
+  );
+}
+
+function MainCourseTile({
+  course,
+  width,
+  hasAccess,
+  progressPct,
+  onPress,
+  t,
+  styles,
+}: {
+  course: Course;
+  width: number;
+  hasAccess: boolean;
+  progressPct: number | null;
+  onPress: () => void;
+  t: ReturnType<typeof useI18n>['t'];
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const thumb = course.thumbnailUrl?.trim();
+  const lessonMeta =
+    course.videoCount === 1
+      ? t('learn.lessonOne')
+      : t('learn.lessonsCount', { count: course.videoCount });
+  const pct = Math.max(0, Math.min(100, progressPct ?? 0));
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tile, { width }, pressed && styles.pressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${course.name}, ${hasAccess ? `${pct}%` : formatInr(course.price)}`}
+    >
+      <View style={[styles.tileMedia, { height: width - 12 }]}>
+        {thumb ? (
+          <AppImage uri={thumb} style={styles.trendImage} contentFit="cover" recyclingKey={course.id} />
+        ) : (
+          <View style={[styles.trendImage, styles.trendFallback]}>
+            <Text style={styles.trendFallbackMark}>V</Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.tileTitle} numberOfLines={2}>
+        {course.name}
       </Text>
+      {hasAccess ? (
+        <>
+          <Text style={styles.tileContinue} numberOfLines={1}>
+            {pct}% · {t('learn.continueArrow')}
+          </Text>
+          <View style={styles.tileTrack}>
+            <View style={[styles.tileFill, { width: `${pct}%` }]} />
+          </View>
+        </>
+      ) : (
+        <>
+          <Text style={styles.tilePrice} numberOfLines={1}>
+            {formatInr(course.price)}
+          </Text>
+          <Text style={styles.tileMeta} numberOfLines={1}>
+            {lessonMeta}
+          </Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -149,6 +208,8 @@ export default function LearnScreen() {
   const styles = useMemo(() => createStyles(fonts), [language]);
   const { isAuthenticated, user } = useShoppingSession();
 
+  /** Android blur needs an explicit target: the colour blobs behind the hero glass. */
+  const heroBlurTarget = useRef<View>(null);
   const [allCourses, setAllCourses] = useState<Course[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [discoverFilter, setDiscoverFilter] = useState<DiscoverFilter>('all');
@@ -364,49 +425,51 @@ export default function LearnScreen() {
             <Text style={styles.topAcademy}>{t('learn.academy')}</Text>
           </View>
 
+          <View style={styles.heroShadow}>
           <View style={styles.heroBanner}>
+            {/* Colour blobs behind the frosted glass give the blur something to diffuse. */}
+            <BlurTargetView ref={heroBlurTarget} style={StyleSheet.absoluteFill} pointerEvents="none">
+              <View style={[styles.heroBlob, styles.heroBlobPink]} />
+              <View style={[styles.heroBlob, styles.heroBlobPeach]} />
+            </BlurTargetView>
+            {/* Real blur on iOS and Android 12+; older Android falls back to a translucent tint. */}
+            <BlurView
+              intensity={36}
+              tint="light"
+              blurTarget={heroBlurTarget}
+              blurMethod="dimezisBlurViewSdk31Plus"
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0.65)', 'rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0)']}
+              locations={[0, 0.45, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0.35, y: 1 }}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+            <View style={styles.heroCopy}>
+              <Text
+                style={styles.heroHeading}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+              >
+                {t('learn.title')}
+              </Text>
+              <Text style={styles.heroTagline} numberOfLines={2}>
+                {t('learn.introSub')}
+              </Text>
+            </View>
             <Image
               source={HERO_LEARN}
-              style={[
-                styles.heroBannerImage,
-                { width: HERO_IMAGE_WIDTH, height: HERO_IMAGE_HEIGHT },
-              ]}
+              style={styles.heroImage}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
               accessibilityLabel={t('learn.heroA11y')}
             />
-
-            <View style={styles.heroGlassWrap} pointerEvents="none">
-              {Platform.OS === 'ios' ? (
-                <BlurView intensity={28} tint="light" style={styles.heroGlass}>
-                  <Text
-                    style={styles.heroHeading}
-                    numberOfLines={2}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.72}
-                  >
-                    {t('learn.title')}
-                  </Text>
-                  <Text style={styles.heroTagline} numberOfLines={2}>
-                    {t('learn.introSub')}
-                  </Text>
-                </BlurView>
-              ) : (
-                <View style={[styles.heroGlass, styles.heroGlassAndroid]}>
-                  <Text
-                    style={styles.heroHeading}
-                    numberOfLines={2}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.72}
-                  >
-                    {t('learn.title')}
-                  </Text>
-                  <Text style={styles.heroTagline} numberOfLines={2}>
-                    {t('learn.introSub')}
-                  </Text>
-                </View>
-              )}
-            </View>
+          </View>
           </View>
 
           {error ? (
@@ -422,7 +485,7 @@ export default function LearnScreen() {
             <View style={styles.journeyWrap}>
               <LearnerJourney
                 journey={journey}
-                variant="learn"
+                variant="strip"
                 onPressMilestone={(courseId) => openCourse(courseId)}
                 onPressCta={(courseId) => {
                   if (courseId) openCourse(courseId);
@@ -438,12 +501,13 @@ export default function LearnScreen() {
               isAuthenticated ? styles.mainSectionAfterJourney : styles.mainSection,
             ]}
           >
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionIndex}>01</Text>
-              <View style={styles.sectionHeadCopy}>
-                <Text style={styles.sectionTitle}>{t('learn.mainCourses')}</Text>
-                <Text style={styles.sectionSub}>{t('learn.mainCoursesSub')}</Text>
+            <View style={styles.sectionHead} accessibilityLabel={`${t('learn.mainCourses')}. ${t('learn.mainCoursesSub')}`}>
+              <View style={styles.sectionIndex}>
+                <Text style={styles.sectionIndexText}>1</Text>
               </View>
+              <Text style={styles.sectionTitle} numberOfLines={1}>
+                {t('learn.mainCourses')}
+              </Text>
             </View>
 
             {mainCourses.length === 0 ? (
@@ -452,33 +516,40 @@ export default function LearnScreen() {
                 message={t('learn.noCoursesAcademyMessage')}
               />
             ) : (
-              <View style={styles.mainList}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.mainList}
+              >
                 {mainCourses.map((course) => {
                   const progress = progressByCourseId[course.id];
                   const hasAccess = Boolean(progress);
                   return (
-                    <CourseCard
+                    <MainCourseTile
                       key={course.id}
                       course={course}
-                      variant="editorial"
+                      width={MAIN_TILE_WIDTH}
                       hasAccess={hasAccess}
                       progressPct={progress?.progressPct ?? null}
                       onPress={() => openCourse(course.id)}
+                      t={t}
+                      styles={styles}
                     />
                   );
                 })}
-              </View>
+              </ScrollView>
             )}
           </View>
 
           {discoverChips.length > 0 ? (
             <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Text style={styles.sectionIndexSecondary}>02</Text>
-                <View style={styles.sectionHeadCopy}>
-                  <Text style={styles.sectionTitleSecondary}>{t('learn.discover')}</Text>
-                  <Text style={styles.sectionSub}>{t('learn.discoverSub')}</Text>
+              <View style={styles.sectionHead} accessibilityLabel={`${t('learn.discover')}. ${t('learn.discoverSub')}`}>
+                <View style={[styles.sectionIndex, styles.sectionIndexSecondary]}>
+                  <Text style={styles.sectionIndexText}>2</Text>
                 </View>
+                <Text style={styles.sectionTitle} numberOfLines={1}>
+                  {t('learn.discover')}
+                </Text>
               </View>
 
               <ScrollView
@@ -577,52 +648,63 @@ function createStyles(fonts: UiFonts) {
       borderRadius: 8,
       overflow: 'hidden',
     },
-    heroBanner: {
-      position: 'relative',
+    heroShadow: {
       marginHorizontal: spacing.md,
-      marginTop: 2,
-      marginBottom: 0,
-      height: HERO_SECTION_HEIGHT,
-      justifyContent: 'center',
-      overflow: 'visible',
-      zIndex: 1,
+      marginTop: 4,
+      borderRadius: 22,
+      boxShadow: '0px 12px 28px -12px rgba(200, 20, 90, 0.35)',
     },
-    heroBannerImage: {
-      position: 'absolute',
-      right: -10,
-      /** Keep art below the top bar — never grow upward into Crochet Academy. */
-      top: 0,
-      zIndex: 0,
-    },
-    heroGlassWrap: {
-      zIndex: 2,
-      maxWidth: '58%',
-      alignSelf: 'flex-start',
-    },
-    heroGlass: {
-      borderRadius: 12,
+    heroBanner: {
+      height: 96,
+      borderRadius: 22,
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.75)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingLeft: 16,
+      paddingRight: 6,
       overflow: 'hidden',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(255, 255, 255, 0.55)',
-      backgroundColor: 'rgba(255, 255, 255, 0.28)',
     },
-    heroGlassAndroid: {
-      backgroundColor: 'rgba(255, 248, 250, 0.78)',
+    heroBlob: {
+      position: 'absolute',
+      borderRadius: 999,
+    },
+    heroBlobPink: {
+      width: 170,
+      height: 170,
+      right: -30,
+      top: -60,
+      backgroundColor: 'rgba(255, 142, 176, 0.75)',
+    },
+    heroBlobPeach: {
+      width: 150,
+      height: 150,
+      left: -40,
+      bottom: -80,
+      backgroundColor: 'rgba(247, 205, 170, 0.8)',
+    },
+    heroCopy: {
+      flex: 1,
+      minWidth: 0,
+      paddingRight: 6,
+    },
+    heroImage: {
+      width: 150,
+      height: 100,
+      marginRight: -8,
     },
     heroHeading: {
       fontFamily: fonts.heading,
-      fontSize: 26,
-      lineHeight: 30,
+      fontSize: 24,
+      lineHeight: 28,
       color: colors.ink,
-      flexShrink: 1,
     },
     heroTagline: {
       fontFamily: fonts.regular,
       fontSize: 12,
       lineHeight: 16,
-      color: colors.muted,
+      color: colors.pinkDark,
       marginTop: 2,
     },
     banner: {
@@ -649,82 +731,119 @@ function createStyles(fonts: UiFonts) {
       color: colors.pink,
     },
     section: {
-      marginTop: spacing.lg,
+      marginTop: 14,
       paddingHorizontal: spacing.md,
     },
     journeyWrap: {
-      marginTop: spacing.xl + 40,
+      marginTop: 10,
       paddingHorizontal: spacing.md,
     },
     mainSection: {
-      marginTop: spacing.xl + 48,
+      marginTop: 14,
     },
     mainSectionAfterJourney: {
-      marginTop: spacing.lg,
+      marginTop: 14,
     },
     sectionHead: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: 12,
-      marginBottom: 14,
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 8,
     },
     sectionIndex: {
-      fontFamily: fonts.display,
-      fontSize: 22,
-      lineHeight: 26,
-      color: colors.pink,
-      minWidth: 28,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: colors.pink,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sectionIndexText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 11,
+      lineHeight: 14,
+      color: colors.white,
     },
     sectionIndexSecondary: {
-      fontFamily: fonts.display,
-      fontSize: 18,
-      lineHeight: 22,
-      color: colors.muted,
-      minWidth: 28,
-      opacity: 0.7,
-    },
-    sectionHeadCopy: {
-      flex: 1,
-      minWidth: 0,
+      backgroundColor: colors.pinkDark,
     },
     sectionTitle: {
-      fontFamily: fonts.display,
-      fontSize: 24,
-      lineHeight: 28,
+      flex: 1,
+      fontFamily: fonts.extraBold,
+      fontSize: 15,
+      lineHeight: 20,
       color: colors.ink,
-    },
-    sectionTitleSecondary: {
-      fontFamily: fonts.display,
-      fontSize: 20,
-      lineHeight: 24,
-      color: colors.ink,
-    },
-    sectionSub: {
-      fontFamily: fonts.regular,
-      fontSize: 13,
-      lineHeight: 18,
-      color: colors.muted,
-      marginTop: 4,
     },
     mainList: {
-      gap: 10,
+      gap: 8,
+      paddingRight: spacing.md,
+    },
+    tile: {
+      padding: 6,
+      borderRadius: 14,
+      backgroundColor: colors.white,
+      borderWidth: 1,
+      borderColor: colors.pinkMist,
+    },
+    tileMedia: {
+      width: '100%',
+      borderRadius: 10,
+      overflow: 'hidden',
+      backgroundColor: colors.mediaWash,
+    },
+    tileTitle: {
+      fontFamily: fonts.semiBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: colors.ink,
+      marginTop: 6,
+      minHeight: 34,
+    },
+    tilePrice: {
+      fontFamily: fonts.extraBold,
+      fontSize: 14,
+      color: colors.ink,
+      marginTop: 2,
+    },
+    tileMeta: {
+      fontFamily: fonts.regular,
+      fontSize: 11,
+      color: colors.muted,
+    },
+    tileContinue: {
+      fontFamily: fonts.semiBold,
+      fontSize: 11.5,
+      color: colors.pinkDark,
+      marginTop: 2,
+    },
+    tileTrack: {
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: colors.pinkMist,
+      marginTop: 4,
+      overflow: 'hidden',
+    },
+    tileFill: {
+      height: '100%',
+      borderRadius: 2,
+      backgroundColor: colors.pink,
     },
     discoverChips: {
-      gap: 8,
-      paddingBottom: 14,
+      gap: 6,
+      paddingBottom: 8,
       paddingRight: spacing.md,
     },
     discoverChip: {
       paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 2,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      paddingVertical: 5,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.pinkMist,
       backgroundColor: colors.white,
     },
     discoverChipActive: {
       borderColor: colors.pink,
-      backgroundColor: colors.pinkSoft,
+      backgroundColor: colors.pink,
     },
     discoverChipText: {
       fontFamily: fonts.semiBold,
@@ -732,23 +851,21 @@ function createStyles(fonts: UiFonts) {
       color: colors.muted,
     },
     discoverChipTextActive: {
-      color: colors.pinkDark,
+      color: colors.white,
     },
     trendRail: {
-      gap: 12,
+      gap: 8,
       paddingRight: spacing.md,
     },
     trendCard: {
-      width: 148,
+      width: 150,
     },
     trendMedia: {
-      width: 148,
-      height: 96,
-      borderRadius: 2,
+      width: 150,
+      height: 100,
+      borderRadius: 12,
       overflow: 'hidden',
       backgroundColor: colors.mediaWash,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
     },
     trendImage: {
       width: '100%',
@@ -765,11 +882,11 @@ function createStyles(fonts: UiFonts) {
     },
     trendPlay: {
       position: 'absolute',
-      left: 8,
-      bottom: 8,
+      left: 6,
+      bottom: 6,
       width: 26,
       height: 26,
-      borderRadius: 2,
+      borderRadius: 13,
       backgroundColor: 'rgba(232, 33, 91, 0.92)',
       alignItems: 'center',
       justifyContent: 'center',
@@ -777,16 +894,10 @@ function createStyles(fonts: UiFonts) {
     trendTitle: {
       fontFamily: fonts.semiBold,
       fontSize: 13,
-      lineHeight: 17,
+      lineHeight: 16,
       color: colors.ink,
-      marginTop: 8,
-      minHeight: 34,
-    },
-    trendMeta: {
-      fontFamily: fonts.regular,
-      fontSize: 11,
-      color: colors.muted,
-      marginTop: 2,
+      marginTop: 5,
+      minHeight: 32,
     },
   });
 }

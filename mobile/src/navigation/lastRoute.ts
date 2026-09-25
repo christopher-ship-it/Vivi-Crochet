@@ -59,6 +59,12 @@ export async function loadLastHref(): Promise<string | null> {
   try {
     const href = await AsyncStorage.getItem(HREF_KEY);
     if (!href || shouldSkip(href.split('?')[0] ?? href)) return null;
+    // Normalize home deep links. `/(tabs)/index` can show Unmatched Route on device;
+    // bare `/(tabs)` + tabs `unstable_settings.initialRouteName` opens Home.
+    const path = href.split('?')[0] ?? href;
+    if (path === '/(tabs)' || path === '/(tabs)/' || path === '/(tabs)/index') {
+      return '/(tabs)';
+    }
     return href;
   } catch {
     return null;

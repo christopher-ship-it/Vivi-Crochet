@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { useI18n } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
@@ -9,8 +10,11 @@ import type { LearnerJourneySnapshot, JourneyMilestone } from '../utils/learnerJ
 
 type Props = {
   journey: LearnerJourneySnapshot;
-  /** `learn` = fuller card on Learn tab; `profile` = compact under member card */
-  variant?: 'learn' | 'profile';
+  /**
+   * `learn` = fuller card; `profile` = compact under member card;
+   * `strip` = one-line "continue learning" row (Learn tab).
+   */
+  variant?: 'learn' | 'profile' | 'strip';
   onPressMilestone?: (courseId: string) => void;
   onPressCta?: (courseId: string | null) => void;
 };
@@ -56,6 +60,56 @@ export function LearnerJourney({
     : nextMilestone?.status === 'locked'
       ? t('journey.ctaUnlock', { name: nextMilestone.shortLabel })
       : t('journey.ctaContinue', { name: nextMilestone?.shortLabel ?? '' });
+
+  if (variant === 'strip') {
+    const pct = journey.journeyComplete
+      ? 100
+      : Math.max(0, Math.min(100, nextMilestone?.progressPct ?? 0));
+    const ringR = 15;
+    const ringC = 2 * Math.PI * ringR;
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.strip, pressed && styles.pressed]}
+        onPress={() => onPressCta?.(journey.nextCourseId)}
+        accessibilityRole="button"
+        accessibilityLabel={`${t('journey.eyebrow')}. ${ctaLabel}`}
+      >
+        <View style={styles.ring}>
+          <Svg width={38} height={38} viewBox="0 0 38 38">
+            <Circle cx={19} cy={19} r={ringR} stroke={colors.pinkMist} strokeWidth={3.5} fill="none" />
+            <Circle
+              cx={19}
+              cy={19}
+              r={ringR}
+              stroke={colors.pink}
+              strokeWidth={3.5}
+              fill="none"
+              strokeLinecap="round"
+              strokeDasharray={[ringC, ringC]}
+              strokeDashoffset={ringC * (1 - pct / 100)}
+              transform="rotate(-90 19 19)"
+            />
+          </Svg>
+          <Text style={styles.ringPct}>{pct}%</Text>
+        </View>
+        <View style={styles.stripCopy}>
+          <Text style={styles.eyebrow} numberOfLines={1}>
+            {t('journey.eyebrow')}
+          </Text>
+          <Text style={styles.stripTitle} numberOfLines={1}>
+            {ctaLabel}
+          </Text>
+        </View>
+        <View style={styles.stripGo}>
+          <Ionicons
+            name={journey.journeyComplete ? 'arrow-forward' : 'play'}
+            size={14}
+            color={colors.white}
+          />
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <View style={styles.card}>
@@ -129,9 +183,52 @@ export function LearnerJourney({
   );
 }
 
-function createStyles(fonts: UiFonts, variant: 'learn' | 'profile') {
+function createStyles(fonts: UiFonts, variant: 'learn' | 'profile' | 'strip') {
   const compact = variant === 'profile';
   return StyleSheet.create({
+    strip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colors.white,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.pinkMist,
+      paddingVertical: 8,
+      paddingLeft: 8,
+      paddingRight: 10,
+    },
+    ring: {
+      width: 38,
+      height: 38,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    ringPct: {
+      position: 'absolute',
+      fontFamily: fonts.semiBold,
+      fontSize: 9,
+      color: colors.pinkDark,
+    },
+    stripCopy: {
+      flex: 1,
+      minWidth: 0,
+      gap: 1,
+    },
+    stripTitle: {
+      fontFamily: fonts.semiBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: colors.ink,
+    },
+    stripGo: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.pink,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     card: {
       backgroundColor: colors.white,
       borderRadius: radii.md,

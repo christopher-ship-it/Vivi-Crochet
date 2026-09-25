@@ -453,6 +453,11 @@ using (var scope = app.Services.CreateScope())
                     IF COL_LENGTH('Courses', 'Description') IS NULL
                         ALTER TABLE [Courses] ADD [Description] nvarchar(400) NULL;
 
+                    -- COL_LENGTH is bytes; nvarchar(80) => 160, nvarchar(160) => 320
+                    IF COL_LENGTH('Courses', 'Level') IS NOT NULL
+                       AND COL_LENGTH('Courses', 'Level') < 320
+                        ALTER TABLE [Courses] ALTER COLUMN [Level] nvarchar(160) NULL;
+
                     IF NOT EXISTS (
                         SELECT 1 FROM sys.indexes
                         WHERE name = N'IX_Courses_CategoryId_SortOrder'

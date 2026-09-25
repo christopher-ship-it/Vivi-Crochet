@@ -48,6 +48,9 @@ export function LanguageSelector({ variant = 'menu', isLast = false }: LanguageS
           accessibilityState={{ expanded }}
           accessibilityLabel={t('language.title')}
         >
+          <View style={styles.menuIcon}>
+            <Ionicons name="language-outline" size={17} color={colors.pink} />
+          </View>
           <View style={styles.menuCopy}>
             <Text style={[styles.menuTitle, { fontFamily: fonts.nunitoBold }]}>
               {t('language.title')}
@@ -57,9 +60,9 @@ export function LanguageSelector({ variant = 'menu', isLast = false }: LanguageS
             </Text>
           </View>
           <Ionicons
-            name={expanded ? 'chevron-up' : 'language-outline'}
-            size={22}
-            color="#9a8f93"
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color="#b0a4a8"
           />
         </Pressable>
 
@@ -173,10 +176,19 @@ const styles = StyleSheet.create({
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 18,
+    gap: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e8e0e3',
+    borderBottomColor: '#f6e4ea',
+  },
+  menuIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: colors.pinkSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menuRowLast: {
     borderBottomWidth: 0,
@@ -187,20 +199,21 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   menuTitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.ink,
   },
   menuSubtitle: {
-    marginTop: 4,
-    fontSize: 12,
-    lineHeight: 17,
+    marginTop: 1,
+    fontSize: 11.5,
+    lineHeight: 15,
     color: '#9a8f93',
   },
   menuOptions: {
+    paddingHorizontal: 8,
     paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e8e0e3',
-    gap: 6,
+    borderBottomColor: '#f6e4ea',
+    gap: 4,
   },
   menuOptionRow: {
     flexDirection: 'row',

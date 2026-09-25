@@ -41,13 +41,12 @@ function formatWeekRange(startDate: string, endDate: string, weekNumber: number,
   const end = parseDateOnly(endDate);
   if (start && end) {
     const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
-    const startLabel = start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-    const endLabel = end.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: sameMonth ? undefined : 'short',
-      year: 'numeric',
-    });
-    return `${startLabel}–${endLabel}`;
+    // `{ day, year }` without a month renders as "2026 (day: 11)" in Chrome.
+    const endLabel = end.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const startLabel = sameMonth
+      ? String(start.getDate())
+      : start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    return `${startLabel} – ${endLabel}`;
   }
   return `W${weekNumber} · ${seasonYear}`;
 }
@@ -180,16 +179,8 @@ export function LiveClassBookingsPage() {
         </div>
       </header>
 
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          marginBottom: 16,
-          alignItems: 'flex-end',
-        }}
-      >
-        <div className="form-field" style={{ minWidth: 200, marginBottom: 0 }}>
+      <div className="filter-bar">
+        <div className="form-field filter-bar__search">
           <label htmlFor="live-bookings-search">Search</label>
           <input
             id="live-bookings-search"
@@ -200,7 +191,7 @@ export function LiveClassBookingsPage() {
           />
         </div>
 
-        <div className="form-field" style={{ minWidth: 160, marginBottom: 0 }}>
+        <div className="form-field">
           <label htmlFor="live-bookings-week">Week</label>
           <select id="live-bookings-week" value={weekKey} onChange={(e) => setWeekKey(e.target.value)}>
             <option value="">All weeks</option>
@@ -212,7 +203,7 @@ export function LiveClassBookingsPage() {
           </select>
         </div>
 
-        <div className="form-field" style={{ minWidth: 150, marginBottom: 0 }}>
+        <div className="form-field">
           <label htmlFor="live-bookings-class">Class</label>
           <select
             id="live-bookings-class"
@@ -228,7 +219,7 @@ export function LiveClassBookingsPage() {
           </select>
         </div>
 
-        <div className="form-field" style={{ minWidth: 140, marginBottom: 0 }}>
+        <div className="form-field">
           <label htmlFor="live-bookings-payment">Payment</label>
           <select
             id="live-bookings-payment"
@@ -244,7 +235,7 @@ export function LiveClassBookingsPage() {
           </select>
         </div>
 
-        <div className="form-field" style={{ minWidth: 150, marginBottom: 0 }}>
+        <div className="form-field">
           <label htmlFor="live-bookings-status">Status</label>
           <select
             id="live-bookings-status"
@@ -283,20 +274,20 @@ export function LiveClassBookingsPage() {
 
       {!loading && !error && visible.length > 0 && (
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table data-table--live-bookings">
             <thead>
               <tr>
-                <th>Booking</th>
-                <th>Customer</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Title</th>
-                <th>Week</th>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Payment</th>
-                <th>Status</th>
-                <th aria-label="Actions" />
+                <th className="col-booking">Booking</th>
+                <th className="col-customer">Customer</th>
+                <th className="col-email">Email</th>
+                <th className="col-phone">Phone</th>
+                <th className="col-title">Class</th>
+                <th className="col-week">Week</th>
+                <th className="col-date">Date</th>
+                <th className="col-amount">Amount</th>
+                <th className="col-payment">Payment</th>
+                <th className="col-status">Status</th>
+                <th className="col-actions" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -310,19 +301,25 @@ export function LiveClassBookingsPage() {
                 );
                 return (
                   <tr key={booking.id}>
-                    <td style={{ fontWeight: 600 }}>{displayOrDash(booking.orderNumber)}</td>
-                    <td>{displayOrDash(booking.customerName)}</td>
-                    <td>{displayOrDash(booking.customerEmail)}</td>
-                    <td>{displayOrDash(booking.customerPhone)}</td>
-                    <td>{title}</td>
-                    <td>{week}</td>
-                    <td>{formatClassDate(booking.startDate, booking.endDate)}</td>
-                    <td>{formatInr(booking.totalAmount)}</td>
-                    <td>{booking.paymentStatus ?? '—'}</td>
-                    <td>
+                    <td className="col-booking cell-strong" title={booking.orderNumber || undefined}>
+                      {displayOrDash(booking.orderNumber)}
+                    </td>
+                    <td className="col-customer col-clip" title={booking.customerName || undefined}>
+                      {displayOrDash(booking.customerName)}
+                    </td>
+                    <td className="col-email col-clip" title={booking.customerEmail || undefined}>
+                      {displayOrDash(booking.customerEmail)}
+                    </td>
+                    <td className="col-phone">{displayOrDash(booking.customerPhone)}</td>
+                    <td className="col-title">{title}</td>
+                    <td className="col-week">{week}</td>
+                    <td className="col-date">{formatClassDate(booking.startDate, booking.endDate)}</td>
+                    <td className="col-amount">{formatInr(booking.totalAmount)}</td>
+                    <td className="col-payment">{booking.paymentStatus ?? '—'}</td>
+                    <td className="col-status">
                       <span className={badgeClass(String(booking.status))}>{booking.status}</span>
                     </td>
-                    <td>
+                    <td className="col-actions">
                       <div className="data-table__actions">
                         <RowActionsMenu
                           label={`Actions for booking ${booking.orderNumber || booking.id}`}

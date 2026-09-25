@@ -127,18 +127,15 @@ export function TeamUsersPage() {
         </div>
       </header>
 
-      {error ? <div className="form-error" style={{ marginBottom: 16 }}>{error}</div> : null}
+      {error ? <div className="form-error">{error}</div> : null}
       {info ? (
-        <div
-          className="form-error"
-          style={{ marginBottom: 16, background: '#e8f6ee', color: '#1a7a4a', borderColor: '#b7dfc6' }}
-        >
+        <div className="alert alert--success alert--spaced">
           {info}
         </div>
       ) : null}
 
-      <section className="card" style={{ marginBottom: 24, maxWidth: 640 }}>
-        <h2 style={{ margin: '0 0 16px', fontSize: 16 }}>Add user</h2>
+      <section className="card card--narrow">
+        <h2 className="card__title" style={{ marginBottom: 16 }}>Add user</h2>
         <form className="form-stack" onSubmit={(e) => void handleCreate(e)}>
           <div className="form-field">
             <label htmlFor="create-name">Name</label>
@@ -192,7 +189,7 @@ export function TeamUsersPage() {
       </section>
 
       <section className="card">
-        <h2 style={{ margin: '0 0 16px', fontSize: 16 }}>Console users</h2>
+        <h2 className="card__title" style={{ marginBottom: 16 }}>Console users</h2>
         {loading ? (
           <p className="muted">Loading…</p>
         ) : users.length === 0 ? (

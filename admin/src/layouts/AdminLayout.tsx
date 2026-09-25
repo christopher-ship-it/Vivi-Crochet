@@ -4,12 +4,56 @@ import { getSupportUnreadCount } from '../api/support';
 import { useAuth } from '../auth/AuthContext';
 import { GlobalSearch } from '../components/GlobalSearch';
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', end: true },
-  { to: '/products', label: 'Shop products' },
-  { to: '/customers', label: 'Customers' },
-  { to: '/notifications', label: 'Notifications' },
-  { to: '/support', label: 'Support' },
+type IconName =
+  | 'dashboard'
+  | 'shop'
+  | 'customers'
+  | 'bell'
+  | 'support'
+  | 'course'
+  | 'orders'
+  | 'calendar'
+  | 'team'
+  | 'lock';
+
+const ICON_PATHS: Record<IconName, string> = {
+  dashboard: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z',
+  shop: 'M6 7h12l-1 13H7L6 7zM9 7a3 3 0 0 1 6 0',
+  customers: 'M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.15a3.5 3.5 0 0 1 0 6.7',
+  bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+  support: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z',
+  course: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5',
+  orders: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5',
+  calendar: 'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4',
+  team: 'M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z',
+  lock: 'M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3',
+};
+
+function NavIcon({ name }: { name: IconName }) {
+  return (
+    <svg
+      className="admin-nav__icon"
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d={ICON_PATHS[name]} />
+    </svg>
+  );
+}
+
+const NAV_ITEMS: { to: string; label: string; icon: IconName; end?: boolean }[] = [
+  { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
+  { to: '/products', label: 'Shop products', icon: 'shop' },
+  { to: '/customers', label: 'Customers', icon: 'customers' },
+  { to: '/notifications', label: 'Notifications', icon: 'bell' },
+  { to: '/support', label: 'Support', icon: 'support' },
 ];
 
 const COURSE_DASHBOARD_ITEMS = [
@@ -59,6 +103,10 @@ export function AdminLayout() {
   const ordersActive = isOrdersPath(location.pathname);
   const bookingsActive = isBookingsPath(location.pathname);
   const courseDashActive = isCourseDashboardPath(location.pathname);
+  // Focused create screens skip the global search bar to keep the form on one screen.
+  const hideSearchHeader =
+    ['/courses/new', '/products/new', '/live'].includes(location.pathname) ||
+    /^\/orders\/[^/]+$/.test(location.pathname);
   const [ordersOpen, setOrdersOpen] = useState(ordersActive);
   const [bookingsOpen, setBookingsOpen] = useState(bookingsActive);
   const [courseDashOpen, setCourseDashOpen] = useState(courseDashActive);
@@ -131,7 +179,10 @@ export function AdminLayout() {
                 `admin-nav__link${isActive ? ' admin-nav__link--active' : ''}`
               }
             >
-              {item.label}
+              <span className="admin-nav__link-label">
+                <NavIcon name={item.icon} />
+                {item.label}
+              </span>
             </NavLink>
           ))}
 
@@ -142,7 +193,10 @@ export function AdminLayout() {
               aria-expanded={courseDashOpen}
               onClick={() => setCourseDashOpen((open) => !open)}
             >
-              <span>Course dashboard</span>
+              <span className="admin-nav__link-label">
+                <NavIcon name="course" />
+                Course dashboard
+              </span>
               <span className="admin-nav__chevron" aria-hidden>
                 ▾
               </span>
@@ -171,7 +225,10 @@ export function AdminLayout() {
               aria-expanded={ordersOpen}
               onClick={() => setOrdersOpen((open) => !open)}
             >
-              <span>Orders</span>
+              <span className="admin-nav__link-label">
+                <NavIcon name="orders" />
+                Orders
+              </span>
               <span className="admin-nav__chevron" aria-hidden>
                 ▾
               </span>
@@ -200,7 +257,10 @@ export function AdminLayout() {
               aria-expanded={bookingsOpen}
               onClick={() => setBookingsOpen((open) => !open)}
             >
-              <span>Bookings</span>
+              <span className="admin-nav__link-label">
+                <NavIcon name="calendar" />
+                Bookings
+              </span>
               <span className="admin-nav__chevron" aria-hidden>
                 ▾
               </span>
@@ -232,6 +292,7 @@ export function AdminLayout() {
               }
             >
               <span className="admin-nav__link-label">
+                <NavIcon name={item.icon} />
                 {item.label}
                 {item.to === '/support' && supportUnread > 0 ? (
                   <span className="admin-nav__badge" aria-label={`${supportUnread} unread`}>
@@ -249,20 +310,34 @@ export function AdminLayout() {
                 `admin-nav__link${isActive ? ' admin-nav__link--active' : ''}`
               }
             >
-              Team users
+              <span className="admin-nav__link-label">
+                <NavIcon name="team" />
+                Team users
+              </span>
             </NavLink>
           ) : null}
 
+          {DISABLED_NAV.length > 0 ? <div className="admin-nav__section">Coming soon</div> : null}
           {DISABLED_NAV.map((label) => (
             <span key={label} className="admin-nav__link admin-nav__link--disabled">
-              {label}
+              <span className="admin-nav__link-label">
+                <NavIcon name="lock" />
+                {label}
+              </span>
             </span>
           ))}
         </nav>
 
         <div className="admin-sidebar__user">
-          <div className="admin-sidebar__user-name">{user?.name ?? 'Admin'}</div>
-          <div className="admin-sidebar__user-role">{roleLabel}</div>
+          <div className="admin-sidebar__user-row">
+            <span className="admin-sidebar__avatar" aria-hidden>
+              {(user?.name ?? 'Admin').trim().charAt(0).toUpperCase() || 'A'}
+            </span>
+            <div className="admin-sidebar__user-copy">
+              <div className="admin-sidebar__user-name">{user?.name ?? 'Admin'}</div>
+              <div className="admin-sidebar__user-role">{roleLabel}</div>
+            </div>
+          </div>
           <NavLink
             to="/account"
             className={({ isActive }) =>
@@ -278,11 +353,13 @@ export function AdminLayout() {
       </aside>
 
       <div className="admin-main">
-        <header className="admin-header">
-          <div className="admin-header__search">
-            <GlobalSearch />
-          </div>
-        </header>
+        {hideSearchHeader ? null : (
+          <header className="admin-header">
+            <div className="admin-header__search">
+              <GlobalSearch />
+            </div>
+          </header>
+        )}
         <main className="admin-content">
           <Outlet />
         </main>

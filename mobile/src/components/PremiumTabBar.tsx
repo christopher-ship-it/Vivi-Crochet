@@ -154,15 +154,11 @@ function OffersTabLabel({
   grabLabel,
   animate,
   fontFamily,
-  fontSize,
-  lineHeight,
 }: {
   offersLabel: string;
   grabLabel: string;
   animate: boolean;
   fontFamily: string;
-  fontSize: number;
-  lineHeight: number;
 }) {
   const phase = useRef(new Animated.Value(0)).current;
 
@@ -217,15 +213,11 @@ function OffersTabLabel({
           styles.labelOffers,
           {
             fontFamily,
-            fontSize,
-            lineHeight,
             opacity: offersOpacity,
             transform: [{ translateY: 2 }],
           },
         ]}
         numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.75}
       >
         {offersLabel}
       </Animated.Text>
@@ -244,7 +236,7 @@ function OffersTabLabel({
             style={styles.grabNowText}
             numberOfLines={1}
             adjustsFontSizeToFit
-            minimumFontScale={0.65}
+            minimumFontScale={0.72}
           >
             {grabLabel}
           </Text>
@@ -427,8 +419,6 @@ export function PremiumTabBar({ state, descriptors, navigation }: PremiumTabBarP
                   grabLabel={t('tabs.grabNow')}
                   animate={!focused}
                   fontFamily={fontsUi.extraBold}
-                  fontSize={compactLabels ? 9 : 11}
-                  lineHeight={compactLabels ? 12 : 14}
                 />
               ) : (
                 <Text
@@ -580,12 +570,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
     backgroundColor: colors.white,
-    shadowColor: colors.ink,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 8,
-    overflow: 'hidden',
+    /* Two soft layers: a faint contact edge + a wide, diffused lift. */
+    boxShadow: '0px 1px 2px rgba(34, 26, 30, 0.06), 0px 14px 28px -10px rgba(34, 26, 30, 0.22)',
   },
   tab: {
     flex: 1,
@@ -638,15 +624,18 @@ const styles = StyleSheet.create({
   },
   offersLabelSlot: {
     marginTop: 2,
-    height: 14,
+    height: 16,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  /** Match grabNowText so Offers ↔ Grab now read at the same size. */
   offersLabelText: {
+    fontSize: 9,
+    lineHeight: 11,
     letterSpacing: 0,
     textAlign: 'center',
-    paddingHorizontal: 1,
+    paddingHorizontal: 0,
     width: '100%',
     includeFontPadding: false,
   },
@@ -654,21 +643,22 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   grabNowChip: {
     backgroundColor: colors.yellow,
     borderRadius: 4,
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     paddingVertical: 1,
+    alignSelf: 'center',
     maxWidth: '100%',
   },
   grabNowText: {
     fontFamily: fonts.extraBold,
-    fontSize: 8,
-    lineHeight: 10,
-    letterSpacing: 0.2,
+    fontSize: 9,
+    lineHeight: 11,
+    letterSpacing: 0,
     textAlign: 'center',
-    textTransform: 'uppercase',
     color: colors.ink,
     includeFontPadding: false,
   },

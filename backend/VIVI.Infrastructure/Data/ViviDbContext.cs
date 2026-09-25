@@ -63,7 +63,7 @@ public sealed class ViviDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
             entity.Property(x => x.Type).HasConversion<int>().IsRequired();
-            entity.Property(x => x.Level).HasMaxLength(80);
+            entity.Property(x => x.Level).HasMaxLength(160);
             entity.Property(x => x.Description).HasMaxLength(400);
             entity.Property(x => x.About).HasMaxLength(2000);
             entity.Property(x => x.Languages).HasMaxLength(200);

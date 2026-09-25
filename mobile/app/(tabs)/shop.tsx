@@ -1,12 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -44,9 +43,10 @@ type ShopRoom = 'handmade' | 'essentials';
 const WISHLIST_FILTER = 'Wishlist';
 
 /** Designed Crochet Essentials category collage (1536×1024). */
-const ESSENTIALS_HERO = require('../../assets/crochet-essentials.png');
+/** Compressed app copies of assets/crochet-essentials.png and assets/shophandmade.png. */
+const ESSENTIALS_HERO = require('../../assets/shop-essentials-app.jpg');
 /** Designed Handmade Collection collage (1536×1024). */
-const HANDMADE_HERO = require('../../assets/shophandmade.png');
+const HANDMADE_HERO = require('../../assets/shop-handmade-app.png');
 
 function parseShopRoom(raw: string | string[] | undefined): ShopRoom | null {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -322,8 +322,7 @@ export default function ShopScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.chooserEyebrow}>{t('shop.title').toUpperCase()}</Text>
-              <Text style={styles.chooserTagline}>{t('shop.heroSubtitle')}</Text>
+              <Text style={styles.chooserEyebrow}>{t('shop.heroSubtitle').toUpperCase()}</Text>
               <Text style={styles.chooserTitle}>{t('shop.chooseRoomTitle')}</Text>
             </>
           )}
@@ -429,98 +428,100 @@ export default function ShopScreen() {
           contentContainerStyle={[styles.chooser, { paddingBottom: dockClearance + 28 }]}
           showsVerticalScrollIndicator={false}
         >
-          {(() => {
-            const handmadeBody = (
-              <>
-                <View style={[styles.roomImageWrap, styles.handmadeImageWrap]}>
-                  <Image
-                    source={HANDMADE_HERO}
-                    style={styles.roomImage}
-                    resizeMode="cover"
-                    accessibilityLabel={t('shop.roomHandmadeTitle')}
-                  />
-                </View>
-                <View style={styles.roomBody}>
-                  <Text style={styles.roomTitle}>{t('shop.roomHandmadeTitle')}</Text>
-                  <Text style={styles.roomSubtitle}>{t('shop.roomHandmadeSubtitle')}</Text>
-                  <Text style={styles.roomExamples}>{t('shop.roomHandmadeExamples')}</Text>
-                  <Text style={[styles.roomCta, styles.roomCtaHandmade]}>
-                    {t('shop.roomHandmadeCta').toUpperCase()} →
+          <View style={styles.roomRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.roomTile,
+                styles.roomTileHandmade,
+                pressed && styles.roomCardPressed,
+              ]}
+              onPress={() => enterRoom('handmade')}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('shop.roomHandmadeTitle')}. ${t('shop.roomHandmadeSubtitle')}`}
+            >
+              <Image
+                source={HANDMADE_HERO}
+                style={styles.roomTilePhoto}
+                resizeMode="cover"
+                accessibilityIgnoresInvertColors
+              />
+              <LinearGradient
+                colors={['rgba(114, 36, 62, 0)', 'rgba(114, 36, 62, 0.88)']}
+                style={styles.roomTileScrim}
+                pointerEvents="none"
+              />
+              <View style={styles.roomTileBody}>
+                <Text style={styles.roomTileTitle} numberOfLines={2}>
+                  {t('shop.roomHandmadeTitle')}
+                </Text>
+                <Text style={styles.roomTileExamples} numberOfLines={2}>
+                  {t('shop.roomHandmadeExamples')}
+                </Text>
+                <View style={styles.roomTileCta}>
+                  <Text style={[styles.roomTileCtaText, styles.roomCtaHandmade]} numberOfLines={1}>
+                    {t('shop.roomHandmadeCta')}
                   </Text>
+                  <Ionicons name="arrow-forward" size={12} color={colors.pinkDark} />
                 </View>
-              </>
-            );
-            const essentialsBody = (
-              <>
-                <View style={[styles.roomImageWrap, styles.essentialsImageWrap]}>
-                  <Image
-                    source={ESSENTIALS_HERO}
-                    style={styles.roomImage}
-                    resizeMode="cover"
-                    accessibilityLabel={t('shop.roomEssentialsTitle')}
-                  />
-                </View>
-                <View style={styles.roomBody}>
-                  <Text style={styles.roomTitle}>{t('shop.roomEssentialsTitle')}</Text>
-                  <Text style={styles.roomSubtitle}>{t('shop.roomEssentialsSubtitle')}</Text>
-                  <Text style={styles.roomExamples}>{t('shop.roomEssentialsExamples')}</Text>
-                  <View style={styles.roomDeliveryBadge}>
-                    <Text style={styles.roomDeliveryBadgeText}>
-                      {t('shop.roomEssentialsDelivery')}
-                    </Text>
-                  </View>
-                  <Text style={[styles.roomCta, styles.roomCtaEssentials]}>
-                    {t('shop.roomEssentialsCta').toUpperCase()} →
-                  </Text>
-                </View>
-              </>
-            );
-            return (
-              <>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.roomCardShell,
-                    styles.roomCardShellHandmade,
-                    pressed && styles.roomCardPressed,
-                  ]}
-                  onPress={() => enterRoom('handmade')}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('shop.roomHandmadeTitle')}
-                >
-                  {Platform.OS === 'ios' ? (
-                    <BlurView intensity={34} tint="light" style={styles.roomCard}>
-                      {handmadeBody}
-                    </BlurView>
-                  ) : (
-                    <View style={[styles.roomCard, styles.roomCardAndroidHandmade]}>
-                      {handmadeBody}
-                    </View>
-                  )}
-                </Pressable>
+              </View>
+            </Pressable>
 
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.roomCardShell,
-                    styles.roomCardShellEssentials,
-                    pressed && styles.roomCardPressed,
-                  ]}
-                  onPress={() => enterRoom('essentials')}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('shop.roomEssentialsTitle')}
-                >
-                  {Platform.OS === 'ios' ? (
-                    <BlurView intensity={34} tint="light" style={styles.roomCard}>
-                      {essentialsBody}
-                    </BlurView>
-                  ) : (
-                    <View style={[styles.roomCard, styles.roomCardAndroidEssentials]}>
-                      {essentialsBody}
-                    </View>
-                  )}
-                </Pressable>
-              </>
-            );
-          })()}
+            <Pressable
+              style={({ pressed }) => [
+                styles.roomTile,
+                styles.roomTileEssentials,
+                pressed && styles.roomCardPressed,
+              ]}
+              onPress={() => enterRoom('essentials')}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}. ${t('shop.roomEssentialsDelivery')}`}
+            >
+              <Image
+                source={ESSENTIALS_HERO}
+                style={styles.roomTilePhoto}
+                resizeMode="cover"
+                accessibilityIgnoresInvertColors
+              />
+              <LinearGradient
+                colors={['rgba(74, 46, 37, 0)', 'rgba(74, 46, 37, 0.9)']}
+                style={styles.roomTileScrim}
+                pointerEvents="none"
+              />
+              <View style={styles.roomDeliveryBadge}>
+                <Ionicons name="car-outline" size={11} color={colors.success} />
+                <Text style={styles.roomDeliveryBadgeText} numberOfLines={2}>
+                  {t('shop.roomEssentialsDelivery')}
+                </Text>
+              </View>
+              <View style={styles.roomTileBody}>
+                <Text style={styles.roomTileTitle} numberOfLines={2}>
+                  {t('shop.roomEssentialsTitle')}
+                </Text>
+                <Text style={styles.roomTileExamples} numberOfLines={2}>
+                  {t('shop.roomEssentialsExamples')}
+                </Text>
+                <View style={styles.roomTileCta}>
+                  <Text style={[styles.roomTileCtaText, styles.roomCtaEssentials]} numberOfLines={1}>
+                    {t('shop.roomEssentialsCta')}
+                  </Text>
+                  <Ionicons name="arrow-forward" size={12} color="#6e5336" />
+                </View>
+              </View>
+            </Pressable>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.quickLink, pressed && styles.roomCardPressed]}
+            onPress={() => setTab('orders')}
+            accessibilityRole="button"
+            accessibilityLabel={t('shop.myOrders')}
+          >
+            <View style={styles.quickLinkIcon}>
+              <Ionicons name="cube-outline" size={18} color={colors.pink} />
+            </View>
+            <Text style={styles.quickLinkText}>{t('shop.myOrders')}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+          </Pressable>
         </ScrollView>
       ) : tab === 'products' ? (
         loading && !refreshing ? (
@@ -786,121 +787,138 @@ function createStyles(fonts: UiFonts) {
     },
     chooser: {
       paddingHorizontal: spacing.md,
-      paddingTop: spacing.sm,
-      gap: spacing.md,
+      paddingTop: spacing.md,
+      gap: 12,
     },
     chooserEyebrow: {
       fontFamily: fonts.semiBold,
       fontSize: 11,
-      letterSpacing: 2,
-      color: colors.pink,
+      letterSpacing: 1.6,
+      color: colors.pinkDark,
       marginBottom: 2,
     },
-    chooserTagline: {
+    chooserTitle: {
       fontFamily: fonts.heading,
-      fontSize: 26,
-      lineHeight: 30,
+      fontSize: 24,
+      lineHeight: 29,
       color: colors.ink,
     },
-    chooserTitle: {
+    roomRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    roomTile: {
+      flex: 1,
+      aspectRatio: 0.52,
+      borderRadius: 22,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.7)',
+      justifyContent: 'flex-end',
+    },
+    roomTileHandmade: {
+      backgroundColor: '#ffc7d8',
+    },
+    roomTileEssentials: {
+      backgroundColor: '#efe2d3',
+    },
+    /* Bundled images default to their pixel size, so size them to the card explicitly. */
+    roomTilePhoto: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+    },
+    roomTileScrim: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: '62%',
+    },
+    roomTileBody: {
+      padding: 12,
+      gap: 3,
+    },
+    roomTileTitle: {
+      fontFamily: fonts.extraBold,
+      fontSize: 16,
+      lineHeight: 20,
+      color: colors.white,
+    },
+    roomTileExamples: {
       fontFamily: fonts.regular,
+      fontSize: 11,
+      lineHeight: 15,
+      color: 'rgba(255, 255, 255, 0.9)',
+    },
+    roomTileCta: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginTop: 8,
+      paddingHorizontal: 11,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: colors.white,
+      maxWidth: '100%',
+    },
+    roomTileCtaText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 11,
+      flexShrink: 1,
+    },
+    quickLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 16,
+      backgroundColor: 'rgba(255, 255, 255, 0.62)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.85)',
+    },
+    quickLinkIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: colors.pinkSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickLinkText: {
+      flex: 1,
+      fontFamily: fonts.semiBold,
       fontSize: 14,
-      lineHeight: 19,
-      color: colors.muted,
-      marginTop: 2,
-    },
-    roomCardShell: {
-      borderRadius: radii.lg,
-      overflow: 'hidden',
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(255, 255, 255, 0.62)',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.14,
-      shadowRadius: 18,
-      elevation: 4,
-    },
-    roomCardShellHandmade: {
-      shadowColor: colors.pink,
-    },
-    roomCardShellEssentials: {
-      shadowColor: '#8a6a45',
-    },
-    roomCard: {
-      backgroundColor: 'rgba(255, 255, 255, 0.28)',
-      overflow: 'hidden',
-    },
-    roomCardAndroidHandmade: {
-      backgroundColor: 'rgba(255, 236, 242, 0.88)',
-    },
-    roomCardAndroidEssentials: {
-      backgroundColor: 'rgba(255, 246, 236, 0.88)',
+      color: colors.ink,
     },
     roomCardPressed: {
       opacity: 0.94,
       transform: [{ scale: 0.985 }],
     },
-    roomImageWrap: {
-      width: '100%',
-      aspectRatio: 3,
-      backgroundColor: 'rgba(239, 232, 228, 0.55)',
-    },
-    handmadeImageWrap: {
-      aspectRatio: 2.85,
-      backgroundColor: 'rgba(247, 208, 221, 0.55)',
-    },
-    essentialsImageWrap: {
-      aspectRatio: 2.85,
-      backgroundColor: 'rgba(229, 216, 200, 0.55)',
-    },
-    roomImage: {
-      width: '100%',
-      height: '100%',
-    },
-    roomBody: {
-      paddingHorizontal: 12,
-      paddingTop: 10,
-      paddingBottom: 12,
-      gap: 2,
-    },
-    roomTitle: {
-      fontFamily: fonts.extraBold,
-      fontSize: 14,
-      letterSpacing: 0.2,
-      color: colors.ink,
-    },
-    roomSubtitle: {
-      fontFamily: fonts.regular,
-      fontSize: 11,
-      lineHeight: 15,
-      color: colors.muted,
-    },
-    roomExamples: {
-      fontFamily: fonts.regular,
-      fontSize: 10,
-      lineHeight: 13,
-      color: colors.muted,
-    },
     roomDeliveryBadge: {
+      position: 'absolute',
+      top: 10,
+      left: 10,
+      right: 10,
       alignSelf: 'flex-start',
-      marginTop: 5,
-      paddingHorizontal: 9,
-      paddingVertical: 4,
-      borderRadius: 7,
-      backgroundColor: 'rgba(240, 197, 106, 0.92)',
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(255, 255, 255, 0.55)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255, 255, 255, 0.92)',
     },
     roomDeliveryBadgeText: {
+      flexShrink: 1,
       fontFamily: fonts.extraBold,
       fontSize: 10,
-      letterSpacing: 0.2,
-      color: '#3d2a0a',
-    },
-    roomCta: {
-      fontFamily: fonts.extraBold,
-      fontSize: 10,
-      letterSpacing: 1,
-      marginTop: 6,
+      lineHeight: 13,
+      color: colors.success,
     },
     roomCtaHandmade: {
       color: colors.pinkDark,

@@ -47,7 +47,6 @@ import type { Course, CourseLesson } from '../../src/types';
 import { colors, fonts, radii, shadows, spacing } from '../../src/theme';
 import {
   COURSE_TYPE_LABELS,
-  formatAccessDays,
   formatCourseMeta,
   formatDuration,
   formatInr,
@@ -417,8 +416,12 @@ export default function CourseDetailScreen() {
   const isRenewalOffer = Boolean(pricing?.isRenewalOffer);
   const renewalPercent = pricing?.renewalPercentage ?? course.renewalPercentage ?? 50;
   const showPurchaseFooter = (!hasAccess || isRenewalOffer) && !(isBundle && collectionOwned && !isRenewalOffer);
-  const accessLabel = formatAccessDays(pricing?.accessDays ?? course.accessDays).toLowerCase();
+  // Prefer admin "What you get" (About), then Description, then catalog package copy.
   const packageWhatYouGetKey = getMainCourseWhatYouGetKey(course);
+  const whatYouGetLine =
+    course.about?.trim() ||
+    course.description?.trim() ||
+    (packageWhatYouGetKey ? t(packageWhatYouGetKey) : null);
   const payButtonLabel = purchasing
     ? 'Starting checkout…'
     : isRenewalOffer
@@ -548,7 +551,15 @@ export default function CourseDetailScreen() {
                 <View style={styles.hero}>
                   <Text style={styles.type}>{COURSE_TYPE_LABELS[course.type] ?? course.type}</Text>
                   <Text style={styles.title}>{course.name}</Text>
-                  <Text style={styles.meta}>{formatCourseMeta(course)}</Text>
+                  {course.level?.trim() ? (
+                    <Text style={styles.level}>{course.level.trim()}</Text>
+                  ) : null}
+                  <Text style={styles.meta}>
+                    {formatCourseMeta({
+                      videoCount: course.videoCount,
+                      accessDays: pricing?.accessDays ?? course.accessDays,
+                    })}
+                  </Text>
                   <View style={styles.priceRow}>
                     <Text style={styles.price}>{formatInr(displayPrice)}</Text>
                     {displayMrp && displayMrp > displayPrice && (
@@ -586,17 +597,10 @@ export default function CourseDetailScreen() {
 
               <View style={styles.block}>
                 <Text style={styles.blockTitle}>{t('learn.whatYouGet')}</Text>
-                {packageWhatYouGetKey ? (
-                  <>
-                    <Text style={styles.body}>{t(packageWhatYouGetKey)}</Text>
-                    <Text style={[styles.body, styles.whatYouGetAccess]}>
-                      {t('learn.whatYouGetAccess', { access: accessLabel })}
-                    </Text>
-                  </>
+                {whatYouGetLine ? (
+                  <Text style={styles.body}>{whatYouGetLine}</Text>
                 ) : (
-                  <Text style={styles.body}>
-                    {t('learn.whatYouGetBody', { access: accessLabel })}
-                  </Text>
+                  <Text style={styles.body}>{t('learn.whatYouGetFallback')}</Text>
                 )}
               </View>
 
@@ -909,9 +913,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.ink,
     lineHeight: 20,
-  },
-  whatYouGetAccess: {
-    marginTop: 6,
   },
   lesson: {
     flexDirection: 'row',

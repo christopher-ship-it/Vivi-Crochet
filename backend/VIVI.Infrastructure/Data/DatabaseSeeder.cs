@@ -254,7 +254,7 @@ public sealed class DatabaseSeeder
             Catalog.FoundationId,
             "Foundation Stitches",
             "7 guided lessons + 5 mini cute projects.",
-            "Beginner",
+            "Beginner Level - From First Hook Hold to Creating Your First Crochet Projects",
             299,
             null,
             30,
@@ -353,8 +353,12 @@ public sealed class DatabaseSeeder
         }
 
         existing.Name = name;
-        existing.About = about;
-        existing.Level = level;
+        // Preserve admin-edited marketing copy; only fill blanks from the catalog seed.
+        // Also upgrade the original short Foundation level so the longer tagline lands once.
+        if (string.IsNullOrWhiteSpace(existing.About))
+            existing.About = about;
+        if (string.IsNullOrWhiteSpace(existing.Level) || existing.Level.Trim() == "Beginner")
+            existing.Level = level;
         existing.Price = price;
         existing.Mrp = mrp;
         existing.AccessDays = accessDays;

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiClientError } from '../api/client';
 import { broadcastPush, getPushReach, sendWeeklyPushNow } from '../api/push';
+import { confirmDialog } from '../components/AppDialog';
 
 const SCREENS = [
   { value: '/(tabs)/shop', label: 'Shop' },
   { value: '/(tabs)/learn', label: 'Learn & Loop' },
   { value: '/(tabs)/live', label: 'Live classes' },
   { value: '/(tabs)/profile', label: 'Profile' },
-  { value: '/(tabs)', label: 'Home' },
+  { value: '/(tabs)/index', label: 'Home' },
 ];
 
 export function NotificationsPage() {
@@ -63,7 +64,7 @@ export function NotificationsPage() {
 
   async function handleWeekly() {
     if (
-      !window.confirm(
+      !await confirmDialog(
         'Send the weekly product + course + live digests now to all eligible customers?',
       )
     ) {
@@ -109,23 +110,23 @@ export function NotificationsPage() {
         </div>
       ) : null}
       {info ? (
-        <div className="empty-state" style={{ marginBottom: 16, textAlign: 'left' }}>
+        <div className="alert alert--info alert--spaced">
           <p>{info}</p>
         </div>
       ) : null}
 
-      <section className="card" style={{ marginBottom: 24, padding: 20 }}>
-        <h2 style={{ margin: '0 0 8px', fontSize: 16 }}>Reach</h2>
-        <p style={{ margin: 0, color: 'var(--muted, #6b5f64)' }}>
+      <section className="card">
+        <h2 className="card__title" style={{ marginBottom: 6 }}>Reach</h2>
+        <p className="card__subtitle">
           {loadingReach
             ? 'Loading…'
             : `${customers} customer${customers === 1 ? '' : 's'} · ${devices} active device${devices === 1 ? '' : 's'}`}
         </p>
       </section>
 
-      <section className="card" style={{ marginBottom: 24, padding: 20 }}>
-        <h2 style={{ margin: '0 0 16px', fontSize: 16 }}>Broadcast</h2>
-        <form onSubmit={(e) => void handleBroadcast(e)} className="form">
+      <section className="card">
+        <h2 className="card__title" style={{ marginBottom: 16 }}>Broadcast</h2>
+        <form onSubmit={(e) => void handleBroadcast(e)} className="form-stack">
           <div className="form-field">
             <label htmlFor="push-title">Title</label>
             <input
@@ -165,9 +166,9 @@ export function NotificationsPage() {
         </form>
       </section>
 
-      <section className="card" style={{ padding: 20 }}>
-        <h2 style={{ margin: '0 0 8px', fontSize: 16 }}>Weekly digest</h2>
-        <p style={{ margin: '0 0 16px', color: 'var(--muted, #6b5f64)' }}>
+      <section className="card">
+        <h2 className="card__title" style={{ marginBottom: 6 }}>Weekly digest</h2>
+        <p className="card__subtitle" style={{ marginBottom: 16 }}>
           Sends the three weekly messages (product, course, live) to customers who have not received them in the last 7
           days.
         </p>

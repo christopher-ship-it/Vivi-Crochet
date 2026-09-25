@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -302,15 +302,67 @@ export default function CheckoutScreen() {
     router.replace('/cart');
   }, [router]);
 
+  const hasEnteredAddressDetails =
+    address1.trim().length > 0
+    || address2.trim().length > 0
+    || landmark.trim().length > 0
+    || city.trim().length > 0
+    || state.trim().length > 0
+    || pinCode.trim().length > 0;
+
+  const allowLeaveRef = useRef(false);
+  const navigation = useNavigation();
+
+  const requestLeaveCheckout = useCallback(() => {
+    if (allowLeaveRef.current || !hasEnteredAddressDetails) {
+      allowLeaveRef.current = true;
+      leaveCheckout();
+      return;
+    }
+
+    Alert.alert(t('checkout.leaveTitle'), t('checkout.leaveBody'), [
+      { text: t('checkout.leaveStay'), style: 'cancel' },
+      {
+        text: t('checkout.leaveConfirm'),
+        style: 'destructive',
+        onPress: () => {
+          allowLeaveRef.current = true;
+          leaveCheckout();
+        },
+      },
+    ]);
+  }, [hasEnteredAddressDetails, leaveCheckout, t]);
+
   useFocusEffect(
     useCallback(() => {
       const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-        leaveCheckout();
+        requestLeaveCheckout();
         return true;
       });
       return () => sub.remove();
-    }, [leaveCheckout]),
+    }, [requestLeaveCheckout]),
   );
+
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (event) => {
+      if (allowLeaveRef.current || !hasEnteredAddressDetails) {
+        return;
+      }
+      event.preventDefault();
+      Alert.alert(t('checkout.leaveTitle'), t('checkout.leaveBody'), [
+        { text: t('checkout.leaveStay'), style: 'cancel' },
+        {
+          text: t('checkout.leaveConfirm'),
+          style: 'destructive',
+          onPress: () => {
+            allowLeaveRef.current = true;
+            navigation.dispatch(event.data.action);
+          },
+        },
+      ]);
+    });
+    return unsub;
+  }, [navigation, hasEnteredAddressDetails, t]);
 
   useEffect(() => {
     const accountName = realCustomerName(learningProfile?.fullName, user?.name);
@@ -813,7 +865,7 @@ export default function CheckoutScreen() {
           title: t('headers.checkout'),
           headerLeft: () => (
             <View style={{ marginLeft: 4 }}>
-              <BackButton fallbackHref="/cart" onPress={leaveCheckout} />
+              <BackButton fallbackHref="/cart" onPress={requestLeaveCheckout} />
             </View>
           ),
         }}

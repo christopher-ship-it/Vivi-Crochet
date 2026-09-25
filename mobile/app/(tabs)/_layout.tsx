@@ -5,12 +5,23 @@ import { useI18n } from '../../src/i18n';
 import { uiFonts } from '../../src/i18n/uiFonts';
 import { colors } from '../../src/theme';
 
+/**
+ * Offers is declared first so it stays leftmost in the dock, but Home (`index`)
+ * must be the deep-link / `/(tabs)` target — otherwise Expo Router opens Offers
+ * (or can show Unmatched Route for `/(tabs)/index`).
+ */
+export const unstable_settings = {
+  initialRouteName: 'index',
+};
+
 export default function TabLayout() {
   const { t, language } = useI18n();
   const fonts = uiFonts(language);
 
   return (
     <Tabs
+      initialRouteName="index"
+      backBehavior="initialRoute"
       tabBar={(props) => (
         <PremiumTabBar
           state={props.state}

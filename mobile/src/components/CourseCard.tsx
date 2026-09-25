@@ -66,7 +66,7 @@ export function CourseCard({
       ? t('learn.lessonOne')
       : t('learn.lessonsCount', { count: course.videoCount });
   const editorialMeta = formatEditorialMeta(course, lessonLabel);
-  const blurb = course.about?.trim();
+  const blurb = course.about?.trim() || course.description?.trim();
   const showProgress = hasAccess && progressPct != null && progressPct > 0;
   const accessLabel = formatAccessDays(course.accessDays);
 
@@ -395,12 +395,12 @@ function createStyles(fonts: UiFonts) {
     },
     railMedia: {
       width: RAIL_IMAGE_SIZE,
-      height: Math.round(RAIL_IMAGE_SIZE * 0.92),
+      height: Math.round(RAIL_IMAGE_SIZE * 0.72),
       backgroundColor: colors.mediaWash,
     },
     railImage: {
       width: RAIL_IMAGE_SIZE,
-      height: Math.round(RAIL_IMAGE_SIZE * 0.92),
+      height: Math.round(RAIL_IMAGE_SIZE * 0.72),
     },
     railFallback: {
       flex: 1,

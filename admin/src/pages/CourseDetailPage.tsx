@@ -28,6 +28,7 @@ import {
   formatInr,
   readVideoUrlDurationSeconds,
 } from '../utils/format';
+import { confirmDialog, alertDialog } from '../components/AppDialog';
 
 type Tab = 'lessons' | 'info';
 
@@ -112,7 +113,7 @@ export function CourseDetailPage() {
       (v) => v.uploadConfirmed && (v.durationSeconds == null || v.durationSeconds <= 0),
     );
     if (missing.length === 0) {
-      alert('All uploaded lessons already have a duration.');
+      void alertDialog('All uploaded lessons already have a duration.');
       return;
     }
 
@@ -131,7 +132,7 @@ export function CourseDetailPage() {
           // Continue with remaining lessons.
         }
       }
-      alert(
+      void alertDialog(
         filled > 0
           ? `Filled duration for ${filled} lesson${filled === 1 ? '' : 's'}.`
           : 'Could not read duration from the video files. Try opening a lesson in the app once, or enter mm:ss manually.',
@@ -171,7 +172,7 @@ export function CourseDetailPage() {
       const updated = await publishCourse(course.id);
       setCourse(updated);
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Publish failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Publish failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
@@ -184,7 +185,7 @@ export function CourseDetailPage() {
       const updated = await unpublishCourse(course.id);
       setCourse(updated);
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Unpublish failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Unpublish failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
@@ -192,7 +193,7 @@ export function CourseDetailPage() {
 
   async function handleVideoPublish(video: Video) {
     if (!canPublishVideo(video)) {
-      alert(
+      void alertDialog(
         video.transcodeStatus === 'Failed'
           ? 'Compress failed. Use Retry compress, then publish.'
           : 'Wait until “Compressing for mobile…” finishes before publishing.',
@@ -204,7 +205,7 @@ export function CourseDetailPage() {
       const updated = await publishVideo(video.id);
       setVideos((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Publish failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Publish failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
@@ -216,7 +217,7 @@ export function CourseDetailPage() {
       const updated = await requeueVideoTranscode(video.id);
       setVideos((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Could not queue compress.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Could not queue compress.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
@@ -225,11 +226,11 @@ export function CourseDetailPage() {
   async function handleRecompressAll() {
     const targets = videos.filter(needsRecompress);
     if (targets.length === 0) {
-      alert('No lessons need mobile compress right now.');
+      void alertDialog('No lessons need mobile compress right now.');
       return;
     }
     if (
-      !window.confirm(
+      !await confirmDialog(
         `Queue H.264 compress for ${targets.length} lesson${targets.length === 1 ? '' : 's'}? Originals are kept.`,
       )
     ) {
@@ -247,7 +248,7 @@ export function CourseDetailPage() {
           // Continue with remaining lessons.
         }
       }
-      alert(
+      void alertDialog(
         queued > 0
           ? `Queued ${queued} lesson${queued === 1 ? '' : 's'} for mobile compress.`
           : 'Could not queue compress for any lesson.',
@@ -263,14 +264,14 @@ export function CourseDetailPage() {
       const updated = await unpublishVideo(video.id);
       setVideos((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Unpublish failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Unpublish failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
   }
 
   async function handleVideoDelete(video: Video) {
-    if (!window.confirm(`Delete "${video.title}"? Remaining lessons keep their order.`)) return;
+    if (!await confirmDialog(`Delete "${video.title}"? Remaining lessons keep their order.`)) return;
     setActionId(video.id);
     try {
       await deleteVideo(video.id);
@@ -280,7 +281,7 @@ export function CourseDetailPage() {
         err instanceof ApiClientError
           ? `${err.message}${err.code ? ` (${err.code})` : ''}`
           : 'Delete failed.';
-      alert(message);
+      void alertDialog(message, { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
@@ -317,7 +318,7 @@ export function CourseDetailPage() {
         return next.sort((x, y) => x.sortOrder - y.sortOrder);
       });
     } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : 'Reorder failed.');
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Reorder failed.', { title: 'Something went wrong' });
     } finally {
       setActionId(null);
     }
@@ -424,10 +425,8 @@ export function CourseDetailPage() {
             <dd>{course.renewalPercentage}%</dd>
             <dt>Languages</dt>
             <dd>{course.languages || '—'}</dd>
-            <dt>Slide description</dt>
-            <dd className="dd--block">{course.description || '—'}</dd>
-            <dt>About</dt>
-            <dd className="dd--block">{course.about || '—'}</dd>
+            <dt>What you get</dt>
+            <dd className="dd--block">{course.about || course.description || '—'}</dd>
             {course.type === 'Bundle' && (
               <>
                 <dt>Included courses</dt>

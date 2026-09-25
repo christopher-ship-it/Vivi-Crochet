@@ -2,9 +2,21 @@
   --vivi-pink: #e8215b;
   --vivi-pink-dark: #c91a4d;
   --vivi-pink-light: #fdecf1;
+  --vivi-pink-soft: #fff4f7;
   --vivi-ink: #221a1e;
-  --vivi-cream: #fefbfa;
-  --vivi-canvas: #f8f5f6;
+  --vivi-cream: #faf7f8;
+  --vivi-canvas: #f5f1f2;
+  --vivi-surface: #ffffff;
+  --vivi-placeholder: #a3979c;
+  --vivi-success-bg: #ecf8f1;
+  --vivi-success-border: #bfe3cd;
+  --vivi-danger-bg: #fef3f2;
+  --vivi-danger-border: #f3c7c2;
+  --vivi-warning-bg: #fff8e6;
+  --vivi-warning-border: #f3e2ad;
+  --vivi-info-bg: #fff4f7;
+  --vivi-info-border: #f6d3de;
+  --focus-ring: 0 0 0 4px rgba(232, 33, 91, 0.14);
   --vivi-rail: #191315;
   --vivi-rail-text: #f6eef1;
   --vivi-muted: #6b5f64;
@@ -38,7 +50,7 @@
   --text-label: 11.5px;
   --btn-height: 40px;
   --btn-height-sm: 32px;
-  --field-height: 32px;
+  --field-height: 40px;
   --radius-sm: 8px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -119,6 +131,86 @@ p {
 :focus-visible {
   outline: 2px solid var(--vivi-pink);
   outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(232, 33, 91, 0.18);
+}
+
+/* —— Base fields: applies to every input across the console. `:where` keeps
+   specificity at zero so component classes can still override. —— */
+:where(
+    input:not([type='checkbox'], [type='radio'], [type='file'], [type='range'], [type='hidden'], [type='color']),
+    select,
+    textarea
+  ) {
+  min-height: var(--field-height);
+  padding: 8px 12px;
+  border: 1px solid var(--vivi-border-soft);
+  border-radius: var(--radius-md);
+  background-color: var(--vivi-surface);
+  color: var(--vivi-ink);
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(34, 20, 26, 0.04);
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease),
+    background-color 0.15s var(--ease);
+}
+
+:where(input, textarea)::placeholder {
+  color: var(--vivi-placeholder);
+  font-weight: 400;
+}
+
+:where(input, select, textarea):where(:hover:not(:disabled, :focus)) {
+  border-color: #d9c7cd;
+}
+
+:where(input, select, textarea):where(:focus) {
+  outline: none;
+  border-color: var(--vivi-pink);
+  box-shadow: var(--focus-ring);
+}
+
+:where(input, select, textarea):where(:user-invalid) {
+  border-color: var(--vivi-danger);
+}
+
+:where(input, select, textarea):where(:disabled) {
+  background-color: var(--vivi-canvas);
+  color: var(--vivi-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+:where(select) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236b5f64' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 10px 6px;
+  cursor: pointer;
+}
+
+:where(textarea) {
+  resize: vertical;
+  line-height: 1.55;
+}
+
+:where(input[type='checkbox'], input[type='radio']) {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--vivi-pink);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+:where(input[type='number']) {
+  font-variant-numeric: tabular-nums;
 }
 
 .sr-only {
