@@ -55,8 +55,9 @@ export default function SplashRoute() {
       }
     })();
 
+    // Hide native splash early; give yarn sequence time to finish before forcing exit.
     const hideId = setTimeout(() => void hideNativeSplash(), 1200);
-    const leaveId = setTimeout(() => leaveSplash(), 4500);
+    const leaveId = setTimeout(() => leaveSplash(), 7000);
 
     return () => {
       cancelled = true;
