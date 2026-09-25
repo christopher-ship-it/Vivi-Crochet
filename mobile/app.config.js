@@ -82,7 +82,7 @@ module.exports = ({ config }) => {
     },
     android: {
       package: 'in.vivicrochet.app',
-      versionCode: 13,
+      versionCode: 11,
       googleServicesFile: './google-services.json',
       adaptiveIcon: {
         backgroundColor: '#fcf3ee',
