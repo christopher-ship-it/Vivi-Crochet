@@ -16,7 +16,7 @@ module.exports = ({ config }) => {
     slug: 'vivi-crochet',
     owner: 'chris88navi',
     scheme: 'vivi',
-    version: '1.0.10',
+    version: '1.0.11',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
@@ -39,15 +39,13 @@ module.exports = ({ config }) => {
       'expo-font',
       'expo-status-bar',
       [
-        // Plain blush launch screen (no logo): the animated splash
-        // (src/components/AnimatedSplash.tsx, SPLASH_STAGE_COLOR) starts on the same colour.
-        // The plugin's Android theme always references @drawable/splashscreen_logo, so an image
-        // is required; a fully transparent one keeps the screen plain.
+        // Blush + logo so a hung JS bundle still shows branding (not a blank pink slab).
+        // AnimatedSplash uses the same SPLASH_STAGE_COLOR for a seamless handoff.
         'expo-splash-screen',
         {
           backgroundColor: '#ffd0e0',
-          image: './assets/splash-blank.png',
-          imageWidth: 200,
+          image: './assets/vivi-splash-logo.png',
+          imageWidth: 220,
         },
       ],
       [
@@ -77,14 +75,14 @@ module.exports = ({ config }) => {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'in.vivicrochet.app',
-      buildNumber: '10',
+      buildNumber: '11',
       infoPlist: {
         UIBackgroundModes: ['remote-notification'],
       },
     },
     android: {
       package: 'in.vivicrochet.app',
-      versionCode: 11,
+      versionCode: 12,
       googleServicesFile: './google-services.json',
       adaptiveIcon: {
         backgroundColor: '#fcf3ee',

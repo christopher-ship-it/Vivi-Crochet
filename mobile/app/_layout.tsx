@@ -15,7 +15,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { View } from 'react-native';
 import { SessionProvider } from '../src/auth/SessionContext';
 import { CartProvider } from '../src/cart/CartContext';
@@ -31,8 +31,11 @@ import { addNotificationResponseListener } from '../src/notifications/push';
 import { colors } from '../src/theme';
 import { applyStatusBar } from '../src/utils/statusBar';
 
-// Keep the native splash up through font load so cold start never flashes white.
-void SplashScreen.preventAutoHideAsync();
+// Keep native splash briefly, but NEVER forever — module-level escape if React never mounts.
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
+setTimeout(() => {
+  void SplashScreen.hideAsync().catch(() => undefined);
+}, 2500);
 
 function PushNotificationNavigator() {
   const router = useRouter();
@@ -131,11 +134,9 @@ function AppStack() {
   );
 }
 
-/** If useFonts never settles (some OEM builds), still mount the app. */
-const FONT_WAIT_MS = 4000;
-
 export default function RootLayout() {
-  const [loaded, fontError] = useFonts({
+  // Load fonts in the background — never block first paint / splash handoff.
+  useFonts({
     Nunito_400Regular,
     Nunito_600SemiBold,
     Nunito_700Bold,
@@ -149,28 +150,10 @@ export default function RootLayout() {
     NotoSansDevanagari_600SemiBold,
     NotoSansDevanagari_700Bold,
   });
-  const [fontTimedOut, setFontTimedOut] = useState(false);
 
   useEffect(() => {
-    // Default: dark icons on light gradient screens
     applyStatusBar('dark');
   }, []);
-
-  useEffect(() => {
-    if (loaded || fontError) return;
-    const id = setTimeout(() => setFontTimedOut(true), FONT_WAIT_MS);
-    return () => clearTimeout(id);
-  }, [loaded, fontError]);
-
-  useEffect(() => {
-    // Fonts failed — don't leave the native splash stuck forever.
-    // On timeout we still mount the tree; AnimatedSplash owns the normal hide.
-    if (fontError) {
-      void SplashScreen.hideAsync().catch(() => undefined);
-    }
-  }, [fontError]);
-
-  if (!loaded && !fontError && !fontTimedOut) return null;
 
   return (
     <I18nProvider>

@@ -12,15 +12,13 @@ async function hideNativeSplash() {
   try {
     await SplashScreen.hideAsync();
   } catch {
-    // Already hidden / not available (Expo Go edge cases).
+    // Already hidden / not available.
   }
 }
 
 export default function SplashRoute() {
   const router = useRouter();
-  // Mount branded splash immediately — never wait on AsyncStorage before paint.
   const [showSplash, setShowSplash] = useState(true);
-  /** Screen to restore after the splash when the process was killed while backgrounded. */
   const resumeHref = useRef<string | null>(null);
   const finishedRef = useRef(false);
 
@@ -35,36 +33,30 @@ export default function SplashRoute() {
       return;
     }
     void (async () => {
-      const stored = await loadStoredLanguage();
-      if (stored) {
+      try {
+        const stored = await loadStoredLanguage();
+        router.replace(stored ? '/(tabs)' : '/language-onboarding');
+      } catch {
         router.replace('/(tabs)');
-      } else {
-        router.replace('/language-onboarding');
       }
     })();
   }, [router]);
 
   useEffect(() => {
-    // Starts SQL resume during splash so Learn / Live / Shop rarely hit a cold DB.
     wakeApi();
 
     let cancelled = false;
-
     (async () => {
-      const [lastHref, resume] = await Promise.all([loadLastHref(), wasRecentlyBackgrounded()]);
-      if (cancelled) return;
-      resumeHref.current = resume && lastHref ? lastHref : null;
+      try {
+        const [lastHref, resume] = await Promise.all([loadLastHref(), wasRecentlyBackgrounded()]);
+        if (!cancelled) resumeHref.current = resume && lastHref ? lastHref : null;
+      } catch {
+        // Ignore — still leave splash via animation / failsafe.
+      }
     })();
 
-    // Hide native splash even if AnimatedSplash never reports ready.
-    const hideId = setTimeout(() => {
-      void hideNativeSplash();
-    }, 2500);
-
-    // Hard escape: never stay on pink forever if splash/animation crashes.
-    const leaveId = setTimeout(() => {
-      leaveSplash();
-    }, 9000);
+    const hideId = setTimeout(() => void hideNativeSplash(), 1200);
+    const leaveId = setTimeout(() => leaveSplash(), 4500);
 
     return () => {
       cancelled = true;
@@ -73,20 +65,12 @@ export default function SplashRoute() {
     };
   }, [leaveSplash]);
 
-  const handleReady = useCallback(() => {
-    void hideNativeSplash();
-  }, []);
-
-  const handleFinish = useCallback(() => {
-    leaveSplash();
-  }, [leaveSplash]);
-
-  // Keep this view on the blush stage while the native splash is still covering —
-  // never paint a blank white frame before the branding splash.
   return (
     <View style={styles.root}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
-      {showSplash && <AnimatedSplash onReady={handleReady} onFinish={handleFinish} />}
+      {showSplash ? (
+        <AnimatedSplash onReady={() => void hideNativeSplash()} onFinish={leaveSplash} />
+      ) : null}
     </View>
   );
 }
