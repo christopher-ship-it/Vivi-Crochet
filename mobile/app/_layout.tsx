@@ -15,7 +15,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { SessionProvider } from '../src/auth/SessionContext';
 import { CartProvider } from '../src/cart/CartContext';
@@ -131,6 +131,9 @@ function AppStack() {
   );
 }
 
+/** If useFonts never settles (some OEM builds), still mount the app. */
+const FONT_WAIT_MS = 4000;
+
 export default function RootLayout() {
   const [loaded, fontError] = useFonts({
     Nunito_400Regular,
@@ -146,6 +149,7 @@ export default function RootLayout() {
     NotoSansDevanagari_600SemiBold,
     NotoSansDevanagari_700Bold,
   });
+  const [fontTimedOut, setFontTimedOut] = useState(false);
 
   useEffect(() => {
     // Default: dark icons on light gradient screens
@@ -153,13 +157,20 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    if (loaded || fontError) return;
+    const id = setTimeout(() => setFontTimedOut(true), FONT_WAIT_MS);
+    return () => clearTimeout(id);
+  }, [loaded, fontError]);
+
+  useEffect(() => {
     // Fonts failed — don't leave the native splash stuck forever.
+    // On timeout we still mount the tree; AnimatedSplash owns the normal hide.
     if (fontError) {
       void SplashScreen.hideAsync().catch(() => undefined);
     }
   }, [fontError]);
 
-  if (!loaded && !fontError) return null;
+  if (!loaded && !fontError && !fontTimedOut) return null;
 
   return (
     <I18nProvider>

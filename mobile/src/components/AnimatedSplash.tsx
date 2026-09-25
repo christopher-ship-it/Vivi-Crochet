@@ -108,6 +108,13 @@ export function AnimatedSplash({ onReady, onFinish }: AnimatedSplashProps) {
     const readyId = requestAnimationFrame(() => onReady?.());
     let running: Animated.CompositeAnimation | null = null;
     let cancelled = false;
+    let finishedOnce = false;
+
+    const finish = () => {
+      if (cancelled || finishedOnce) return;
+      finishedOnce = true;
+      onFinish();
+    };
 
     const native = { useNativeDriver: true } as const;
     const js = { useNativeDriver: false } as const;
@@ -205,19 +212,29 @@ export function AnimatedSplash({ onReady, onFinish }: AnimatedSplashProps) {
       Animated.timing(v.exit, { toValue: 1, duration: 300, ...native }),
     ]);
 
-    void AccessibilityInfo.isReduceMotionEnabled()
-      .catch(() => false)
-      .then((reduce) => {
-        if (cancelled) return;
-        running = reduce ? reduced : full;
-        running.start(({ finished }) => {
-          if (finished) onFinish();
-        });
+    const start = (reduce: boolean) => {
+      if (cancelled || running) return;
+      running = reduce ? reduced : full;
+      running.start(({ finished }) => {
+        if (finished) finish();
       });
+    };
+
+    // Some OEM Androids never settle AccessibilityInfo — don't gate the whole splash on it.
+    const reduceMotion = Promise.race([
+      AccessibilityInfo.isReduceMotionEnabled().catch(() => false),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 150)),
+    ]);
+
+    void reduceMotion.then(start);
+
+    // Hard cap: never leave users on the blush stage if animation/a11y stalls.
+    const failsafeId = setTimeout(finish, T_EXIT_AT + T_EXIT + 1500);
 
     return () => {
       cancelled = true;
       cancelAnimationFrame(readyId);
+      clearTimeout(failsafeId);
       running?.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

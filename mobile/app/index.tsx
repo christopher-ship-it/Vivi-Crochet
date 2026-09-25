@@ -18,7 +18,8 @@ async function hideNativeSplash() {
 
 export default function SplashRoute() {
   const router = useRouter();
-  const [showSplash, setShowSplash] = useState(false);
+  // Mount branded splash immediately — never wait on AsyncStorage before paint.
+  const [showSplash, setShowSplash] = useState(true);
   /** Screen to restore after the splash when the process was killed while backgrounded. */
   const resumeHref = useRef<string | null>(null);
 
@@ -31,18 +32,19 @@ export default function SplashRoute() {
     (async () => {
       const [lastHref, resume] = await Promise.all([loadLastHref(), wasRecentlyBackgrounded()]);
       if (cancelled) return;
-
-      // Process was killed while backgrounded — play the splash, then restore place.
       resumeHref.current = resume && lastHref ? lastHref : null;
-
-      // Every cold start: reveal animated splash; native splash stays up until onReady.
-      setShowSplash(true);
     })();
+
+    // If AnimatedSplash never mounts/reports ready, don't leave the native blush forever.
+    const failsafeId = setTimeout(() => {
+      void hideNativeSplash();
+    }, 2500);
 
     return () => {
       cancelled = true;
+      clearTimeout(failsafeId);
     };
-  }, [router]);
+  }, []);
 
   const handleReady = useCallback(() => {
     void hideNativeSplash();

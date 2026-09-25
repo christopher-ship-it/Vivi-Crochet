@@ -16,7 +16,7 @@ module.exports = ({ config }) => {
     slug: 'vivi-crochet',
     owner: 'chris88navi',
     scheme: 'vivi',
-    version: '1.0.8',
+    version: '1.0.9',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
@@ -77,14 +77,14 @@ module.exports = ({ config }) => {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'in.vivicrochet.app',
-      buildNumber: '8',
+      buildNumber: '9',
       infoPlist: {
         UIBackgroundModes: ['remote-notification'],
       },
     },
     android: {
       package: 'in.vivicrochet.app',
-      versionCode: 9,
+      versionCode: 10,
       googleServicesFile: './google-services.json',
       adaptiveIcon: {
         backgroundColor: '#fcf3ee',
