@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BackHandler,
   FlatList,
   Image,
   Modal,
@@ -104,7 +105,7 @@ export default function ShopScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useI18n();
   const fonts = uiFonts(language);
-  const styles = useMemo(() => createStyles(fonts), [language]);
+  const styles = useMemo(() => createStyles(fonts, language !== 'en'), [language]);
   const { shopTab: shopTabParam, shopRoom: shopRoomParam } = useLocalSearchParams<{
     shopTab?: string | string[];
     shopRoom?: string | string[];
@@ -136,6 +137,25 @@ export default function ShopScreen() {
     useCallback(() => {
       applyStatusBar('dark');
     }, []),
+  );
+
+  // Phone Back / back gesture inside a product list returns to the Shop main page
+  // (the room chooser), same as the on-screen "Back to rooms" button — not Home.
+  const inRoom = tab === 'products' && room !== null;
+  useFocusEffect(
+    useCallback(() => {
+      if (!inRoom) return undefined;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (filterOpen) {
+          setFilterOpen(false);
+          return true;
+        }
+        exitRoom();
+        return true;
+      });
+      return () => sub.remove();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [inRoom, filterOpen]),
   );
 
   useEffect(() => {
@@ -286,7 +306,9 @@ export default function ShopScreen() {
                 hitSlop={6}
               >
                 <Ionicons name="chevron-back" size={16} color={colors.pink} />
-                <Text style={styles.backRoomsText}>{t('shop.backToRooms')}</Text>
+                <Text style={styles.backRoomsText} numberOfLines={1}>
+                  {t('shop.backToRooms')}
+                </Text>
               </Pressable>
             ) : null}
           </View>
@@ -446,7 +468,8 @@ export default function ShopScreen() {
                 accessibilityIgnoresInvertColors
               />
               <LinearGradient
-                colors={['rgba(114, 36, 62, 0)', 'rgba(114, 36, 62, 0.88)']}
+                colors={['rgba(114, 36, 62, 0)', 'rgba(114, 36, 62, 0.55)', 'rgba(90, 24, 46, 0.94)']}
+                locations={[0, 0.4, 1]}
                 style={styles.roomTileScrim}
                 pointerEvents="none"
               />
@@ -483,7 +506,8 @@ export default function ShopScreen() {
                 accessibilityIgnoresInvertColors
               />
               <LinearGradient
-                colors={['rgba(74, 46, 37, 0)', 'rgba(74, 46, 37, 0.9)']}
+                colors={['rgba(74, 46, 37, 0)', 'rgba(74, 46, 37, 0.55)', 'rgba(52, 32, 24, 0.94)']}
+                locations={[0, 0.4, 1]}
                 style={styles.roomTileScrim}
                 pointerEvents="none"
               />
@@ -509,19 +533,6 @@ export default function ShopScreen() {
               </View>
             </Pressable>
           </View>
-
-          <Pressable
-            style={({ pressed }) => [styles.quickLink, pressed && styles.roomCardPressed]}
-            onPress={() => setTab('orders')}
-            accessibilityRole="button"
-            accessibilityLabel={t('shop.myOrders')}
-          >
-            <View style={styles.quickLinkIcon}>
-              <Ionicons name="cube-outline" size={18} color={colors.pink} />
-            </View>
-            <Text style={styles.quickLinkText}>{t('shop.myOrders')}</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-          </Pressable>
         </ScrollView>
       ) : tab === 'products' ? (
         loading && !refreshing ? (
@@ -663,7 +674,7 @@ export default function ShopScreen() {
   );
 }
 
-function createStyles(fonts: UiFonts) {
+function createStyles(fonts: UiFonts, compact = false) {
   return StyleSheet.create({
     screen: {
       flex: 1,
@@ -734,8 +745,9 @@ function createStyles(fonts: UiFonts) {
     },
     title: {
       fontFamily: fonts.heading,
-      fontSize: 30,
-      lineHeight: 36,
+      // The Latin script font is small for its size; Tamil / Hindi bold sans needs less.
+      fontSize: compact ? 22 : 30,
+      lineHeight: compact ? 32 : 36,
       color: colors.ink,
     },
     subtitle: {
@@ -799,17 +811,18 @@ function createStyles(fonts: UiFonts) {
     },
     chooserTitle: {
       fontFamily: fonts.heading,
-      fontSize: 24,
-      lineHeight: 29,
+      // Tamil / Hindi headings use a bold sans, which reads much larger than the English script.
+      fontSize: compact ? 18 : 24,
+      lineHeight: compact ? 27 : 29,
       color: colors.ink,
     },
     roomRow: {
-      flexDirection: 'row',
-      gap: 10,
+      gap: 12,
     },
+    /* Wide banner tiles, stacked: Handmade on top, Essentials below. */
     roomTile: {
-      flex: 1,
-      aspectRatio: 0.52,
+      width: '100%',
+      aspectRatio: 1.6,
       borderRadius: 22,
       overflow: 'hidden',
       borderWidth: 1,
@@ -835,7 +848,7 @@ function createStyles(fonts: UiFonts) {
       left: 0,
       right: 0,
       bottom: 0,
-      height: '62%',
+      height: '78%',
     },
     roomTileBody: {
       padding: 12,
@@ -843,15 +856,21 @@ function createStyles(fonts: UiFonts) {
     },
     roomTileTitle: {
       fontFamily: fonts.extraBold,
-      fontSize: 16,
-      lineHeight: 20,
+      fontSize: compact ? 17 : 20,
+      lineHeight: compact ? 25 : 24,
       color: colors.white,
+      textShadowColor: 'rgba(0, 0, 0, 0.45)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
     },
     roomTileExamples: {
-      fontFamily: fonts.regular,
-      fontSize: 11,
-      lineHeight: 15,
-      color: 'rgba(255, 255, 255, 0.9)',
+      fontFamily: fonts.semiBold,
+      fontSize: compact ? 12 : 13,
+      lineHeight: compact ? 18 : 17,
+      color: colors.white,
+      textShadowColor: 'rgba(0, 0, 0, 0.45)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
     },
     roomTileCta: {
       alignSelf: 'flex-start',
@@ -870,31 +889,6 @@ function createStyles(fonts: UiFonts) {
       fontSize: 11,
       flexShrink: 1,
     },
-    quickLink: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 16,
-      backgroundColor: 'rgba(255, 255, 255, 0.62)',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.85)',
-    },
-    quickLinkIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: colors.pinkSoft,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    quickLinkText: {
-      flex: 1,
-      fontFamily: fonts.semiBold,
-      fontSize: 14,
-      color: colors.ink,
-    },
     roomCardPressed: {
       opacity: 0.94,
       transform: [{ scale: 0.985 }],
@@ -903,7 +897,7 @@ function createStyles(fonts: UiFonts) {
       position: 'absolute',
       top: 10,
       left: 10,
-      right: 10,
+      maxWidth: '70%',
       alignSelf: 'flex-start',
       flexDirection: 'row',
       alignItems: 'center',

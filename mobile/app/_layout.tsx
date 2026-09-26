@@ -37,6 +37,14 @@ setTimeout(() => {
   void SplashScreen.hideAsync().catch(() => undefined);
 }, 2500);
 
+/**
+ * Both `app/index.tsx` (animated splash) and `app/(tabs)/index.tsx` (Home) resolve to "/".
+ * Pin the root stack to the splash route so a cold start always plays it before Home.
+ */
+export const unstable_settings = {
+  initialRouteName: 'index',
+};
+
 function PushNotificationNavigator() {
   const router = useRouter();
 

@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import { useI18n } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
@@ -27,6 +26,63 @@ function encourageKey(journey: LearnerJourneySnapshot): TranslationKey {
     return 'journey.encourageKeepGoing';
   }
   return 'journey.encourageStart';
+}
+
+const RING_SIZE = 38;
+const RING_STROKE = 3.5;
+
+/**
+ * Circular progress ring drawn from plain Views (two clipped half-rings), so it needs no
+ * native drawing library. Progress runs clockwise from 12 o'clock.
+ */
+function ProgressRing({ pct }: { pct: number }) {
+  const half = RING_SIZE / 2;
+  const angle = Math.max(0, Math.min(100, pct)) * 3.6;
+  const rightTurn = Math.min(angle, 180) - 135;
+  const leftTurn = Math.max(angle - 180, 0) - 135;
+  const ring = {
+    position: 'absolute' as const,
+    top: 0,
+    width: RING_SIZE,
+    height: RING_SIZE,
+    borderRadius: half,
+    borderWidth: RING_STROKE,
+    borderColor: 'transparent',
+  };
+  return (
+    <View style={{ width: RING_SIZE, height: RING_SIZE }}>
+      {/* Track */}
+      <View style={[ring, { left: 0, borderColor: colors.pinkMist }]} />
+      {/* Right half: 0 to 180 degrees */}
+      <View style={{ position: 'absolute', left: half, top: 0, width: half, height: RING_SIZE, overflow: 'hidden' }}>
+        <View
+          style={[
+            ring,
+            {
+              left: -half,
+              borderTopColor: colors.pink,
+              borderRightColor: colors.pink,
+              transform: [{ rotate: `${rightTurn}deg` }],
+            },
+          ]}
+        />
+      </View>
+      {/* Left half: 180 to 360 degrees */}
+      <View style={{ position: 'absolute', left: 0, top: 0, width: half, height: RING_SIZE, overflow: 'hidden' }}>
+        <View
+          style={[
+            ring,
+            {
+              left: 0,
+              borderBottomColor: colors.pink,
+              borderLeftColor: colors.pink,
+              transform: [{ rotate: `${leftTurn}deg` }],
+            },
+          ]}
+        />
+      </View>
+    </View>
+  );
 }
 
 function statusGlyph(status: JourneyMilestone['status']): keyof typeof Ionicons.glyphMap {
@@ -65,8 +121,6 @@ export function LearnerJourney({
     const pct = journey.journeyComplete
       ? 100
       : Math.max(0, Math.min(100, nextMilestone?.progressPct ?? 0));
-    const ringR = 15;
-    const ringC = 2 * Math.PI * ringR;
     return (
       <Pressable
         style={({ pressed }) => [styles.strip, pressed && styles.pressed]}
@@ -75,21 +129,7 @@ export function LearnerJourney({
         accessibilityLabel={`${t('journey.eyebrow')}. ${ctaLabel}`}
       >
         <View style={styles.ring}>
-          <Svg width={38} height={38} viewBox="0 0 38 38">
-            <Circle cx={19} cy={19} r={ringR} stroke={colors.pinkMist} strokeWidth={3.5} fill="none" />
-            <Circle
-              cx={19}
-              cy={19}
-              r={ringR}
-              stroke={colors.pink}
-              strokeWidth={3.5}
-              fill="none"
-              strokeLinecap="round"
-              strokeDasharray={[ringC, ringC]}
-              strokeDashoffset={ringC * (1 - pct / 100)}
-              transform="rotate(-90 19 19)"
-            />
-          </Svg>
+          <ProgressRing pct={pct} />
           <Text style={styles.ringPct}>{pct}%</Text>
         </View>
         <View style={styles.stripCopy}>

@@ -6,10 +6,8 @@ import {
   Dimensions,
   Easing,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
-import Svg, { ClipPath, Circle, Defs, G, Line, Path } from 'react-native-svg';
 import { colors, fonts } from '../theme';
 
 const LOGO = require('../../assets/vivi-splash-logo.png');
@@ -18,37 +16,34 @@ const SUBTITLE = 'Handmade with Love';
 
 /** Must match the native splash backgroundColor in app.config.js so the handoff is seamless. */
 export const SPLASH_STAGE_COLOR = '#ffd0e0';
-const REVEAL_COLOR = '#fffaf7';
-const THREAD = colors.pink;
 
-const BALL = 44;
-const HEART_W = 132;
-const HEART_SCALE = HEART_W / 100;
-/** Heart outline drawn in a 100×92 box; its tip sits at (50, 86). */
-const HEART_D =
-  'M50 86 C 20 64, 4 46, 10 26 C 16 8, 40 6, 50 26 C 60 6, 84 8, 90 26 C 96 46, 80 64, 50 86 Z';
-const HEART_LEN = 300;
-const PARTICLES = 14;
+const BALL = 52;
+const THREAD_DOT = 4;
+/** Height of the wool's waves and how many half-waves it makes across the screen. */
+const WAVE_AMP = 30;
+const WAVE_HALF_CYCLES = 3;
+/** Spacing of the dots that make up the wool line. */
+const DOT_STEP = 3;
+const PATH_STEPS = 32;
+
+/** Vertical offset of the wool at horizontal position `x` (0 outside the screen run). */
+function waveOffset(x: number, run: number): number {
+  const u = Math.min(1, Math.max(0, x / run));
+  return WAVE_AMP * Math.sin(Math.PI * WAVE_HALF_CYCLES * u);
+}
 
 // Timeline (ms)
-const T_ROLL = 950;
-const T_HEART_AT = 950;
-const T_HEART = 550;
-const T_FILL_AT = 1450;
-const T_BEAT_AT = 1600;
-const T_BURST_AT = 1600;
-const T_REVEAL_AT = 1850;
-const T_LOGO_AT = 2100;
-const T_SHEEN_AT = 2600;
-const T_TAG_AT = 2800;
-const T_EXIT_AT = 3900;
+const T_ROLL = 1300;
+const T_BALL_OUT_AT = 1250;
+const T_BALL_OUT = 300;
+const T_LOGO_AT = 1350;
+const T_LOGO = 900;
+const T_TAG_AT = 2100;
+const T_TAG = 600;
+const T_EXIT_AT = 3400;
 const T_EXIT = 450;
-
-const AnimatedPath = Animated.createAnimatedComponent(Path);
-
-function at(delay: number, animation: Animated.CompositeAnimation) {
-  return Animated.sequence([Animated.delay(delay), animation]);
-}
+/** Never stay on the blush stage longer than this, whatever the animation does. */
+const FAILSAFE_MS = 5200;
 
 interface AnimatedSplashProps {
   /** Fired once the branded frame is painted (safe to hide the native splash). */
@@ -56,53 +51,50 @@ interface AnimatedSplashProps {
   onFinish: () => void;
 }
 
+/**
+ * Rolling-wool splash: a ball of yarn rolls across the screen along a curved path, leaving a
+ * wavy wool thread behind it, then the logo fades in. Built from plain Views (no SVG) and
+ * native-driver animations only, so it behaves the same in release builds as in development.
+ */
 export function AnimatedSplash({ onReady, onFinish }: AnimatedSplashProps) {
   const { width: W, height: H } = Dimensions.get('window');
 
   const geo = useMemo(() => {
     const cx = W / 2;
-    const cy = H * 0.44;
-    const ballY = cy + 70;
-    const heartTop = ballY - 86 * HEART_SCALE;
-    const heartCenterY = heartTop + 46 * HEART_SCALE;
-    const trailD = `M -20 ${ballY} C ${W * 0.15} ${ballY - 18}, ${W * 0.3} ${ballY + 14}, ${cx} ${ballY}`;
-    const trailLen = (cx + 20) * 1.08;
-    const revealD = 2 * Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy));
-    const logoW = Math.min(W * 0.72, 300);
+    const rollY = H * 0.5;
+    const logoW = Math.min(W * 0.7, 300);
     const logoH = logoW / LOGO_ASPECT;
-    return { cx, cy, ballY, heartTop, heartCenterY, trailD, trailLen, revealD, logoW, logoH };
+    const glow = Math.max(W, H) * 1.1;
+
+    // The ball's centre runs from just off-screen to the middle; `p` (0..1) is progress.
+    const x0 = -BALL / 2;
+    const run = cx;
+    const xAt = (p: number) => x0 + (cx - x0) * p;
+
+    // Wool: tiny dots along the wave, each shown once the ball has passed it.
+    const dots: { x: number; y: number; p: number }[] = [];
+    for (let x = 0; x <= cx; x += DOT_STEP) {
+      dots.push({ x, y: rollY + waveOffset(x, run), p: (x - x0) / (cx - x0) });
+    }
+
+    // The ball follows the same wave.
+    const pathP: number[] = [];
+    const pathY: number[] = [];
+    for (let k = 0; k <= PATH_STEPS; k += 1) {
+      const p = k / PATH_STEPS;
+      pathP.push(p);
+      pathY.push(waveOffset(xAt(p), run));
+    }
+    return { cx, rollY, logoW, logoH, glow, dots, pathP, pathY };
   }, [W, H]);
 
   const v = useRef({
-    ballX: new Animated.Value(0),
-    ballBounce: new Animated.Value(0),
-    ballOut: new Animated.Value(1),
-    trail: new Animated.Value(geo.trailLen),
-    trailOpacity: new Animated.Value(1),
-    heart: new Animated.Value(HEART_LEN),
-    heartFill: new Animated.Value(0),
-    heartBeat: new Animated.Value(1),
-    burst: new Animated.Value(0),
-    reveal: new Animated.Value(0.001),
+    roll: new Animated.Value(0),
+    ballOut: new Animated.Value(0),
     logoIn: new Animated.Value(0),
-    sheen: new Animated.Value(0),
     tag: new Animated.Value(0),
     exit: new Animated.Value(0),
   }).current;
-
-  const particles = useMemo(
-    () =>
-      Array.from({ length: PARTICLES }, (_, i) => {
-        const angle = (i / PARTICLES) * Math.PI * 2;
-        const radius = 80 + (i % 3) * 26;
-        return {
-          dx: Math.cos(angle) * radius,
-          dy: Math.sin(angle) * radius,
-          size: 10 + (i % 3) * 4,
-        };
-      }),
-    [],
-  );
 
   useEffect(() => {
     const readyId = requestAnimationFrame(() => onReady?.());
@@ -117,99 +109,67 @@ export function AnimatedSplash({ onReady, onFinish }: AnimatedSplashProps) {
     };
 
     const native = { useNativeDriver: true } as const;
-    const js = { useNativeDriver: false } as const;
+    const at = (delay: number, animation: Animated.CompositeAnimation) =>
+      Animated.sequence([Animated.delay(delay), animation]);
 
     const full = Animated.parallel([
-      // 1. Yarn ball rolls in with a bounce, trailing thread.
-      Animated.timing(v.ballX, {
+      // 1. The yarn ball rolls in from the left along the wave, trailing its wool.
+      Animated.timing(v.roll, {
         toValue: 1,
         duration: T_ROLL,
-        easing: Easing.bezier(0.3, 0.7, 0.4, 1),
+        easing: Easing.bezier(0.3, 0.6, 0.35, 1),
         ...native,
       }),
-      Animated.sequence([
-        Animated.timing(v.ballBounce, { toValue: -22, duration: 330, easing: Easing.out(Easing.quad), ...native }),
-        Animated.timing(v.ballBounce, { toValue: 0, duration: 300, easing: Easing.in(Easing.quad), ...native }),
-        Animated.timing(v.ballBounce, { toValue: -8, duration: 150, easing: Easing.out(Easing.quad), ...native }),
-        Animated.timing(v.ballBounce, { toValue: 0, duration: 150, easing: Easing.in(Easing.quad), ...native }),
-      ]),
-      Animated.timing(v.trail, {
-        toValue: 0,
-        duration: T_ROLL,
-        easing: Easing.bezier(0.3, 0.7, 0.4, 1),
-        ...js,
-      }),
-      at(1050, Animated.timing(v.ballOut, { toValue: 0, duration: 250, easing: Easing.in(Easing.quad), ...native })),
-      at(1550, Animated.timing(v.trailOpacity, { toValue: 0, duration: 300, ...js })),
-
-      // 2. Thread stitches a heart, which fills and beats.
+      // 2. The ball shrinks away as it reaches the middle.
       at(
-        T_HEART_AT,
-        Animated.timing(v.heart, {
-          toValue: 0,
-          duration: T_HEART,
-          easing: Easing.bezier(0.65, 0, 0.35, 1),
-          ...js,
-        }),
-      ),
-      at(T_FILL_AT, Animated.timing(v.heartFill, { toValue: 1, duration: 250, ...native })),
-      at(
-        T_BEAT_AT,
-        Animated.sequence([
-          Animated.timing(v.heartBeat, { toValue: 1.18, duration: 170, easing: Easing.out(Easing.quad), ...native }),
-          Animated.timing(v.heartBeat, { toValue: 1, duration: 180, easing: Easing.inOut(Easing.quad), ...native }),
-        ]),
-      ),
-
-      // 3. Heart bursts into little hearts.
-      at(
-        T_BURST_AT,
-        Animated.timing(v.burst, {
+        T_BALL_OUT_AT,
+        Animated.timing(v.ballOut, {
           toValue: 1,
-          duration: 700,
-          easing: Easing.bezier(0.2, 0.8, 0.3, 1),
+          duration: T_BALL_OUT,
+          easing: Easing.in(Easing.quad),
           ...native,
         }),
       ),
-
-      // 4. Circle reveal onto the logo stage.
+      // 3. The logo blooms in over a soft glow.
       at(
-        T_REVEAL_AT,
-        Animated.timing(v.reveal, {
+        T_LOGO_AT,
+        Animated.timing(v.logoIn, {
           toValue: 1,
-          duration: 650,
-          easing: Easing.bezier(0.7, 0, 0.3, 1),
+          duration: T_LOGO,
+          easing: Easing.out(Easing.cubic),
           ...native,
         }),
       ),
-      at(T_LOGO_AT, Animated.spring(v.logoIn, { toValue: 1, friction: 6, tension: 60, ...native })),
-      at(
-        T_SHEEN_AT,
-        Animated.timing(v.sheen, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), ...native }),
-      ),
+      // 4. The tagline rises in.
       at(
         T_TAG_AT,
-        Animated.timing(v.tag, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), ...native }),
+        Animated.timing(v.tag, {
+          toValue: 1,
+          duration: T_TAG,
+          easing: Easing.out(Easing.cubic),
+          ...native,
+        }),
       ),
-
-      // 5. Gentle zoom + fade into the app.
+      // 5. Hold, then a gentle push-in and fade into the app.
       at(
         T_EXIT_AT,
-        Animated.timing(v.exit, { toValue: 1, duration: T_EXIT, easing: Easing.in(Easing.quad), ...native }),
+        Animated.timing(v.exit, {
+          toValue: 1,
+          duration: T_EXIT,
+          easing: Easing.in(Easing.quad),
+          ...native,
+        }),
       ),
     ]);
 
-    // Reduced motion: skip the story, show the logo briefly, then continue.
+    // Reduced motion: skip the roll, just show the logo, then continue.
     const reduced = Animated.sequence([
       Animated.parallel([
-        Animated.timing(v.ballOut, { toValue: 0, duration: 1, ...native }),
-        Animated.timing(v.trailOpacity, { toValue: 0, duration: 1, ...js }),
-        Animated.timing(v.reveal, { toValue: 1, duration: 1, ...native }),
-        Animated.timing(v.logoIn, { toValue: 1, duration: 300, ...native }),
-        Animated.timing(v.tag, { toValue: 1, duration: 300, ...native }),
+        Animated.timing(v.logoIn, { toValue: 1, duration: 250, ...native }),
+        Animated.timing(v.tag, { toValue: 1, duration: 250, ...native }),
       ]),
-      Animated.delay(700),
-      Animated.timing(v.exit, { toValue: 1, duration: 300, ...native }),
+      Animated.delay(800),
+      Animated.timing(v.exit, { toValue: 1, duration: 250, ...native }),
     ]);
 
     const start = (reduce: boolean) => {
@@ -220,16 +180,14 @@ export function AnimatedSplash({ onReady, onFinish }: AnimatedSplashProps) {
       });
     };
 
-    // Some OEM Androids never settle AccessibilityInfo — don't gate the whole splash on it.
+    // Some OEM Androids never settle AccessibilityInfo — don't gate the splash on it.
     const reduceMotion = Promise.race([
       AccessibilityInfo.isReduceMotionEnabled().catch(() => false),
       new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 150)),
     ]);
-
     void reduceMotion.then(start);
 
-    // Hard cap: never leave users on the blush stage if animation/a11y stalls.
-    const failsafeId = setTimeout(finish, T_EXIT_AT + T_EXIT + 1500);
+    const failsafeId = setTimeout(finish, FAILSAFE_MS);
 
     return () => {
       cancelled = true;
@@ -240,186 +198,117 @@ export function AnimatedSplash({ onReady, onFinish }: AnimatedSplashProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { cx, cy, ballY, heartTop, heartCenterY, trailD, trailLen, revealD, logoW, logoH } = geo;
+  const { cx, rollY, logoW, logoH, glow, dots, pathP, pathY } = geo;
 
-  const ballTranslateX = v.ballX.interpolate({ inputRange: [0, 1], outputRange: [-60, cx] });
-  const ballRotate = v.ballX.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '760deg'] });
+  // The ball's centre travels from just off-screen to the middle; it turns as it goes.
+  const ballX = v.roll.interpolate({ inputRange: [0, 1], outputRange: [-BALL, cx - BALL / 2] });
+  const ballTurn = v.roll.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '700deg'] });
+  const ballBounce = v.roll.interpolate({ inputRange: pathP, outputRange: pathY });
+  const ballScale = v.ballOut.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const ballOpacity = v.ballOut.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const threadOpacity = v.logoIn.interpolate({
+    inputRange: [0, 0.5],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const logoOpacity = v.logoIn.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 1, 1] });
   const logoScale = Animated.multiply(
-    v.logoIn.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }),
-    v.exit.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }),
+    v.logoIn.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
+    v.exit.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07] }),
   );
-  const sheenX = v.sheen.interpolate({ inputRange: [0, 1], outputRange: [-140, logoW + 140] });
+  const glowOpacity = v.logoIn.interpolate({ inputRange: [0, 1], outputRange: [0, 0.9] });
+  const glowScale = v.logoIn.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
+  const tagY = v.tag.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+  const rootOpacity = v.exit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
   return (
     <Animated.View
-      style={[
-        styles.root,
-        { opacity: v.exit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
-      ]}
+      style={[styles.root, { opacity: rootOpacity }]}
       accessible
       accessibilityLabel={`VIVI Crochet. ${SUBTITLE}`}
     >
-      {/* Thread trail + stitched heart outline */}
-      <Svg width={W} height={H} style={StyleSheet.absoluteFill} pointerEvents="none">
-        <AnimatedPath
-          d={trailD}
-          stroke={THREAD}
-          strokeWidth={2.5}
-          strokeLinecap="round"
-          fill="none"
-          strokeDasharray={[trailLen, trailLen]}
-          strokeDashoffset={v.trail}
-          opacity={v.trailOpacity}
-        />
-      </Svg>
-
-      <View
-        style={[styles.abs, { left: cx - HEART_W / 2, top: heartTop, width: HEART_W, height: 92 * HEART_SCALE }]}
-        pointerEvents="none"
-      >
-        <Svg width="100%" height="100%" viewBox="0 0 100 92">
-          <AnimatedPath
-            d={HEART_D}
-            stroke={THREAD}
-            strokeWidth={2.2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            strokeDasharray={[HEART_LEN, HEART_LEN]}
-            strokeDashoffset={v.heart}
-          />
-        </Svg>
-        <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            { opacity: v.heartFill, transform: [{ scale: v.heartBeat }] },
-          ]}
-        >
-          <Svg width="100%" height="100%" viewBox="0 0 100 92">
-            <Path d={HEART_D} fill={THREAD} />
-          </Svg>
-        </Animated.View>
-      </View>
-
-      {/* Little hearts bursting outward */}
-      {particles.map((p, i) => (
-        <Animated.Text
-          key={`p-${i}`}
-          style={[
-            styles.particle,
-            {
-              left: cx - p.size / 2,
-              top: heartCenterY - p.size / 2,
-              fontSize: p.size,
-              opacity: v.burst.interpolate({ inputRange: [0, 0.05, 0.7, 1], outputRange: [0, 1, 0.8, 0] }),
-              transform: [
-                { translateX: v.burst.interpolate({ inputRange: [0, 1], outputRange: [0, p.dx] }) },
-                { translateY: v.burst.interpolate({ inputRange: [0, 1], outputRange: [0, p.dy] }) },
-                { scale: v.burst.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.2] }) },
-              ],
-            },
-          ]}
-        >
-          ♥
-        </Animated.Text>
-      ))}
-
-      {/* Rolling yarn ball */}
+      {/* Soft light behind the logo. */}
       <Animated.View
         style={[
-          styles.abs,
+          styles.glow,
           {
-            left: 0,
-            top: ballY - BALL / 2,
-            width: BALL,
-            height: BALL,
-            marginLeft: -BALL / 2,
-            opacity: v.ballOut,
-            transform: [
-              { translateX: ballTranslateX },
-              { translateY: v.ballBounce },
-              { rotate: ballRotate },
-              { scale: v.ballOut },
-            ],
+            width: glow,
+            height: glow,
+            borderRadius: glow / 2,
+            left: cx - glow / 2,
+            top: H * 0.42 - glow / 2,
+            opacity: glowOpacity,
+            transform: [{ scale: glowScale }],
           },
         ]}
         pointerEvents="none"
       >
-        <Svg width={BALL} height={BALL} viewBox="0 0 44 44">
-          <Defs>
-            <ClipPath id="yarnClip">
-              <Circle cx={22} cy={22} r={21} />
-            </ClipPath>
-          </Defs>
-          <Circle cx={22} cy={22} r={21} fill={THREAD} />
-          <G clipPath="url(#yarnClip)" stroke="#ff7ea2" strokeWidth={3}>
-            {[-24, -15, -6, 3, 12, 21, 30].map((o) => (
-              <Line key={o} x1={o} y1={44} x2={o + 30} y2={0} />
-            ))}
-          </G>
-          <Circle cx={22} cy={22} r={21} fill="none" stroke={colors.pinkDark} strokeWidth={1.5} />
-        </Svg>
+        <LinearGradient
+          colors={['rgba(255, 250, 247, 0.95)', 'rgba(255, 233, 240, 0.55)', 'rgba(255, 208, 224, 0)']}
+          locations={[0, 0.45, 1]}
+          start={{ x: 0.5, y: 0.5 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
       </Animated.View>
 
-      {/* Circle reveal */}
+      {/* Wool trailing the ball along a curved path; fades out as the logo appears. */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: threadOpacity }]} pointerEvents="none">
+        {dots.map((dot, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              styles.thread,
+              {
+                left: dot.x - THREAD_DOT / 2,
+                top: dot.y - THREAD_DOT / 2,
+                opacity: v.roll.interpolate({
+                  inputRange: [Math.max(0, dot.p - 0.002), Math.min(1, dot.p + 0.002)],
+                  outputRange: [0, 1],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ]}
+          />
+        ))}
+      </Animated.View>
+
+      {/* Rolling yarn ball. */}
       <Animated.View
         style={[
-          styles.reveal,
+          styles.ballWrap,
           {
-            width: revealD,
-            height: revealD,
-            borderRadius: revealD / 2,
-            left: cx - revealD / 2,
-            top: cy - revealD / 2,
-            transform: [{ scale: v.reveal }],
+            top: rollY - BALL / 2,
+            opacity: ballOpacity,
+            transform: [{ translateX: ballX }, { translateY: ballBounce }, { scale: ballScale }],
           },
         ]}
         pointerEvents="none"
-      />
+      >
+        <Animated.View style={[styles.ball, { transform: [{ rotate: ballTurn }] }]}>
+          <View style={[styles.stripe, { top: 8 }]} />
+          <View style={[styles.stripe, { top: 20 }]} />
+          <View style={[styles.stripe, { top: 32 }]} />
+          <View style={[styles.stripe, { top: 44 }]} />
+        </Animated.View>
+      </Animated.View>
 
-      {/* Logo + sheen + tagline */}
-      <Animated.View
-        style={[
-          styles.abs,
-          {
-            left: cx - logoW / 2,
-            top: cy - logoH / 2,
+      <View style={styles.center} pointerEvents="none">
+        <Animated.Image
+          source={LOGO}
+          style={{
             width: logoW,
             height: logoH,
-            opacity: v.logoIn.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 1, 1] }),
+            opacity: logoOpacity,
             transform: [{ scale: logoScale }],
-          },
-        ]}
-        pointerEvents="none"
-      >
-        <Animated.Image source={LOGO} style={{ width: logoW, height: logoH }} resizeMode="contain" />
-        <View style={styles.sheenClip}>
-          <Animated.View style={[styles.sheen, { height: logoH * 1.4, transform: [{ translateX: sheenX }, { rotate: '15deg' }] }]}>
-            <LinearGradient
-              colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-        </View>
-      </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.tagWrap,
-          {
-            top: cy + logoH / 2 + 18,
-            opacity: v.tag,
-            transform: [
-              { translateY: v.tag.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-            ],
-          },
-        ]}
-        pointerEvents="none"
-      >
-        <Text style={styles.tag}>{SUBTITLE}</Text>
-      </Animated.View>
+          }}
+          resizeMode="contain"
+        />
+        <Animated.Text style={[styles.tag, { opacity: v.tag, transform: [{ translateY: tagY }] }]}>
+          {SUBTITLE}
+        </Animated.Text>
+      </View>
     </Animated.View>
   );
 }
@@ -435,39 +324,47 @@ const styles = StyleSheet.create({
     zIndex: 100,
     overflow: 'hidden',
   },
-  abs: {
+  glow: {
     position: 'absolute',
   },
-  particle: {
+  thread: {
     position: 'absolute',
-    color: THREAD,
-    fontWeight: '700',
+    width: THREAD_DOT,
+    height: THREAD_DOT,
+    borderRadius: THREAD_DOT / 2,
+    backgroundColor: colors.pink,
   },
-  reveal: {
+  ballWrap: {
     position: 'absolute',
-    backgroundColor: REVEAL_COLOR,
-  },
-  sheenClip: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
     left: 0,
+    width: BALL,
+    height: BALL,
+  },
+  ball: {
+    width: BALL,
+    height: BALL,
+    borderRadius: BALL / 2,
+    backgroundColor: colors.pink,
+    borderWidth: 1.5,
+    borderColor: colors.pinkDark,
     overflow: 'hidden',
   },
-  sheen: {
+  stripe: {
     position: 'absolute',
-    top: '-20%',
-    left: 0,
-    width: 70,
+    left: -14,
+    width: BALL + 28,
+    height: 4,
+    backgroundColor: '#ff86a8',
+    transform: [{ rotate: '-32deg' }],
   },
-  tagWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+  center: {
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 56,
   },
   tag: {
+    marginTop: 22,
     fontFamily: fonts.heading,
     fontSize: 24,
     letterSpacing: 0.4,

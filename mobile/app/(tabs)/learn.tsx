@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurTargetView, BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   Image,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -213,6 +214,10 @@ export default function LearnScreen() {
   const [allCourses, setAllCourses] = useState<Course[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [discoverFilter, setDiscoverFilter] = useState<DiscoverFilter>('all');
+  const scrollRef = useRef<ScrollView>(null);
+  const discoverY = useRef<number | null>(null);
+  const pendingDiscoverScroll = useRef(false);
+  const { discover } = useLocalSearchParams<{ discover?: string }>();
   const [progressByCourseId, setProgressByCourseId] = useState<Record<string, CourseProgress>>(
     {},
   );
@@ -372,6 +377,28 @@ export default function LearnScreen() {
     }
   }, [discoverChips, discoverFilter]);
 
+  const scrollToDiscover = useCallback(() => {
+    if (!pendingDiscoverScroll.current || discoverY.current == null) return;
+    pendingDiscoverScroll.current = false;
+    scrollRef.current?.scrollTo({ y: Math.max(discoverY.current - 8, 0), animated: true });
+  }, []);
+
+  // Home's "Viral & Tutorial Projects" room opens Learn at the Discover section.
+  useEffect(() => {
+    if (!discover) return;
+    setDiscoverFilter(
+      discover === 'trending' || discover === 'viral' || discover === 'product' ? discover : 'all',
+    );
+    pendingDiscoverScroll.current = true;
+    scrollToDiscover();
+    // Clear the param so tapping the room again (or revisiting the tab) re-triggers cleanly.
+    router.setParams({ discover: undefined });
+    const stale = setTimeout(() => {
+      pendingDiscoverScroll.current = false;
+    }, 4000);
+    return () => clearTimeout(stale);
+  }, [discover, router, scrollToDiscover]);
+
   function openCourse(courseId: string) {
     router.push(`/course/${courseId}`);
   }
@@ -408,6 +435,7 @@ export default function LearnScreen() {
     <MyViviPageGradient>
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={{ paddingBottom: dockClearance + 24 }}
           showsVerticalScrollIndicator={false}
@@ -432,15 +460,19 @@ export default function LearnScreen() {
               <View style={[styles.heroBlob, styles.heroBlobPink]} />
               <View style={[styles.heroBlob, styles.heroBlobPeach]} />
             </BlurTargetView>
-            {/* Real blur on iOS and Android 12+; older Android falls back to a translucent tint. */}
-            <BlurView
-              intensity={36}
-              tint="light"
-              blurTarget={heroBlurTarget}
-              blurMethod="dimezisBlurViewSdk31Plus"
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
+            {/* Real blur on iOS only. Android release builds render the native blur as a grey slab
+                behind the text, so Android uses a plain white wash over the blobs instead. */}
+            {Platform.OS === 'ios' ? (
+              <BlurView
+                intensity={36}
+                tint="light"
+                blurTarget={heroBlurTarget}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, styles.heroGlassAndroid]} pointerEvents="none" />
+            )}
             <LinearGradient
               colors={['rgba(255, 255, 255, 0.65)', 'rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0)']}
               locations={[0, 0.45, 1]}
@@ -542,7 +574,13 @@ export default function LearnScreen() {
           </View>
 
           {discoverChips.length > 0 ? (
-            <View style={styles.section}>
+            <View
+              style={styles.section}
+              onLayout={(e) => {
+                discoverY.current = e.nativeEvent.layout.y;
+                scrollToDiscover();
+              }}
+            >
               <View style={styles.sectionHead} accessibilityLabel={`${t('learn.discover')}. ${t('learn.discoverSub')}`}>
                 <View style={[styles.sectionIndex, styles.sectionIndexSecondary]}>
                   <Text style={styles.sectionIndexText}>2</Text>
@@ -669,6 +707,9 @@ function createStyles(fonts: UiFonts) {
     heroBlob: {
       position: 'absolute',
       borderRadius: 999,
+    },
+    heroGlassAndroid: {
+      backgroundColor: 'rgba(255, 255, 255, 0.62)',
     },
     heroBlobPink: {
       width: 170,

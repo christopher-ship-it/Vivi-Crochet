@@ -15,6 +15,19 @@ public sealed class AzureBlobStorageService : IBlobStorageService
     private readonly BlobStorageOptions _options;
     private readonly ILogger<AzureBlobStorageService> _logger;
 
+    private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+
+    /// <summary>
+    /// Sent on image reads so phones and CDNs keep product/course photos instead of re-downloading
+    /// them. Image blob names are unique per upload, so a week of caching is safe.
+    /// </summary>
+    private const string ImageCacheControl = "public, max-age=604800";
+
+    private static string? CacheControlFor(string blobPath) =>
+        ImageExtensions.Any(ext => blobPath.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+            ? ImageCacheControl
+            : null;
+
     public AzureBlobStorageService(IOptions<BlobStorageOptions> options, ILogger<AzureBlobStorageService> logger)
     {
         _options = options.Value;
@@ -47,7 +60,7 @@ public sealed class AzureBlobStorageService : IBlobStorageService
         await _container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
         var blob = _container.GetBlobClient(blobPath);
         var expires = DateTimeOffset.UtcNow.AddMinutes(_options.ReadSasMinutes);
-        var sas = BuildSas(blob, expires, BlobSasPermissions.Read);
+        var sas = BuildSas(blob, expires, BlobSasPermissions.Read, CacheControlFor(blobPath));
         return new BlobReadTicket(sas, expires);
     }
 
@@ -115,7 +128,11 @@ public sealed class AzureBlobStorageService : IBlobStorageService
             cancellationToken);
     }
 
-    private string BuildSas(BlobClient blob, DateTimeOffset expiresOn, BlobSasPermissions permissions)
+    private string BuildSas(
+        BlobClient blob,
+        DateTimeOffset expiresOn,
+        BlobSasPermissions permissions,
+        string? cacheControl = null)
     {
         if (_sharedKey is not null)
         {
@@ -126,7 +143,8 @@ public sealed class AzureBlobStorageService : IBlobStorageService
                 Resource = "b",
                 StartsOn = DateTimeOffset.UtcNow.AddMinutes(-2),
                 ExpiresOn = expiresOn,
-                ContentType = null
+                ContentType = null,
+                CacheControl = cacheControl
             };
             builder.SetPermissions(permissions);
             var sas = builder.ToSasQueryParameters(_sharedKey).ToString();
@@ -134,7 +152,16 @@ public sealed class AzureBlobStorageService : IBlobStorageService
         }
 
         if (blob.CanGenerateSasUri)
-            return blob.GenerateSasUri(permissions, expiresOn).ToString();
+        {
+            var builder = new BlobSasBuilder(permissions, expiresOn)
+            {
+                BlobContainerName = _container.Name,
+                BlobName = blob.Name,
+                Resource = "b",
+                CacheControl = cacheControl
+            };
+            return blob.GenerateSasUri(builder).ToString();
+        }
 
         throw new InvalidOperationException(
             "Cannot generate a SAS URL. The connection string must include an AccountKey, or the process must use a credential that can sign SAS tokens.");
