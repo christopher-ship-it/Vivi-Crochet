@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo-google-fonts/archivo": "^0.4.2",
