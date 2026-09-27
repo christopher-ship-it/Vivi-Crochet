@@ -1,7 +1,8 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -159,6 +160,22 @@ export default function CourseDetailScreen() {
     if (!id || !hasAccess) return;
     void getCoursePathCursor(id, pathOwnerId).then(setPathCursorId);
   }, [id, hasAccess, pathOwnerId]);
+
+  // Hardware/gesture Back must land on Learn (same target as the header's
+  // Back arrow), not fall through to whatever the OS default pop reveals.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/(tabs)/learn');
+        }
+        return true;
+      });
+      return () => sub.remove();
+    }, [router]),
+  );
 
   function requireSignIn() {
     if (!id) return;

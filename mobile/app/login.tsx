@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -72,8 +73,10 @@ export default function LoginScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [otp, setOtp] = useState('');
   const [testCode, setTestCode] = useState('');
   const [challengeId, setChallengeId] = useState<string | null>(null);
@@ -104,6 +107,13 @@ export default function LoginScreen() {
       hideSub.remove();
     };
   }, []);
+
+  // Complete-profile: once the keyboard is up, scroll so Save & continue stays above it.
+  useEffect(() => {
+    if (step !== 'india_complete_profile' || keyboardHeight === 0) return undefined;
+    const id = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
+    return () => clearTimeout(id);
+  }, [step, keyboardHeight]);
 
   /** Keep the focused field visible — do not always jump to the end (that hides Name). */
   function scrollFieldIntoView(edge: 'start' | 'end' = 'end') {
@@ -751,6 +761,7 @@ export default function LoginScreen() {
                     maxLength={10}
                     placeholder="9876543210"
                     placeholderTextColor={colors.muted}
+                    onFocus={() => scrollFieldIntoView('end')}
                   />
                 </View>
                 <Pressable
@@ -776,6 +787,7 @@ export default function LoginScreen() {
                   maxLength={6}
                   placeholder={t('auth.sixDigit')}
                   placeholderTextColor={colors.muted}
+                  onFocus={() => scrollFieldIntoView('end')}
                 />
                 <Pressable
                   style={[styles.button, loading && styles.buttonDisabled]}
@@ -890,20 +902,35 @@ export default function LoginScreen() {
                   onFocus={() => scrollFieldIntoView('end')}
                 />
                 <Text style={[styles.label, styles.labelCompact]}>{t('auth.password')}</Text>
-                <TextInput
-                  style={[styles.input, styles.inputCompact]}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder={t('auth.passwordHint')}
-                  placeholderTextColor={colors.muted}
-                  textContentType="newPassword"
-                  autoComplete="new-password"
-                  passwordRules="minlength: 8;"
-                  onFocus={() => scrollFieldIntoView('end')}
-                />
+                <View style={styles.passwordFieldWrap}>
+                  <TextInput
+                    style={[styles.input, styles.inputCompact, styles.passwordInput]}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder={t('auth.passwordHint')}
+                    placeholderTextColor={colors.muted}
+                    textContentType="newPassword"
+                    autoComplete="new-password"
+                    passwordRules="minlength: 8;"
+                    onFocus={() => scrollFieldIntoView('end')}
+                  />
+                  <Pressable
+                    style={styles.passwordEyeBtn}
+                    onPress={() => setShowPassword((v) => !v)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={19}
+                      color={colors.muted}
+                    />
+                  </Pressable>
+                </View>
                 <Pressable
                   style={[styles.button, styles.buttonCompact, loading && styles.buttonDisabled]}
                   onPress={handleIntlRegister}
@@ -928,19 +955,36 @@ export default function LoginScreen() {
                   autoCorrect={false}
                   placeholder={t('auth.emailPlaceholder')}
                   placeholderTextColor={colors.muted}
+                  onFocus={() => scrollFieldIntoView('start')}
                 />
                 <Text style={styles.label}>{t('auth.password')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder={t('auth.password')}
-                  placeholderTextColor={colors.muted}
-                  textContentType="password"
-                />
+                <View style={styles.passwordFieldWrap}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder={t('auth.password')}
+                    placeholderTextColor={colors.muted}
+                    textContentType="password"
+                    onFocus={() => scrollFieldIntoView('end')}
+                  />
+                  <Pressable
+                    style={styles.passwordEyeBtn}
+                    onPress={() => setShowPassword((v) => !v)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={19}
+                      color={colors.muted}
+                    />
+                  </Pressable>
+                </View>
                 <Pressable
                   style={[styles.button, loading && styles.buttonDisabled]}
                   onPress={handleIntlLogin}
@@ -1014,18 +1058,35 @@ export default function LoginScreen() {
                   onFocus={scrollFieldIntoView}
                 />
                 <Text style={styles.label}>{t('auth.newPassword')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder={t('auth.passwordHint')}
-                  placeholderTextColor={colors.muted}
-                  textContentType="newPassword"
-                  onFocus={scrollFieldIntoView}
-                />
+                <View style={styles.passwordFieldWrap}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry={!showNewPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder={t('auth.passwordHint')}
+                    placeholderTextColor={colors.muted}
+                    textContentType="newPassword"
+                    onFocus={scrollFieldIntoView}
+                  />
+                  <Pressable
+                    style={styles.passwordEyeBtn}
+                    onPress={() => setShowNewPassword((v) => !v)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      showNewPassword ? t('auth.hidePassword') : t('auth.showPassword')
+                    }
+                  >
+                    <Ionicons
+                      name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={19}
+                      color={colors.muted}
+                    />
+                  </Pressable>
+                </View>
                 <Pressable
                   style={[styles.button, loading && styles.buttonDisabled]}
                   onPress={handleForgotConfirm}
@@ -1196,6 +1257,20 @@ function createStyles(fonts: UiFonts) {
   phoneRow: {
     flexDirection: 'row',
     gap: 8,
+  },
+  passwordFieldWrap: {
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 44,
+  },
+  passwordEyeBtn: {
+    position: 'absolute',
+    right: 4,
+    height: '100%',
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   prefix: {
     borderWidth: 1,

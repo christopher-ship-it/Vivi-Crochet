@@ -287,8 +287,10 @@ export default function CheckoutScreen() {
     };
   }, []);
 
+  const allowLeaveRef = useRef(false);
+
   useEffect(() => {
-    if (cartLoading || authLoading) return;
+    if (cartLoading || authLoading || allowLeaveRef.current) return;
     if (items.length === 0) {
       router.replace('/cart');
     }
@@ -310,7 +312,6 @@ export default function CheckoutScreen() {
     || state.trim().length > 0
     || pinCode.trim().length > 0;
 
-  const allowLeaveRef = useRef(false);
   const navigation = useNavigation();
 
   const requestLeaveCheckout = useCallback(() => {
@@ -346,6 +347,12 @@ export default function CheckoutScreen() {
   useEffect(() => {
     const unsub = navigation.addListener('beforeRemove', (event) => {
       if (allowLeaveRef.current || !hasEnteredAddressDetails) {
+        return;
+      }
+      // Only guard a real Back/pop. App-driven navigation (e.g. replace →
+      // order confirmation after payment) must never show "Cancel checkout?".
+      const actionType = event.data.action.type;
+      if (actionType !== 'GO_BACK' && actionType !== 'POP') {
         return;
       }
       event.preventDefault();
@@ -818,6 +825,7 @@ export default function CheckoutScreen() {
 
   async function handlePaymentSuccess(result: RazorpaySuccessPayload) {
     if (!pendingOrderId) return;
+    allowLeaveRef.current = true;
     setCheckoutVisible(false);
     setCheckoutPayload(null);
     setPurchasing(true);
@@ -828,12 +836,15 @@ export default function CheckoutScreen() {
         razorpayPaymentId: result.razorpay_payment_id,
         razorpaySignature: result.razorpay_signature,
       });
+      // Payment is done — leaving checkout is expected, so skip the "leave checkout?" prompt.
+      allowLeaveRef.current = true;
       await clearCart();
       router.replace({
         pathname: '/order-confirmation',
         params: { orderId: pendingOrderId },
       });
     } catch (err) {
+      allowLeaveRef.current = false;
       const message = err instanceof ApiClientError
         ? err.message
         : t('checkout.paymentConfirmFailed');

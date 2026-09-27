@@ -8,28 +8,28 @@ export const colors = {
   lilacSoft: '#f3ebfc',
   ink: '#221a1e',
   /** Soft opaque page fill — matches gradient wash; opaque so stack transitions don’t bleed. */
-  cream: '#fff0f5',
-  canvas: '#fff0f5',
+  cream: '#fff5f8',
+  canvas: '#fff5f8',
   muted: '#7a6d72',
   /** Kept for rare video chrome; prefer pink/white elsewhere. */
   dark: '#120e10',
   white: '#ffffff',
-  border: '#eadfe3',
-  softBorder: '#f0e4e8',
+  border: '#e6e4e5',
+  softBorder: '#eeecec',
   yellow: '#ffd23c',
   success: '#1a7a4a',
   danger: '#b42318',
   academy: '#fff0f4',
-  shopCanvas: '#f7f2ef',
+  shopCanvas: '#f6f5f5',
   /** Soft fill for image placeholders (not page background). */
-  mediaWash: '#f0ebe8',
+  mediaWash: '#efeeee',
   /** Warm ivory base behind product photography (cotton texture frame). */
-  cottonBase: '#FFFDFB',
+  cottonBase: '#FFFFFF',
 };
 
 /** Full-screen pink gradient (soft → lighter pink, no purple shift). */
 export const pageGradient = {
-  colors: ['#ffc8da', '#ffe0ea', '#fff0f5', '#ffe8f0'] as const,
+  colors: ['#ffd3e2', '#ffe3ec', '#fff0f5', '#ffe8f0'] as const,
   locations: [0, 0.35, 0.7, 1] as const,
   start: { x: 0.1, y: 0 },
   end: { x: 0.9, y: 1 },
@@ -48,17 +48,17 @@ export const heroGradient = {
 
 /**
  * Full-page wash for Home, Shop, and Learn (not Live / My Vivi).
- * Soft mixed peach ↔ blush — no hard left/right seam.
+ * Very light neutral ↔ blush — no hard left/right seam.
  */
 export const tabPageGradient = {
   colors: [
-    '#f7e7c8',
-    '#f5e0cc',
-    '#f3d4ce',
-    '#efc4d0',
-    '#ebb6ca',
-    '#e8acc4',
-    '#e5a6c0',
+    '#fff5f0',
+    '#ffeeeb',
+    '#ffe4e8',
+    '#ffdbe4',
+    '#ffd2e0',
+    '#fcc9da',
+    '#f8c0d4',
   ] as const,
   locations: [0, 0.18, 0.36, 0.52, 0.68, 0.84, 1] as const,
   start: { x: 0.08, y: 0.12 },
@@ -68,9 +68,9 @@ export const tabPageGradient = {
 /** Soft cross-fade overlay so peach and blush feel mixed, not banded. */
 export const tabPageGradientMix = {
   colors: [
-    'rgba(229, 166, 192, 0.42)',
-    'rgba(245, 220, 208, 0.18)',
-    'rgba(247, 231, 200, 0.32)',
+    'rgba(248, 192, 212, 0.30)',
+    'rgba(255, 245, 242, 0.15)',
+    'rgba(255, 250, 247, 0.25)',
   ] as const,
   locations: [0, 0.5, 1] as const,
   start: { x: 0.9, y: 0.1 },
@@ -79,7 +79,7 @@ export const tabPageGradientMix = {
 
 /** My Vivi tab hero only — warm diagonal peach → blush. */
 export const myViviHeroGradient = {
-  colors: ['#f7e7c8', '#f3d5c0', '#f6c4d4', '#f8d6e4'] as const,
+  colors: ['#fff5f0', '#ffe9e6', '#ffd6e2', '#ffe3ec'] as const,
   locations: [0, 0.35, 0.7, 1] as const,
   start: { x: 0.1, y: 0 },
   end: { x: 0.95, y: 1 },

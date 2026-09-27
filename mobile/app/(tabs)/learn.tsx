@@ -179,12 +179,15 @@ function MainCourseTile({
       </Text>
       {hasAccess ? (
         <>
-          <Text style={styles.tileContinue} numberOfLines={1}>
-            {pct}% · {t('learn.continueArrow')}
+          <Text style={styles.tilePct} numberOfLines={1}>
+            {pct}%
           </Text>
           <View style={styles.tileTrack}>
             <View style={[styles.tileFill, { width: `${pct}%` }]} />
           </View>
+          <Text style={styles.tileContinue} numberOfLines={1}>
+            {t('learn.continueArrow')}
+          </Text>
         </>
       ) : (
         <>
@@ -825,6 +828,7 @@ function createStyles(fonts: UiFonts) {
       backgroundColor: colors.white,
       borderWidth: 1,
       borderColor: colors.pinkMist,
+      alignItems: 'center',
     },
     tileMedia: {
       width: '100%',
@@ -839,25 +843,37 @@ function createStyles(fonts: UiFonts) {
       color: colors.ink,
       marginTop: 6,
       minHeight: 34,
+      textAlign: 'center',
     },
     tilePrice: {
       fontFamily: fonts.extraBold,
       fontSize: 14,
       color: colors.ink,
       marginTop: 2,
+      textAlign: 'center',
     },
     tileMeta: {
       fontFamily: fonts.regular,
       fontSize: 11,
       color: colors.muted,
+      textAlign: 'center',
+    },
+    tilePct: {
+      fontFamily: fonts.extraBold,
+      fontSize: 14,
+      color: colors.pinkDark,
+      marginTop: 2,
+      textAlign: 'center',
     },
     tileContinue: {
       fontFamily: fonts.semiBold,
       fontSize: 11.5,
       color: colors.pinkDark,
-      marginTop: 2,
+      marginTop: 3,
+      textAlign: 'center',
     },
     tileTrack: {
+      width: '100%',
       height: 3,
       borderRadius: 2,
       backgroundColor: colors.pinkMist,

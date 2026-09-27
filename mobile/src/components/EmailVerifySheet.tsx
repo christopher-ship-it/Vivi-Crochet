@@ -166,7 +166,14 @@ export function EmailVerifySheet({
   const busy = sendingCode || confirmingCode;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
+    <Modal
+      visible={visible}
+      transparent
+      statusBarTranslucent
+      navigationBarTranslucent
+      animationType="slide"
+      onRequestClose={onDismiss}
+    >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -179,7 +186,8 @@ export function EmailVerifySheet({
               automaticallyAdjustKeyboardInsets
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
-                paddingBottom: Math.max(insets.bottom, 12) + 48 + keyboardHeight,
+                paddingBottom:
+                  Math.max(insets.bottom, 12) + 16 + (Platform.OS === 'ios' ? keyboardHeight : 0),
               }}
             >
               <View style={styles.handle} />

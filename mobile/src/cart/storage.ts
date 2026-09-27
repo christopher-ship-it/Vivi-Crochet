@@ -44,6 +44,47 @@ export async function loadCartFromStorage(ownerId: string): Promise<CartLineItem
   }
 }
 
+/**
+ * On sign-in, fold the guest cart into the customer's cart so items added
+ * before logging in (e.g. Buy now → sign in) are not lost. Guest bucket is
+ * emptied afterwards; the reverse direction (logout) never inherits.
+ */
+export async function claimGuestCart(
+  ownerId: string,
+  userItems: CartLineItem[],
+): Promise<CartLineItem[]> {
+  if (ownerId === CART_GUEST_OWNER) return userItems;
+  const guestKey = cartStorageKey(CART_GUEST_OWNER);
+  try {
+    const raw = await AsyncStorage.getItem(guestKey);
+    if (!raw) return userItems;
+    const guestItems = parseCartRaw(raw);
+    if (guestItems.length === 0) {
+      await AsyncStorage.removeItem(guestKey);
+      return userItems;
+    }
+    const merged = [...userItems];
+    for (const g of guestItems) {
+      const i = merged.findIndex((m) => m.productId === g.productId);
+      if (i === -1) {
+        merged.push(g);
+      } else {
+        const stock = g.availableStock ?? merged[i].availableStock;
+        const sum = merged[i].quantity + g.quantity;
+        merged[i] = {
+          ...g,
+          quantity: typeof stock === 'number' && stock > 0 ? Math.min(sum, stock) : sum,
+        };
+      }
+    }
+    await saveCartToStorage(ownerId, merged);
+    await AsyncStorage.removeItem(guestKey);
+    return merged;
+  } catch {
+    return userItems;
+  }
+}
+
 export async function saveCartToStorage(ownerId: string, items: CartLineItem[]): Promise<void> {
   try {
     const payload: CartState = {

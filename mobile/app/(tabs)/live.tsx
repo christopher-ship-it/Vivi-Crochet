@@ -1014,11 +1014,11 @@ function createStyles(fonts: UiFonts) {
     textTransform: 'uppercase',
   },
   tutorBadgeName: {
-    marginTop: 4,
-    fontFamily: fonts.extraBold,
-    fontSize: 26,
-    lineHeight: 30,
-    color: colors.ink,
+    marginTop: 2,
+    fontFamily: fonts.tangerineBold,
+    fontSize: 48,
+    lineHeight: 54,
+    color: colors.pink,
   },
 
   sectionLabel: {

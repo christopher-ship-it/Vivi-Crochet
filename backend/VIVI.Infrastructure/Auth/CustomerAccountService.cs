@@ -71,6 +71,19 @@ public sealed class CustomerAccountService
 
         if (user is null)
         {
+            // Login identity for OTP accounts is the synthetic email above, so this branch
+            // means no OTP account has signed in with this phone before — but the phone may
+            // still be taken as another (email/password) account's verified contact number.
+            // Customers.PhoneNumber is unique, so check it first, otherwise the insert below
+            // throws a generic DbUpdateException instead of this friendly message.
+            var phoneTakenByOtherAccount = await _db.Customers.AnyAsync(
+                c => c.PhoneNumber == normalized,
+                cancellationToken);
+            if (phoneTakenByOtherAccount)
+                throw ViviException.Conflict(
+                    "PHONE_IN_USE",
+                    "That phone number is already registered on another account.");
+
             user = new AdminUser
             {
                 Id = Guid.NewGuid(),
@@ -178,6 +191,17 @@ public sealed class CustomerAccountService
 
         var existing = await _db.AdminUsers.SingleOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
         if (existing is not null)
+            throw ViviException.Conflict(
+                "EMAIL_IN_USE",
+                "An account with this email already exists. Sign in instead (or use Forgot password).");
+
+        // AdminUsers.Email misses India (phone-auth) accounts that later verified this address
+        // as their communication email — Customers.Email is unique too, so check it as well,
+        // otherwise SaveChanges below throws a generic DbUpdateException instead of this message.
+        var emailUsedByOtherCustomer = await _db.Customers.AnyAsync(
+            c => c.Email == normalizedEmail,
+            cancellationToken);
+        if (emailUsedByOtherCustomer)
             throw ViviException.Conflict(
                 "EMAIL_IN_USE",
                 "An account with this email already exists. Sign in instead (or use Forgot password).");

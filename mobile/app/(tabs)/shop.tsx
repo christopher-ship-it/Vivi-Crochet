@@ -25,6 +25,7 @@ import { listMyOrders, type OrderResponse } from '../../src/api/orders';
 import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { useCart } from '../../src/cart/CartContext';
+import { isOutOfStock } from '../../src/cart/stock';
 import { MyOrderCard } from '../../src/components/MyOrderCard';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
@@ -42,6 +43,23 @@ import { prefetchImages } from '../../src/components/AppImage';
 type ShopTab = 'products' | 'orders';
 type ShopRoom = 'handmade' | 'essentials';
 const WISHLIST_FILTER = 'Wishlist';
+
+/** Small icon per category chip — keyword match against free-text category names. */
+function categoryChipIcon(cat: string): keyof typeof Ionicons.glyphMap {
+  if (cat === 'All') return 'grid-outline';
+  if (cat === WISHLIST_FILTER) return 'heart-outline';
+  const key = cat.trim().toLowerCase();
+  if (key.includes('yarn')) return 'color-palette-outline';
+  if (key.includes('hook')) return 'construct-outline';
+  if (key.includes('ring')) return 'ellipse-outline';
+  if (key.includes('button')) return 'radio-button-on-outline';
+  if (key.includes('rose') || key.includes('flower')) return 'flower-outline';
+  if (key.includes('t-shirt') || key.includes('tshirt') || key.includes('shirt')) return 'shirt-outline';
+  if (key.includes('bag')) return 'bag-handle-outline';
+  if (key.includes('toy') || key.includes('doll')) return 'happy-outline';
+  if (key.includes('home') || key.includes('decor')) return 'home-outline';
+  return 'pricetag-outline';
+}
 
 /** Designed Crochet Essentials category collage (1536×1024). */
 /** Compressed app copies of assets/crochet-essentials.png and assets/shophandmade.png. */
@@ -130,6 +148,8 @@ export default function ShopScreen() {
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [availability, setAvailability] = useState<'all' | 'in' | 'out'>('all');
+  const [priceLowToHigh, setPriceLowToHigh] = useState(false);
   const hasLoadedOnce = useRef(false);
   const requestId = useRef(0);
 
@@ -245,11 +265,19 @@ export default function ShopScreen() {
   }, [loadOrders, tab]);
 
   const tabs = ['All', WISHLIST_FILTER, ...categories.filter((c) => c !== 'All')];
-  const filterActive = activeCategory !== 'All';
-  const displayedProducts =
+  const filterActive = activeCategory !== 'All' || availability !== 'all' || priceLowToHigh;
+  let displayedProducts =
     activeCategory === WISHLIST_FILTER
       ? products.filter((p) => wishlistIds.includes(p.id))
       : products;
+  if (availability !== 'all') {
+    displayedProducts = displayedProducts.filter(
+      (p) => isOutOfStock(p.availableStock ?? 0) === (availability === 'out'),
+    );
+  }
+  if (priceLowToHigh) {
+    displayedProducts = [...displayedProducts].sort((a, b) => a.price - b.price);
+  }
 
   const roomHero =
     room === 'essentials'
@@ -266,6 +294,8 @@ export default function ShopScreen() {
   function enterRoom(next: ShopRoom) {
     hasLoadedOnce.current = false;
     setActiveCategory('All');
+    setAvailability('all');
+    setPriceLowToHigh(false);
     setQuery('');
     setDebouncedQuery('');
     setProducts([]);
@@ -279,6 +309,8 @@ export default function ShopScreen() {
     hasLoadedOnce.current = false;
     setRoom(null);
     setActiveCategory('All');
+    setAvailability('all');
+    setPriceLowToHigh(false);
     setQuery('');
     setDebouncedQuery('');
     setProducts([]);
@@ -289,7 +321,8 @@ export default function ShopScreen() {
 
   const showingChooser = tab === 'products' && !room;
   const emptyIsWishlist = activeCategory === WISHLIST_FILTER;
-  const emptyIsSearch = Boolean(debouncedQuery) || activeCategory !== 'All';
+  const emptyIsSearch =
+    Boolean(debouncedQuery) || activeCategory !== 'All' || availability !== 'all';
 
   return (
     <MyViviPageGradient>
@@ -424,22 +457,30 @@ export default function ShopScreen() {
               contentContainerStyle={styles.categoryTabs}
               style={styles.categoryScroll}
             >
-              {tabs.map((cat) => (
-                <Pressable
-                  key={cat}
-                  style={[styles.categoryTab, activeCategory === cat && styles.categoryTabActive]}
-                  onPress={() => selectCategory(cat)}
-                >
-                  <Text
-                    style={[
-                      styles.categoryTabText,
-                      activeCategory === cat && styles.categoryTabTextActive,
-                    ]}
+              {tabs.map((cat) => {
+                const active = activeCategory === cat;
+                return (
+                  <Pressable
+                    key={cat}
+                    style={[styles.categoryTab, active && styles.categoryTabActive]}
+                    onPress={() => selectCategory(cat)}
                   >
-                    {categoryLabel(cat, t)}
-                  </Text>
-                </Pressable>
-              ))}
+                    <Ionicons
+                      name={categoryChipIcon(cat)}
+                      size={14}
+                      color={active ? colors.white : colors.pink}
+                    />
+                    <Text
+                      style={[
+                        styles.categoryTabText,
+                        active && styles.categoryTabTextActive,
+                      ]}
+                    >
+                      {categoryLabel(cat, t)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
           </>
         ) : null}
@@ -640,7 +681,7 @@ export default function ShopScreen() {
           <View style={[styles.filterSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.filterHandle} />
             <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>{t('shop.filterByCategory')}</Text>
+              <Text style={styles.filterTitle}>{t('shop.filterAndSort')}</Text>
               <Pressable onPress={() => setFilterOpen(false)} hitSlop={8}>
                 <Text style={styles.filterClose}>{t('common.close')}</Text>
               </Pressable>
@@ -665,6 +706,43 @@ export default function ShopScreen() {
                   </Pressable>
                 );
               })}
+              <Text style={styles.filterSectionTitle}>{t('shop.availability')}</Text>
+              {(
+                [
+                  ['in', t('shop.inStock')],
+                  ['out', t('shop.outOfStock')],
+                ] as const
+              ).map(([key, label]) => {
+                const selected = availability === key;
+                return (
+                  <Pressable
+                    key={key}
+                    style={[styles.filterOption, selected && styles.filterOptionActive]}
+                    onPress={() => setAvailability(selected ? 'all' : key)}
+                  >
+                    <Text
+                      style={[styles.filterOptionText, selected && styles.filterOptionTextActive]}
+                    >
+                      {label}
+                    </Text>
+                    {selected ? <Ionicons name="checkmark" size={18} color={colors.pink} /> : null}
+                  </Pressable>
+                );
+              })}
+              <Text style={styles.filterSectionTitle}>{t('shop.sortBy')}</Text>
+              <Pressable
+                style={[styles.filterOption, priceLowToHigh && styles.filterOptionActive]}
+                onPress={() => setPriceLowToHigh((v) => !v)}
+              >
+                <Text
+                  style={[styles.filterOptionText, priceLowToHigh && styles.filterOptionTextActive]}
+                >
+                  {t('shop.priceLowToHigh')}
+                </Text>
+                {priceLowToHigh ? (
+                  <Ionicons name="checkmark" size={18} color={colors.pink} />
+                ) : null}
+              </Pressable>
             </ScrollView>
           </View>
         </View>
@@ -965,8 +1043,12 @@ function createStyles(fonts: UiFonts, compact = false) {
       paddingBottom: 2,
     },
     categoryTab: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
       paddingHorizontal: 12,
       paddingVertical: 7,
+      borderRadius: radii.pill,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       backgroundColor: colors.white,
@@ -1095,6 +1177,14 @@ function createStyles(fonts: UiFonts, compact = false) {
       backgroundColor: colors.pinkSoft,
       marginHorizontal: -spacing.md,
       paddingHorizontal: spacing.md,
+    },
+    filterSectionTitle: {
+      fontFamily: fonts.extraBold,
+      fontSize: 13,
+      color: colors.muted,
+      textTransform: 'uppercase',
+      marginTop: spacing.md,
+      marginBottom: 2,
     },
     filterOptionText: {
       fontFamily: fonts.semiBold,

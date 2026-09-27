@@ -380,7 +380,7 @@ export default function ProductDetailScreen() {
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
+          contentContainerStyle={{ paddingBottom: 16 }}
           showsVerticalScrollIndicator={false}
         >
           {galleryUrls.length > 1 && (
@@ -480,22 +480,24 @@ export default function ProductDetailScreen() {
               </View>
             ) : null}
 
-            {!isEssentials
-              ? (() => {
-                  const careText = product.spec1?.trim() || 'Hand wash';
-                  return (
-                    <View style={styles.featureRow}>
-                      <View style={styles.featureCard}>
-                        <Ionicons name="water-outline" size={16} color={colors.pink} />
-                        <View style={styles.featureCopy}>
-                          <Text style={styles.featureLabel}>Care</Text>
-                          <Text style={styles.featureValue}>{careText}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })()
-              : null}
+            {!isEssentials ? (
+              <View style={styles.featureRow}>
+                <View style={styles.featureCard}>
+                  <Ionicons name="water-outline" size={16} color={colors.pink} />
+                  <View style={styles.featureCopy}>
+                    <Text style={styles.featureLabel}>{t('product.careLabel')}</Text>
+                    <Text style={styles.featureValue}>{t('product.handWashOnly')}</Text>
+                  </View>
+                </View>
+                <View style={styles.featureCard}>
+                  <Ionicons name="close-circle-outline" size={16} color={colors.pink} />
+                  <View style={styles.featureCopy}>
+                    <Text style={styles.featureLabel}>{t('product.returnsLabel')}</Text>
+                    <Text style={styles.featureValue}>{t('product.noReturns')}</Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
 
             {outOfStock ? (
               <View style={styles.oosBlock}>
@@ -520,63 +522,12 @@ export default function ProductDetailScreen() {
                   We’ll notify you when this piece is back in stock.
                 </Text>
               </View>
-            ) : (
-              <>
-                <View style={[styles.qtyBlock, isEssentials && styles.qtyBlockCompact]}>
-                  <Text style={[styles.qtyLabel, isEssentials && styles.sectionLabelCompact]}>
-                    {t('product.quantity')}
-                  </Text>
-                  <View style={styles.qtyControl}>
-                    <Pressable
-                      style={[styles.qtyBtn, qty <= 1 && styles.qtyBtnDisabled]}
-                      disabled={qty <= 1}
-                      onPress={() => setQty((q) => Math.max(1, q - 1))}
-                    >
-                      <Text style={styles.qtyBtnText}>−</Text>
-                    </Pressable>
-                    <Text style={styles.qtyValue}>{qty}</Text>
-                    <Pressable
-                      style={[styles.qtyBtn, atMaxQty && styles.qtyBtnDisabled]}
-                      disabled={atMaxQty}
-                      onPress={() => setQty((q) => (canIncreaseQuantity(q, stock) ? q + 1 : q))}
-                    >
-                      <Text style={styles.qtyBtnText}>+</Text>
-                    </Pressable>
-                  </View>
-                </View>
+            ) : null}
+          </View>
+        </ScrollView>
 
-                {lowStock ? (
-                  <Text style={styles.stockHint}>
-                    {atMaxQty
-                      ? 'Maximum quantity reached · Few left'
-                      : 'Few pieces left'}
-                  </Text>
-                ) : null}
-
-                <View style={styles.actionRow}>
-                  <Pressable
-                    style={[styles.addBtn, adding && styles.btnDisabled]}
-                    onPress={handleAddToCart}
-                    disabled={adding}
-                  >
-                    <Ionicons name="bag-outline" size={16} color={colors.white} />
-                    <Text style={styles.addBtnText}>
-                      {adding ? t('product.adding') : t('product.addToCart')}
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={[styles.buyBtn, adding && styles.btnDisabled]}
-                    onPress={handleBuyNow}
-                    disabled={adding}
-                  >
-                    <Text style={styles.buyBtnText}>Buy now</Text>
-                    <Ionicons name="arrow-forward" size={14} color={colors.pink} />
-                  </Pressable>
-                </View>
-              </>
-            )}
-
+        {!outOfStock ? (
+          <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, 8) + 4 }]}>
             {cartMessage ? (
               <View style={styles.successBanner}>
                 <Text style={styles.successText}>{cartMessage}</Text>
@@ -591,8 +542,60 @@ export default function ProductDetailScreen() {
                 <Text style={styles.errorText}>{cartError}</Text>
               </View>
             ) : null}
+            <View style={[styles.qtyBlock, isEssentials && styles.qtyBlockCompact]}>
+              <Text style={[styles.qtyLabel, isEssentials && styles.sectionLabelCompact]}>
+                {t('product.quantity')}
+              </Text>
+              <View style={styles.qtyControl}>
+                <Pressable
+                  style={[styles.qtyBtn, qty <= 1 && styles.qtyBtnDisabled]}
+                  disabled={qty <= 1}
+                  onPress={() => setQty((q) => Math.max(1, q - 1))}
+                >
+                  <Text style={styles.qtyBtnText}>−</Text>
+                </Pressable>
+                <Text style={styles.qtyValue}>{qty}</Text>
+                <Pressable
+                  style={[styles.qtyBtn, atMaxQty && styles.qtyBtnDisabled]}
+                  disabled={atMaxQty}
+                  onPress={() => setQty((q) => (canIncreaseQuantity(q, stock) ? q + 1 : q))}
+                >
+                  <Text style={styles.qtyBtnText}>+</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {lowStock ? (
+              <Text style={styles.stockHint}>
+                {atMaxQty
+                  ? 'Maximum quantity reached · Few left'
+                  : 'Few pieces left'}
+              </Text>
+            ) : null}
+
+            <View style={styles.actionRow}>
+              <Pressable
+                style={[styles.addBtn, adding && styles.btnDisabled]}
+                onPress={handleAddToCart}
+                disabled={adding}
+              >
+                <Ionicons name="bag-outline" size={16} color={colors.white} />
+                <Text style={styles.addBtnText}>
+                  {adding ? t('product.adding') : t('product.addToCart')}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.buyBtn, adding && styles.btnDisabled]}
+                onPress={handleBuyNow}
+                disabled={adding}
+              >
+                <Text style={styles.buyBtnText}>Buy now</Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.pink} />
+              </Pressable>
+            </View>
           </View>
-        </ScrollView>
+        ) : null}
       </View>
 
       {course && (
@@ -897,8 +900,18 @@ function createStyles(fonts: UiFonts) {
     fontSize: 14,
     color: colors.ink,
   },
+  stickyBar: {
+    backgroundColor: colors.white,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.softBorder,
+    paddingHorizontal: spacing.md,
+    paddingTop: 10,
+  },
   qtyBlock: {
-    marginTop: spacing.lg,
+    marginTop: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   qtyBlockCompact: {
     marginTop: spacing.sm,
@@ -909,12 +922,12 @@ function createStyles(fonts: UiFonts) {
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: colors.muted,
-    marginBottom: 8,
+    marginBottom: 0,
   },
   qtyControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
@@ -979,7 +992,7 @@ function createStyles(fonts: UiFonts) {
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: 10,
-    marginTop: spacing.lg,
+    marginTop: 10,
   },
   addBtn: {
     flex: 1.15,

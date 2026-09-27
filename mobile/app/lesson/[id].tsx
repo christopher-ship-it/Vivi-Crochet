@@ -1,6 +1,7 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -184,6 +185,18 @@ export default function LessonScreen() {
     }
     router.replace('/(tabs)/learn');
   }, [router, courseId]);
+
+  // Hardware/gesture Back must land on the course (same target as the
+  // header's Back arrow), not fall through to whatever the OS default pop reveals.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        goToCourse();
+        return true;
+      });
+      return () => sub.remove();
+    }, [goToCourse]),
+  );
 
   const lessons = useMemo(() => {
     return (course?.lessons ?? [])
