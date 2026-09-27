@@ -64,6 +64,7 @@ export function EmailVerifySheet({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const sendCodeInFlight = useRef(false);
   const autoSentForOpen = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -94,6 +95,11 @@ export function EmailVerifySheet({
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const showSub = Keyboard.addListener(showEvent, (e: KeyboardEvent) => {
       setKeyboardHeight(e.endCoordinates?.height ?? 0);
+      // Android Modal windows don't reliably resize for the keyboard (RN limitation for
+      // transparent Modals), so the focused field can end up hidden behind it — push the
+      // scroll view to the end (the field/button being typed into is always near the bottom)
+      // once we know how tall the keyboard actually is.
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
     });
     const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
     return () => {
@@ -181,13 +187,12 @@ export function EmailVerifySheet({
         <Pressable style={styles.backdrop} onPress={onDismiss}>
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
             <ScrollView
+              ref={scrollRef}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
-              automaticallyAdjustKeyboardInsets
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
-                paddingBottom:
-                  Math.max(insets.bottom, 12) + 16 + (Platform.OS === 'ios' ? keyboardHeight : 0),
+                paddingBottom: Math.max(insets.bottom, 12) + 16 + keyboardHeight,
               }}
             >
               <View style={styles.handle} />
@@ -215,6 +220,7 @@ export function EmailVerifySheet({
                 autoCorrect={false}
                 editable={!busy}
                 autoFocus
+                onFocus={() => requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }))}
               />
 
               {codeSent ? (
@@ -232,6 +238,7 @@ export function EmailVerifySheet({
                     keyboardType="number-pad"
                     maxLength={6}
                     editable={!busy}
+                    onFocus={() => requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }))}
                   />
                   <Pressable
                     style={[styles.primaryBtn, busy && styles.btnDisabled]}
