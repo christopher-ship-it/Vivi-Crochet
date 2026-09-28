@@ -15,6 +15,7 @@ public sealed class TransactionalEmailService
     public const string CourseExpiryReminderKeyPrefix = "course-expiry-reminder:";
     public const string DeliveryDateUpdatedKeyPrefix = "delivery-date-updated:";
     public const string LiveBookingConfirmationKeyPrefix = "live-booking-confirmation:";
+    public const string LaunchMembershipConfirmationKeyPrefix = "launch-membership-confirmation:";
 
     private readonly ViviDbContext _db;
     private readonly IEmailService _email;
@@ -52,6 +53,8 @@ public sealed class TransactionalEmailService
             {
                 await SendLiveBookingConfirmationAsync(order, customer, cancellationToken);
             }
+
+            await SendLaunchMembershipConfirmationAsync(order, customer, cancellationToken);
 
             // Bundle / All-Access Pass: one order confirmation covers the purchase.
             // Do not send a separate "course is ready" email per included course.
@@ -163,6 +166,37 @@ public sealed class TransactionalEmailService
         await SendIdempotentAsync(
             $"{LiveBookingConfirmationKeyPrefix}{booking.Id}",
             EmailNotificationType.LiveBookingConfirmation,
+            customer.Email,
+            subject,
+            html,
+            text,
+            orderId: order.Id,
+            enrollmentId: null,
+            cancellationToken);
+    }
+
+    private async Task SendLaunchMembershipConfirmationAsync(
+        Order order,
+        Customer customer,
+        CancellationToken cancellationToken)
+    {
+        var membership = await _db.LaunchMemberships
+            .AsNoTracking()
+            .Include(m => m.ViralProjectCourse)
+            .SingleOrDefaultAsync(m => m.OrderId == order.Id, cancellationToken);
+        if (membership is null)
+            return;
+
+        var offer = await _db.LaunchOfferCounters
+            .AsNoTracking()
+            .SingleOrDefaultAsync(o => o.CourseId == membership.CourseId, cancellationToken);
+        var offerName = offer?.OfferName ?? "VIVI Founding Membership";
+
+        var (subject, html, text) = LaunchMembershipConfirmationEmail.Render(
+            customer, order, membership, offerName, membership.ViralProjectCourse?.Name);
+        await SendIdempotentAsync(
+            $"{LaunchMembershipConfirmationKeyPrefix}{membership.Id}",
+            EmailNotificationType.LaunchMembershipConfirmation,
             customer.Email,
             subject,
             html,

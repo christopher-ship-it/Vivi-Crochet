@@ -48,6 +48,10 @@ Secrets are **not** in `appsettings.json`. Set them with user-secrets (local) or
 
 See [AZURE_DEPLOYMENT.md](../AZURE_DEPLOYMENT.md) for full Azure deployment steps.
 
+### Payments
+
+Shop, courses, and Live bookings all checkout through **Razorpay**. Configure `Razorpay__*` in Azure / user-secrets (see `.env.example`).
+
 ### Local user-secrets
 
 ```powershell

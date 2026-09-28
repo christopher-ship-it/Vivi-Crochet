@@ -58,6 +58,7 @@ public sealed class CreateLiveBookingResponse
     public Guid BookingId { get; set; }
     public Guid OrderId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
+    public string PaymentProvider { get; set; } = "Razorpay";
     public string RazorpayOrderId { get; set; } = string.Empty;
     public string RazorpayKeyId { get; set; } = string.Empty;
     public int AmountPaise { get; set; }
@@ -152,7 +153,16 @@ public sealed class AdminLiveWeekResponse
     public decimal PackagePrice { get; set; }
     public string TutorName { get; set; } = "SRI";
     public string? TutorPhotoUrl { get; set; }
+    /// <summary>True when this week has its own tutor name/photo instead of the shared default.</summary>
+    public bool HasCustomTutor { get; set; }
     public IReadOnlyList<LiveSlotAvailabilityResponse> Slots { get; set; } = Array.Empty<LiveSlotAvailabilityResponse>();
+}
+
+/// <summary>The shared tutor name/photo shown for every Live week without its own override.</summary>
+public sealed class AdminLiveTutorDefaultResponse
+{
+    public string TutorName { get; set; } = "SRI";
+    public string? TutorPhotoUrl { get; set; }
 }
 
 public sealed class LiveTutorPhotoUploadUrlRequest

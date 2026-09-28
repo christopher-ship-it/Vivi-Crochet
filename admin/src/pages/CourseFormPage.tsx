@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   completeCourseThumbnailUpload,
   createCourse,
@@ -76,8 +76,13 @@ export function CourseFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [form, setForm] = useState<CourseFormState>(emptyForm);
+  const [form, setForm] = useState<CourseFormState>(() => {
+    const presetType = searchParams.get('type');
+    const isValidType = presetType === 'DigitalCourse' || presetType === 'ProjectCourse' || presetType === 'Bundle';
+    return isValidType ? { ...emptyForm, type: presetType as CourseType } : emptyForm;
+  });
   const [selectedLangs, setSelectedLangs] = useState<string[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [catalog, setCatalog] = useState<Course[]>([]);

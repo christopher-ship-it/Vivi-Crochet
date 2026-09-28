@@ -229,7 +229,7 @@ public sealed class PricingService
             return (course.Price, false, null);
 
         var remaining = Math.Max(0, offer.LaunchLimit - offer.CompletedPurchaseCount);
-        if (remaining > 0)
+        if (offer.IsActive && remaining > 0)
             return (offer.LaunchPrice, true, remaining);
 
         return (offer.RegularPriceAfterLaunch, false, 0);

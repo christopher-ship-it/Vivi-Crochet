@@ -9,6 +9,11 @@ import {
   completeLiveTutorPhotoUpload,
   deleteLiveTutorPhoto,
   setLiveWeekTutor,
+  clearLiveWeekTutorOverride,
+  requestLiveTutorDefaultPhotoUploadUrl,
+  completeLiveTutorDefaultPhotoUpload,
+  deleteLiveTutorDefaultPhoto,
+  setLiveTutorDefaultName,
 } from '../api/live';
 import { ApiClientError } from '../api/client';
 import {
@@ -111,11 +116,18 @@ export function LiveBookingsPage() {
   const [tutorUploadError, setTutorUploadError] = useState<string | null>(null);
   const [tutorNameDraft, setTutorNameDraft] = useState('SRI');
   const [tutorNameSaving, setTutorNameSaving] = useState(false);
+  const [tutorOverrideClearing, setTutorOverrideClearing] = useState(false);
 
   const selectedWeek = useMemo(
     () => (weeks.length > 0 ? weeks[weekIndex] ?? null : null),
     [weeks, weekIndex],
   );
+
+  // Older API responses (before this backend is deployed) don't send `hasCustomTutor` at all —
+  // treat that as "this week owns its own photo" so existing per-week photos keep editing the
+  // same way they always have. Only an explicit `false` from a deployed backend means "this week
+  // is showing the shared default photo".
+  const usingSharedDefault = selectedWeek?.hasCustomTutor === false;
 
   useEffect(() => {
     setTutorNameDraft(selectedWeek?.tutorName?.trim() || 'SRI');
@@ -289,25 +301,47 @@ export function LiveBookingsPage() {
     setTutorUploading(true);
     setTutorUploadError(null);
     try {
-      const ticket = await requestLiveTutorPhotoUploadUrl(selectedWeek.id, {
-        fileName: file.name,
-        contentType: validation.contentType ?? file.type,
-        fileSizeBytes: file.size,
-      });
-      const uploadResult = await uploadToBlob(
-        ticket.uploadUrl,
-        file,
-        validation.contentType ?? file.type,
-      );
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.error ?? 'Upload failed');
+      if (usingSharedDefault) {
+        const ticket = await requestLiveTutorDefaultPhotoUploadUrl({
+          fileName: file.name,
+          contentType: validation.contentType ?? file.type,
+          fileSizeBytes: file.size,
+        });
+        const uploadResult = await uploadToBlob(
+          ticket.uploadUrl,
+          file,
+          validation.contentType ?? file.type,
+        );
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.error ?? 'Upload failed');
+        }
+        await completeLiveTutorDefaultPhotoUpload({
+          blobPath: ticket.blobPath,
+          fileSizeBytes: file.size,
+          contentType: validation.contentType ?? file.type,
+        });
+        await reloadWeeks(true);
+      } else {
+        const ticket = await requestLiveTutorPhotoUploadUrl(selectedWeek.id, {
+          fileName: file.name,
+          contentType: validation.contentType ?? file.type,
+          fileSizeBytes: file.size,
+        });
+        const uploadResult = await uploadToBlob(
+          ticket.uploadUrl,
+          file,
+          validation.contentType ?? file.type,
+        );
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.error ?? 'Upload failed');
+        }
+        const updated = await completeLiveTutorPhotoUpload(selectedWeek.id, {
+          blobPath: ticket.blobPath,
+          fileSizeBytes: file.size,
+          contentType: validation.contentType ?? file.type,
+        });
+        setWeeks((prev) => prev.map((w) => (w.id === updated.id ? { ...w, ...updated } : w)));
       }
-      const updated = await completeLiveTutorPhotoUpload(selectedWeek.id, {
-        blobPath: ticket.blobPath,
-        fileSizeBytes: file.size,
-        contentType: validation.contentType ?? file.type,
-      });
-      setWeeks((prev) => prev.map((w) => (w.id === updated.id ? { ...w, ...updated } : w)));
     } catch (err) {
       setTutorUploadError(err instanceof Error ? err.message : 'Tutor photo upload failed.');
     } finally {
@@ -317,14 +351,22 @@ export function LiveBookingsPage() {
 
   async function handleRemoveTutorPhoto() {
     if (!selectedWeek?.tutorPhotoUrl) return;
-    if (!await confirmDialog('Remove this tutor photo? The app will show the placeholder again.')) {
+    const confirmMessage = usingSharedDefault
+      ? 'Remove the default tutor photo? Every week still using the default will show the placeholder.'
+      : 'Remove this tutor photo? The app will show the placeholder again.';
+    if (!(await confirmDialog(confirmMessage))) {
       return;
     }
     setTutorUploading(true);
     setTutorUploadError(null);
     try {
-      const updated = await deleteLiveTutorPhoto(selectedWeek.id);
-      setWeeks((prev) => prev.map((w) => (w.id === updated.id ? { ...w, ...updated } : w)));
+      if (usingSharedDefault) {
+        await deleteLiveTutorDefaultPhoto();
+        await reloadWeeks(true);
+      } else {
+        const updated = await deleteLiveTutorPhoto(selectedWeek.id);
+        setWeeks((prev) => prev.map((w) => (w.id === updated.id ? { ...w, ...updated } : w)));
+      }
     } catch (err) {
       setTutorUploadError(
         err instanceof ApiClientError ? err.message : 'Could not remove tutor photo.',
@@ -344,15 +386,44 @@ export function LiveBookingsPage() {
     setTutorNameSaving(true);
     setTutorUploadError(null);
     try {
-      const updated = await setLiveWeekTutor(selectedWeek.id, name);
-      setWeeks((prev) => prev.map((w) => (w.id === updated.id ? { ...w, ...updated } : w)));
-      setTutorNameDraft(updated.tutorName?.trim() || name);
+      if (usingSharedDefault) {
+        await setLiveTutorDefaultName(name);
+        await reloadWeeks(true);
+        setTutorNameDraft(name);
+      } else {
+        const updated = await setLiveWeekTutor(selectedWeek.id, name);
+        setWeeks((prev) => prev.map((w) => (w.id === updated.id ? { ...w, ...updated } : w)));
+        setTutorNameDraft(updated.tutorName?.trim() || name);
+      }
     } catch (err) {
       setTutorUploadError(
         err instanceof ApiClientError ? err.message : 'Could not save tutor name.',
       );
     } finally {
       setTutorNameSaving(false);
+    }
+  }
+
+  async function handleUseDefaultTutor() {
+    if (!selectedWeek?.hasCustomTutor) return;
+    if (
+      !(await confirmDialog(
+        `Use the default tutor for Week ${selectedWeek.weekNumber}? This week's own name/photo will be discarded.`,
+      ))
+    ) {
+      return;
+    }
+    setTutorOverrideClearing(true);
+    setTutorUploadError(null);
+    try {
+      const updated = await clearLiveWeekTutorOverride(selectedWeek.id);
+      setWeeks((prev) => prev.map((w) => (w.id === updated.id ? { ...w, ...updated } : w)));
+    } catch (err) {
+      setTutorUploadError(
+        err instanceof ApiClientError ? err.message : 'Could not switch back to the default tutor.',
+      );
+    } finally {
+      setTutorOverrideClearing(false);
     }
   }
 
@@ -419,7 +490,16 @@ export function LiveBookingsPage() {
               )}
             </div>
             <div className="live-cal__tutor-copy">
-              <div className="live-cal__tutor-label">Tutor for this week</div>
+              <div className="live-cal__tutor-label">
+                Tutor for Week {selectedWeek.weekNumber}
+                {selectedWeek.hasCustomTutor !== undefined ? (
+                  <span
+                    className={`live-cal__tutor-badge${usingSharedDefault ? ' live-cal__tutor-badge--default' : ''}`}
+                  >
+                    {usingSharedDefault ? 'Default' : 'Custom'}
+                  </span>
+                ) : null}
+              </div>
               <div className="live-cal__tutor-name-row">
                 <input
                   className="live-cal__tutor-name-input"
@@ -428,7 +508,7 @@ export function LiveBookingsPage() {
                   onChange={(e) => setTutorNameDraft(e.target.value)}
                   maxLength={100}
                   aria-label="Tutor name for this week"
-                  disabled={tutorNameSaving || tutorUploading}
+                  disabled={tutorNameSaving || tutorUploading || tutorOverrideClearing}
                 />
                 <button
                   type="button"
@@ -436,6 +516,7 @@ export function LiveBookingsPage() {
                   disabled={
                     tutorNameSaving ||
                     tutorUploading ||
+                    tutorOverrideClearing ||
                     tutorNameDraft.trim() === (selectedWeek.tutorName?.trim() || 'SRI')
                   }
                   onClick={() => void handleSaveTutorName()}
@@ -444,7 +525,11 @@ export function LiveBookingsPage() {
                 </button>
               </div>
               <p className="live-cal__tutor-hint">
-                Per week · <strong>1200×1500</strong> (4:5), JPG/WebP, max 5 MB
+                {usingSharedDefault
+                  ? 'Applies to every week — replace it here only when you want to change all weeks at once.'
+                  : selectedWeek.hasCustomTutor
+                    ? 'Only this week — every other week keeps the default photo.'
+                    : <>Per week · <strong>1200×1500</strong> (4:5), JPG/WebP, max 5 MB</>}
               </p>
               {tutorUploadError ? <p className="form-error">{tutorUploadError}</p> : null}
               <div className="live-cal__tutor-actions">
@@ -473,6 +558,16 @@ export function LiveBookingsPage() {
                     onClick={() => void handleRemoveTutorPhoto()}
                   >
                     Remove
+                  </button>
+                ) : null}
+                {selectedWeek.hasCustomTutor ? (
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    disabled={tutorOverrideClearing}
+                    onClick={() => void handleUseDefaultTutor()}
+                  >
+                    {tutorOverrideClearing ? 'Switching…' : 'Use default'}
                   </button>
                 ) : null}
               </div>

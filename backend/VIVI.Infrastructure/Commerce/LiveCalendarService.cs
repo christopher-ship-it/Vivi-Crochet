@@ -379,6 +379,67 @@ public sealed class LiveCalendarService
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Loads the shared default tutor row (name/photo shown for every week that hasn't been
+    /// individually customized), creating it with "SRI" / no photo on first use.
+    /// </summary>
+    public async Task<LiveTutorDefault> GetOrCreateTutorDefaultAsync(CancellationToken cancellationToken)
+    {
+        var row = await _db.LiveTutorDefaults
+            .SingleOrDefaultAsync(x => x.Id == LiveTutorDefault.SingletonId, cancellationToken);
+        if (row is not null)
+            return row;
+
+        row = new LiveTutorDefault
+        {
+            Id = LiveTutorDefault.SingletonId,
+            TutorName = "SRI",
+            TutorPhotoBlobPath = null,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _db.LiveTutorDefaults.Add(row);
+        await _db.SaveChangesAsync(cancellationToken);
+        return row;
+    }
+
+    /// <summary>
+    /// The tutor name/photo that should actually be shown for <paramref name="week"/>:
+    /// its own values when customized (<see cref="LiveWeek.HasCustomTutor"/>), otherwise the
+    /// shared default.
+    /// </summary>
+    public static (string TutorName, string? TutorPhotoBlobPath) ResolveEffectiveTutor(
+        LiveWeek week,
+        LiveTutorDefault tutorDefault)
+    {
+        if (week.HasCustomTutor)
+        {
+            var ownName = string.IsNullOrWhiteSpace(week.TutorName) ? "SRI" : week.TutorName.Trim();
+            return (ownName, week.TutorPhotoBlobPath);
+        }
+
+        var defaultName = string.IsNullOrWhiteSpace(tutorDefault.TutorName)
+            ? "SRI"
+            : tutorDefault.TutorName.Trim();
+        return (defaultName, tutorDefault.TutorPhotoBlobPath);
+    }
+
+    /// <summary>
+    /// Marks <paramref name="week"/> as individually customized, seeding its own name/photo from
+    /// the current shared default the first time this happens so switching to "custom" doesn't
+    /// visually change whichever field the caller isn't about to overwrite. No-op if already custom.
+    /// </summary>
+    public static void ActivateCustomTutor(LiveWeek week, LiveTutorDefault tutorDefault)
+    {
+        if (week.HasCustomTutor)
+            return;
+
+        week.TutorName = string.IsNullOrWhiteSpace(tutorDefault.TutorName)
+            ? "SRI"
+            : tutorDefault.TutorName.Trim();
+        week.TutorPhotoBlobPath = tutorDefault.TutorPhotoBlobPath;
+        week.HasCustomTutor = true;
+    }
+
     public async Task SetSlotBlockedAsync(
         Guid weekId,
         LiveSlotType slotType,

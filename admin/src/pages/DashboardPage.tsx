@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listCourses } from '../api/courses';
 import { listVideos } from '../api/videos';
+import { listSpecialOffers } from '../api/specialOffers';
 import { ApiClientError } from '../api/client';
-import type { Course, Video } from '../types';
-import { formatDate } from '../utils/format';
+import type { AdminSpecialOffer, Course, Video } from '../types';
+import { formatDate, formatInr } from '../utils/format';
 
 export function DashboardPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
+  const [specialOffer, setSpecialOffer] = useState<AdminSpecialOffer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,10 +20,15 @@ export function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [courseData, videoData] = await Promise.all([listCourses(), listVideos()]);
+        const [courseData, videoData, offers] = await Promise.all([
+          listCourses(),
+          listVideos(),
+          listSpecialOffers().catch(() => []),
+        ]);
         if (!cancelled) {
           setCourses(courseData);
           setVideos(videoData);
+          setSpecialOffer(offers[0] ?? null);
         }
       } catch (err) {
         if (!cancelled) {
@@ -138,6 +145,39 @@ export function DashboardPage() {
           </div>
         )}
       </section>
+
+      {specialOffer && (
+        <section className="section-block card">
+          <div className="card__header" style={{ marginBottom: 12 }}>
+            <div>
+              <h2 className="card__title">{specialOffer.offerName}</h2>
+              <p className="card__subtitle">
+                ₹{specialOffer.launchPrice} Launch Offer ·{' '}
+                <span className={`badge ${specialOffer.isActive ? 'badge--published' : 'badge--inactive'}`}>
+                  {specialOffer.isActive ? 'ACTIVE' : 'INACTIVE'}
+                </span>
+              </p>
+            </div>
+            <Link to="/special-offers" className="btn btn--ghost btn--sm">Manage</Link>
+          </div>
+          <div className="stat-grid">
+            <div className="card card--stat">
+              <span className="card__label">Founding members</span>
+              <span className="card__value">
+                {specialOffer.completedPurchaseCount} / {specialOffer.launchLimit}
+              </span>
+            </div>
+            <div className="card card--stat">
+              <span className="card__label">Remaining</span>
+              <span className="card__value">{specialOffer.remaining}</span>
+            </div>
+            <div className="card card--stat">
+              <span className="card__label">Revenue</span>
+              <span className="card__value">{formatInr(specialOffer.revenue)}</span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {videos.length > 0 && (
         <section className="section-block card">

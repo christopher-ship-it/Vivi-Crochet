@@ -58,6 +58,7 @@ public sealed class CreateOrderResponse
 {
     public Guid OrderId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
+    public string PaymentProvider { get; set; } = "Razorpay";
     public string RazorpayOrderId { get; set; } = string.Empty;
     public string RazorpayKeyId { get; set; } = string.Empty;
     public int AmountPaise { get; set; }

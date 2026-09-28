@@ -176,24 +176,6 @@ public sealed class DeliveryTests
     }
 
     [Fact]
-    public async Task Mixed_product_and_course_order_is_rejected()
-    {
-        var productId = await PublishProductAsync("Mix Block", ProductType.Handmade);
-        var (customer, courseId) = await OrderTestsHelper.CustomerWithPublishedCourse(_factory, NextPhone());
-        var response = await customer.PostAsJsonAsync("/api/orders", new
-        {
-            items = new object[]
-            {
-                new { itemType = "Product", productId, quantity = 1 },
-                new { itemType = "Course", courseId, quantity = 1 }
-            },
-            shippingAddress = Address("Coimbatore")
-        });
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Contains("MIXED_ORDER_NOT_ALLOWED", await response.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
     public async Task Server_calculates_delivery_and_ignores_mobile_override()
     {
         var productId = await PublishProductAsync("Server Price", ProductType.Handmade);

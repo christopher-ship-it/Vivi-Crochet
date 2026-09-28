@@ -12,8 +12,9 @@ public sealed record CheckoutLineInput(OrderItemType ItemType, Guid? ProductId, 
 
 public sealed record CheckoutResult(
     Order Order,
-    string RazorpayOrderId,
-    string RazorpayKeyId,
+    PaymentProvider Provider,
+    string? RazorpayOrderId,
+    string? RazorpayKeyId,
     int AmountPaise,
     string Currency,
     DeliveryQuoteSnapshot? Delivery);
@@ -155,7 +156,6 @@ public sealed class OrderCheckoutService
         var amountPaise = ToPaise(order.TotalAmount);
         var razorpayOrder = await _razorpay.CreateOrderAsync(order.OrderNumber, amountPaise, order.Currency, cancellationToken);
         order.RazorpayOrderId = razorpayOrder.RazorpayOrderId;
-
         var payment = new Payment
         {
             Id = Guid.NewGuid(),
@@ -177,10 +177,11 @@ public sealed class OrderCheckoutService
 
         return new CheckoutResult(
             order,
+            PaymentProvider.Razorpay,
             razorpayOrder.RazorpayOrderId,
             _razorpayOptions.KeyId,
-            razorpayOrder.AmountPaise,
-            razorpayOrder.Currency,
+            amountPaise,
+            order.Currency,
             deliveryQuote);
     }
 
@@ -226,15 +227,11 @@ public sealed class OrderCheckoutService
 
     private static void EnsureNotMixed(IReadOnlyList<CheckoutLineInput> items)
     {
+        // Products + courses/bundles may share one Razorpay checkout (shipping applies when any
+        // physical line is present). Live packages remain a separate booking flow.
         var hasPhysical = items.Any(i => i.ItemType == OrderItemType.Product);
         var hasDigital = items.Any(i => i.ItemType is OrderItemType.Course or OrderItemType.CourseBundle);
         var hasLive = items.Any(i => i.ItemType == OrderItemType.LivePackage);
-        if (hasPhysical && hasDigital)
-        {
-            throw ViviException.Conflict(
-                "MIXED_ORDER_NOT_ALLOWED",
-                "Physical products and courses must be purchased in separate checkouts.");
-        }
 
         if (hasLive && (hasPhysical || hasDigital || items.Count > 1))
         {

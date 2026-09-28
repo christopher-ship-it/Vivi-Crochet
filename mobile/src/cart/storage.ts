@@ -1,5 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { CartLineItem, CartState } from './types';
+import {
+  cartLineKey,
+  isCourseLine,
+  isProductLine,
+  normalizeCartItemType,
+  type CartLineItem,
+  type CartState,
+} from './types';
 
 /** Pre–per-user key; claimed once by the next signed-in account. */
 const LEGACY_CART_STORAGE_KEY = 'vivi_shopping_cart_v1';
@@ -18,7 +25,23 @@ export function cartStorageKey(ownerId: string): string {
 function parseCartRaw(raw: string): CartLineItem[] {
   const parsed = JSON.parse(raw) as CartState;
   if (!Array.isArray(parsed.items)) return [];
-  return parsed.items.filter(isValidLineItem);
+  return parsed.items.filter(isValidLineItem).map(normalizeStoredLine);
+}
+
+function normalizeStoredLine(item: CartLineItem): CartLineItem {
+  if (isCourseLine(item)) {
+    return {
+      ...item,
+      itemType: item.itemType === 'CourseBundle' ? 'CourseBundle' : 'Course',
+      quantity: 1,
+      productId: undefined,
+    };
+  }
+  return {
+    ...item,
+    itemType: 'Product',
+    courseId: undefined,
+  };
 }
 
 export async function loadCartFromStorage(ownerId: string): Promise<CartLineItem[]> {
@@ -65,16 +88,19 @@ export async function claimGuestCart(
     }
     const merged = [...userItems];
     for (const g of guestItems) {
-      const i = merged.findIndex((m) => m.productId === g.productId);
+      const key = cartLineKey(g);
+      const i = merged.findIndex((m) => cartLineKey(m) === key);
       if (i === -1) {
         merged.push(g);
-      } else {
+      } else if (isProductLine(g)) {
         const stock = g.availableStock ?? merged[i].availableStock;
         const sum = merged[i].quantity + g.quantity;
         merged[i] = {
           ...g,
           quantity: typeof stock === 'number' && stock > 0 ? Math.min(sum, stock) : sum,
         };
+      } else {
+        merged[i] = { ...g, quantity: 1 };
       }
     }
     await saveCartToStorage(ownerId, merged);
@@ -100,12 +126,19 @@ export async function saveCartToStorage(ownerId: string, items: CartLineItem[]):
 function isValidLineItem(item: unknown): item is CartLineItem {
   if (!item || typeof item !== 'object') return false;
   const row = item as CartLineItem;
-  return (
-    typeof row.productId === 'string'
-    && typeof row.quantity === 'number'
-    && row.quantity >= 1
-    && typeof row.name === 'string'
-    && typeof row.price === 'number'
-    && row.price >= 0
-  );
+  if (
+    typeof row.quantity !== 'number'
+    || row.quantity < 1
+    || typeof row.name !== 'string'
+    || typeof row.price !== 'number'
+    || row.price < 0
+  ) {
+    return false;
+  }
+
+  const type = normalizeCartItemType(row);
+  if (type === 'Course' || type === 'CourseBundle') {
+    return typeof row.courseId === 'string' && row.courseId.length > 0;
+  }
+  return typeof row.productId === 'string' && row.productId.length > 0;
 }

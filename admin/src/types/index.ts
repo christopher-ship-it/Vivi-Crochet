@@ -408,7 +408,15 @@ export interface AdminLiveWeek {
   packagePrice: number;
   tutorName?: string | null;
   tutorPhotoUrl?: string | null;
+  /** True when this week has its own tutor name/photo instead of the shared default. */
+  hasCustomTutor: boolean;
   slots: LiveSlotAvailability[];
+}
+
+/** The shared tutor name/photo shown for every Live week without its own override. */
+export interface AdminLiveTutorDefault {
+  tutorName: string;
+  tutorPhotoUrl?: string | null;
 }
 
 export interface AdminCustomerListItem {
@@ -425,5 +433,60 @@ export interface AdminCustomerListItem {
   country: string | null;
   state: string | null;
   city: string | null;
+}
+
+export interface AdminSpecialOfferCourse {
+  id: string;
+  name: string;
+  price: number;
+}
+
+export interface AdminSpecialOffer {
+  courseId: string;
+  offerName: string;
+  isActive: boolean;
+  launchPrice: number;
+  launchLimit: number;
+  regularPriceAfterLaunch: number;
+  mrp: number;
+  accessDurationDays: number;
+  completedPurchaseCount: number;
+  remaining: number;
+  revenue: number;
+  viralProjectCourseId?: string | null;
+  viralProjectCourseName?: string | null;
+  includedCourses: AdminSpecialOfferCourse[];
+}
+
+export interface AdminSpecialOfferRequest {
+  offerName: string;
+  isActive: boolean;
+  launchPrice: number;
+  launchLimit: number;
+  regularPriceAfterLaunch: number;
+  mrp: number;
+  accessDurationDays: number;
+  viralProjectCourseId?: string | null;
+}
+
+export interface FoundingMember {
+  id: string;
+  memberNumber: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  joinedDate: string;
+  expiryDate: string;
+  amountPaid: number;
+  orderNumber: string;
+  isActive: boolean;
+  viralProjectCourseName?: string | null;
+}
+
+export interface FoundingMemberListResponse {
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  items: FoundingMember[];
 }
 

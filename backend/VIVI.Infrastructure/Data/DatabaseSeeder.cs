@@ -353,19 +353,16 @@ public sealed class DatabaseSeeder
         }
 
         existing.Name = name;
-        // Preserve admin-edited marketing copy; only fill blanks from the catalog seed.
-        // Also upgrade the original short Foundation level so the longer tagline lands once.
+        // Preserve admin-edited marketing copy, pricing, and access window.
+        // AutoSeed runs on every API start in production — never wipe admin prices.
         if (string.IsNullOrWhiteSpace(existing.About))
             existing.About = about;
         if (string.IsNullOrWhiteSpace(existing.Level) || existing.Level.Trim() == "Beginner")
             existing.Level = level;
-        existing.Price = price;
-        existing.Mrp = mrp;
-        existing.AccessDays = accessDays;
         existing.Type = type;
         if (categoryId.HasValue)
             existing.CategoryId = categoryId;
-        existing.UpdatedAt = now;
+        // Do not bump UpdatedAt for no-op re-seeds (keeps admin "Updated" truthful).
     }
 
     private async Task SyncBundleMembershipAsync(CancellationToken cancellationToken)
@@ -405,22 +402,21 @@ public sealed class DatabaseSeeder
             {
                 Id = Guid.NewGuid(),
                 CourseId = Catalog.BundleId,
+                OfferName = "VIVI Crochet Circle",
+                IsActive = true,
                 LaunchLimit = 100,
                 LaunchPrice = 999,
                 RegularPriceAfterLaunch = 1699,
                 Mrp = 1997,
                 CompletedPurchaseCount = 0,
+                AccessDurationDays = 365,
                 CreatedAt = now,
                 UpdatedAt = now
             });
             return;
         }
 
-        offer.LaunchLimit = 100;
-        offer.LaunchPrice = 999;
-        offer.RegularPriceAfterLaunch = 1699;
-        offer.Mrp = 1997;
-        offer.UpdatedAt = now;
+        // Existing offer: admin owns LaunchPrice / limits. Do not reset on AutoSeed.
     }
 
     private async Task SeedProductsAsync(CancellationToken cancellationToken)

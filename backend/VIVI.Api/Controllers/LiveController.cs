@@ -66,9 +66,10 @@ public sealed class LiveController : ControllerBase
             weeks = weeks.Where(w => w.SeasonYear == primaryYear).ToList();
         }
 
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
         var mapped = new List<LiveWeekSummaryResponse>(weeks.Count);
         foreach (var week in weeks)
-            mapped.Add(await MapSummaryAsync(week, cancellationToken));
+            mapped.Add(await MapSummaryAsync(week, tutorDefault, cancellationToken));
         return Ok(mapped);
     }
 
@@ -86,7 +87,8 @@ public sealed class LiveController : ControllerBase
             .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
             ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
 
-        return Ok(await MapDetailAsync(week, cancellationToken));
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        return Ok(await MapDetailAsync(week, tutorDefault, cancellationToken));
     }
 
     [HttpGet("weeks/{weekId:guid}/availability")]
@@ -115,8 +117,9 @@ public sealed class LiveController : ControllerBase
             BookingId = result.Booking.Id,
             OrderId = result.Order.Id,
             OrderNumber = result.Order.OrderNumber,
-            RazorpayOrderId = result.RazorpayOrderId,
-            RazorpayKeyId = result.RazorpayKeyId,
+            PaymentProvider = result.Provider.ToString(),
+            RazorpayOrderId = result.RazorpayOrderId ?? string.Empty,
+            RazorpayKeyId = result.RazorpayKeyId ?? string.Empty,
             AmountPaise = result.AmountPaise,
             Currency = result.Currency,
             TotalAmount = result.Order.TotalAmount,
@@ -175,10 +178,12 @@ public sealed class LiveController : ControllerBase
 
     private async Task<LiveWeekSummaryResponse> MapSummaryAsync(
         Core.Entities.LiveWeek week,
+        Core.Entities.LiveTutorDefault tutorDefault,
         CancellationToken cancellationToken)
     {
+        var (tutorName, tutorPhotoBlobPath) = LiveCalendarService.ResolveEffectiveTutor(week, tutorDefault);
         var tutorPhotoUrl = await ProductImageResolver.ResolveAsync(
-            week.TutorPhotoBlobPath,
+            tutorPhotoBlobPath,
             _blob,
             cancellationToken);
         return new LiveWeekSummaryResponse
@@ -190,7 +195,7 @@ public sealed class LiveController : ControllerBase
             EndDate = week.EndDate,
             IsBookable = week.IsBookable,
             PackagePrice = _calendar.PackagePrice,
-            TutorName = string.IsNullOrWhiteSpace(week.TutorName) ? "SRI" : week.TutorName.Trim(),
+            TutorName = tutorName,
             TutorPhotoUrl = tutorPhotoUrl,
             Slots = week.Slots.OrderBy(s => s.SlotType).Select(MapSlot).ToList()
         };
@@ -198,9 +203,10 @@ public sealed class LiveController : ControllerBase
 
     private async Task<LiveWeekDetailResponse> MapDetailAsync(
         Core.Entities.LiveWeek week,
+        Core.Entities.LiveTutorDefault tutorDefault,
         CancellationToken cancellationToken)
     {
-        var summary = await MapSummaryAsync(week, cancellationToken);
+        var summary = await MapSummaryAsync(week, tutorDefault, cancellationToken);
         return new LiveWeekDetailResponse
         {
             Id = summary.Id,

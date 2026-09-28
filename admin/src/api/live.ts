@@ -2,6 +2,7 @@ import { apiRequest } from './client';
 import type {
   AdminLiveBookingDetail,
   AdminLiveBookingListItem,
+  AdminLiveTutorDefault,
   AdminLiveWeek,
   LiveBookingStatus,
   LiveSlotType,
@@ -125,6 +126,50 @@ export async function setLiveWeekTutor(
   tutorName: string,
 ): Promise<AdminLiveWeek> {
   return apiRequest<AdminLiveWeek>(`/api/admin/live/weeks/${weekId}/tutor`, {
+    method: 'PUT',
+    body: JSON.stringify({ tutorName }),
+  });
+}
+
+export async function clearLiveWeekTutorOverride(weekId: string): Promise<AdminLiveWeek> {
+  return apiRequest<AdminLiveWeek>(`/api/admin/live/weeks/${weekId}/tutor-override`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getLiveTutorDefault(): Promise<AdminLiveTutorDefault> {
+  return apiRequest<AdminLiveTutorDefault>('/api/admin/live/tutor-default');
+}
+
+export async function requestLiveTutorDefaultPhotoUploadUrl(
+  data: LiveTutorPhotoUploadUrlRequest,
+): Promise<LiveTutorPhotoUploadUrlResponse> {
+  return apiRequest<LiveTutorPhotoUploadUrlResponse>(
+    '/api/admin/live/tutor-default/photo-upload-url',
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    },
+  );
+}
+
+export async function completeLiveTutorDefaultPhotoUpload(
+  data: LiveTutorPhotoUploadCompleteRequest,
+): Promise<AdminLiveTutorDefault> {
+  return apiRequest<AdminLiveTutorDefault>('/api/admin/live/tutor-default/photo-upload-complete', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteLiveTutorDefaultPhoto(): Promise<AdminLiveTutorDefault> {
+  return apiRequest<AdminLiveTutorDefault>('/api/admin/live/tutor-default/photo', {
+    method: 'DELETE',
+  });
+}
+
+export async function setLiveTutorDefaultName(tutorName: string): Promise<AdminLiveTutorDefault> {
+  return apiRequest<AdminLiveTutorDefault>('/api/admin/live/tutor-default/name', {
     method: 'PUT',
     body: JSON.stringify({ tutorName }),
   });

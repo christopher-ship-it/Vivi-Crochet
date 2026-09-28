@@ -43,6 +43,7 @@ export interface CreateLiveBookingResponse {
   bookingId: string;
   orderId: string;
   orderNumber: string;
+  paymentProvider?: 'Razorpay' | string;
   razorpayOrderId: string;
   razorpayKeyId: string;
   amountPaise: number;

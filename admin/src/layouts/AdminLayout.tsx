@@ -60,6 +60,8 @@ const COURSE_DASHBOARD_ITEMS = [
   { to: '/live', label: 'Live classes' },
   { to: '/courses', label: 'Courses & videos' },
   { to: '/categories', label: 'Categories' },
+  { to: '/special-offers', label: 'Special Offers' },
+  { to: '/viral-projects', label: 'Viral Projects' },
 ];
 
 const ORDER_ITEMS = [
@@ -93,7 +95,11 @@ function isCourseDashboardPath(pathname: string): boolean {
     pathname === '/courses' ||
     pathname.startsWith('/courses/') ||
     pathname === '/categories' ||
-    pathname.startsWith('/categories/')
+    pathname.startsWith('/categories/') ||
+    pathname === '/special-offers' ||
+    pathname.startsWith('/special-offers/') ||
+    pathname === '/viral-projects' ||
+    pathname.startsWith('/viral-projects/')
   );
 }
 

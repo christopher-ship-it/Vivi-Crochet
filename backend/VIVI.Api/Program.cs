@@ -414,6 +414,16 @@ using (var scope = app.Services.CreateScope())
             await LiveSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
             try
             {
+                await LaunchMembershipSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
+                logger.LogInformation("Founding membership schema verified.");
+            }
+            catch (Exception membershipEx)
+            {
+                logger.LogError(membershipEx, "Founding membership schema bootstrap failed. Launch offer purchases will error until LaunchMemberships exists.");
+            }
+
+            try
+            {
                 await PushSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
                 logger.LogInformation("Push notification schema verified.");
             }

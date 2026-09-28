@@ -6,5 +6,6 @@ public enum EmailNotificationType
     CourseAccess = 1,
     CourseExpiryReminder = 2,
     DeliveryDateUpdated = 3,
-    LiveBookingConfirmation = 4
+    LiveBookingConfirmation = 4,
+    LaunchMembershipConfirmation = 5
 }

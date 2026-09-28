@@ -77,6 +77,20 @@ function splitHours(hours: string): { start: string; end: string } {
   return { start: toClock(parts[0]), end: toClock(parts[1]) };
 }
 
+/**
+ * "SRI" -> "Sri" (first letter of each word capitalized, rest lowercase).
+ * The tutor name is shown in Tangerine, a connected script font — all-caps input
+ * (the DB default, or any admin typing in caps) breaks the letter connections and
+ * reads poorly, so the badge always displays name-case regardless of stored casing.
+ */
+function toNameCase(value: string): string {
+  return value
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function slotUnavailable(slot: LiveSlotAvailability): boolean {
   return (
     slot.isBlocked === true ||
@@ -396,6 +410,7 @@ export default function LiveScreen() {
       const created = await createLiveBooking(detail.id, selectedSlot);
       setPendingOrderId(created.orderId);
       setPendingBookingId(created.bookingId);
+
       setCheckout({
         keyId: created.razorpayKeyId,
         orderId: created.razorpayOrderId,
@@ -417,7 +432,9 @@ export default function LiveScreen() {
           ? err.code === 'ALREADY_BOOKED'
             ? t('live.alreadyBooked')
             : err.message
-          : t('live.couldNotStartBooking');
+          : err instanceof Error
+            ? err.message
+            : t('live.couldNotStartBooking');
       Alert.alert(t('live.booking'), message);
       if (selectedWeekId) void loadDetail(selectedWeekId);
     } finally {
@@ -567,7 +584,7 @@ export default function LiveScreen() {
           <View style={styles.tutorRow}>
             <View style={styles.tutorCopy}>
               <Text style={styles.tutorBadgeLabel}>{t('live.yourTutor')}</Text>
-              <Text style={styles.tutorBadgeName}>{tutorName}</Text>
+              <Text style={styles.tutorBadgeName}>{toNameCase(tutorName)}</Text>
               <Text style={styles.tutorCopyHint}>{t('live.tutorLead')}</Text>
             </View>
             <View style={styles.studioFrame}>

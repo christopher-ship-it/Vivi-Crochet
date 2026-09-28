@@ -61,7 +61,136 @@ public sealed class AdminLiveController : ControllerBase
             .ThenBy(w => w.WeekNumber)
             .ToListAsync(cancellationToken);
 
-        return Ok(await Task.WhenAll(weeks.Select(w => MapWeekAsync(w, cancellationToken))));
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        return Ok(await Task.WhenAll(weeks.Select(w => MapWeekAsync(w, tutorDefault, cancellationToken))));
+    }
+
+    [HttpGet("tutor-default")]
+    [ProducesResponseType(typeof(AdminLiveTutorDefaultResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveTutorDefaultResponse>> GetTutorDefault(CancellationToken cancellationToken)
+    {
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        return Ok(await MapTutorDefaultAsync(tutorDefault, cancellationToken));
+    }
+
+    [HttpPost("tutor-default/photo-upload-url")]
+    [ProducesResponseType(typeof(LiveTutorPhotoUploadUrlResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<LiveTutorPhotoUploadUrlResponse>> CreateTutorDefaultPhotoUploadUrl(
+        [FromBody] LiveTutorPhotoUploadUrlRequest request,
+        CancellationToken cancellationToken)
+    {
+        ImageFileRules.Validate(
+            request.FileName,
+            request.ContentType,
+            request.FileSizeBytes,
+            ImageFileRules.DefaultMaxBytes);
+
+        var safeName = ImageFileRules.SanitizeFileName(request.FileName);
+        var uniqueName = $"{Guid.NewGuid():N}-{safeName}";
+        var blobPath = ImageFileRules.BuildLiveTutorDefaultPhotoBlobPath(uniqueName);
+        var ticket = await _blob.CreateUploadSasAsync(blobPath, request.ContentType.Trim(), cancellationToken);
+
+        return Ok(new LiveTutorPhotoUploadUrlResponse
+        {
+            UploadUrl = ticket.UploadUrl,
+            ExpiresAt = ticket.ExpiresAt,
+            BlobPath = blobPath,
+            MaxFileSizeBytes = ImageFileRules.DefaultMaxBytes
+        });
+    }
+
+    [HttpPost("tutor-default/photo-upload-complete")]
+    [ProducesResponseType(typeof(AdminLiveTutorDefaultResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveTutorDefaultResponse>> CompleteTutorDefaultPhotoUpload(
+        [FromBody] LiveTutorPhotoUploadCompleteRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ImageFileRules.IsOwnedLiveTutorDefaultPhotoPath(request.BlobPath))
+            throw new ViviException("INVALID_BLOB_PATH", "The blob path does not belong to the default tutor photo.");
+
+        ImageFileRules.Validate(
+            Path.GetFileName(request.BlobPath),
+            request.ContentType,
+            request.FileSizeBytes,
+            ImageFileRules.DefaultMaxBytes);
+
+        var completed = await _blob.TryCompleteUploadAsync(
+            request.BlobPath,
+            request.FileSizeBytes,
+            request.ContentType.Trim(),
+            cancellationToken);
+
+        if (!completed)
+            throw ViviException.Conflict(
+                "BLOB_MISSING",
+                "The image file was not found in storage. Upload it to the SAS URL, then retry.");
+
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        var previous = tutorDefault.TutorPhotoBlobPath;
+        tutorDefault.TutorPhotoBlobPath = request.BlobPath;
+        tutorDefault.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(previous)
+            && !string.Equals(previous, request.BlobPath, StringComparison.OrdinalIgnoreCase)
+            && ProductImageResolver.IsBlobPath(previous))
+        {
+            try
+            {
+                await _blob.DeleteAsync(previous, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete previous default tutor photo {BlobPath}", previous);
+            }
+        }
+
+        return Ok(await MapTutorDefaultAsync(tutorDefault, cancellationToken));
+    }
+
+    [HttpDelete("tutor-default/photo")]
+    [ProducesResponseType(typeof(AdminLiveTutorDefaultResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveTutorDefaultResponse>> DeleteTutorDefaultPhoto(
+        CancellationToken cancellationToken)
+    {
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        var previous = tutorDefault.TutorPhotoBlobPath;
+        tutorDefault.TutorPhotoBlobPath = null;
+        tutorDefault.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(previous) && ProductImageResolver.IsBlobPath(previous))
+        {
+            try
+            {
+                await _blob.DeleteAsync(previous, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete default tutor photo {BlobPath}", previous);
+            }
+        }
+
+        return Ok(await MapTutorDefaultAsync(tutorDefault, cancellationToken));
+    }
+
+    [HttpPut("tutor-default/name")]
+    [ProducesResponseType(typeof(AdminLiveTutorDefaultResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveTutorDefaultResponse>> SetTutorDefaultName(
+        [FromBody] SetLiveWeekTutorRequest request,
+        CancellationToken cancellationToken)
+    {
+        var name = (request.TutorName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ViviException("INVALID_TUTOR_NAME", "Tutor name is required.");
+        if (name.Length > 100)
+            throw new ViviException("INVALID_TUTOR_NAME", "Tutor name must be 100 characters or fewer.");
+
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        tutorDefault.TutorName = name;
+        tutorDefault.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        return Ok(await MapTutorDefaultAsync(tutorDefault, cancellationToken));
     }
 
     [HttpPost("weeks/{weekId:guid}/tutor-photo-upload-url")]
@@ -127,10 +256,12 @@ public sealed class AdminLiveController : ControllerBase
                 .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
             ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
 
-        var previous = week.TutorPhotoBlobPath;
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        // Only a week-owned blob is safe to delete — the shared default's blob (if any) is still
+        // used by every other non-customized week.
+        var previous = week.HasCustomTutor ? week.TutorPhotoBlobPath : null;
+        LiveCalendarService.ActivateCustomTutor(week, tutorDefault);
         week.TutorPhotoBlobPath = request.BlobPath;
-        if (string.IsNullOrWhiteSpace(week.TutorName))
-            week.TutorName = "SRI";
         week.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -148,7 +279,7 @@ public sealed class AdminLiveController : ControllerBase
             }
         }
 
-        return Ok(await MapWeekAsync(week, cancellationToken));
+        return Ok(await MapWeekAsync(week, tutorDefault, cancellationToken));
     }
 
     [HttpDelete("weeks/{weekId:guid}/tutor-photo")]
@@ -162,7 +293,11 @@ public sealed class AdminLiveController : ControllerBase
                 .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
             ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
 
-        var previous = week.TutorPhotoBlobPath;
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        // Only a week-owned blob is safe to delete — the shared default's blob (if any) is still
+        // used by every other non-customized week.
+        var previous = week.HasCustomTutor ? week.TutorPhotoBlobPath : null;
+        LiveCalendarService.ActivateCustomTutor(week, tutorDefault);
         week.TutorPhotoBlobPath = null;
         week.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
@@ -179,7 +314,7 @@ public sealed class AdminLiveController : ControllerBase
             }
         }
 
-        return Ok(await MapWeekAsync(week, cancellationToken));
+        return Ok(await MapWeekAsync(week, tutorDefault, cancellationToken));
     }
 
     [HttpPut("weeks/{weekId:guid}/tutor")]
@@ -200,10 +335,48 @@ public sealed class AdminLiveController : ControllerBase
                 .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
             ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
 
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        LiveCalendarService.ActivateCustomTutor(week, tutorDefault);
         week.TutorName = name;
         week.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(await MapWeekAsync(week, cancellationToken));
+        return Ok(await MapWeekAsync(week, tutorDefault, cancellationToken));
+    }
+
+    [HttpDelete("weeks/{weekId:guid}/tutor-override")]
+    [ProducesResponseType(typeof(AdminLiveWeekResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveWeekResponse>> ClearTutorOverride(
+        Guid weekId,
+        CancellationToken cancellationToken)
+    {
+        var week = await _db.LiveWeeks
+                .Include(w => w.Slots)
+                .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
+
+        // Only a week-owned blob is safe to delete — reverting to the default never deletes the
+        // shared default's own photo.
+        var previous = week.HasCustomTutor ? week.TutorPhotoBlobPath : null;
+        week.HasCustomTutor = false;
+        week.TutorName = "SRI";
+        week.TutorPhotoBlobPath = null;
+        week.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(previous) && ProductImageResolver.IsBlobPath(previous))
+        {
+            try
+            {
+                await _blob.DeleteAsync(previous, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete live tutor photo {BlobPath}", previous);
+            }
+        }
+
+        var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
+        return Ok(await MapWeekAsync(week, tutorDefault, cancellationToken));
     }
 
     [HttpPut("weeks/{weekId:guid}/break")]
@@ -331,10 +504,12 @@ public sealed class AdminLiveController : ControllerBase
 
     private async Task<AdminLiveWeekResponse> MapWeekAsync(
         Core.Entities.LiveWeek week,
+        Core.Entities.LiveTutorDefault tutorDefault,
         CancellationToken cancellationToken)
     {
+        var (tutorName, tutorPhotoBlobPath) = LiveCalendarService.ResolveEffectiveTutor(week, tutorDefault);
         var tutorPhotoUrl = await ProductImageResolver.ResolveAsync(
-            week.TutorPhotoBlobPath,
+            tutorPhotoBlobPath,
             _blob,
             cancellationToken);
         return new AdminLiveWeekResponse
@@ -347,9 +522,25 @@ public sealed class AdminLiveController : ControllerBase
             BreakWeekday = week.BreakWeekday?.ToString(),
             IsBookable = week.IsBookable,
             PackagePrice = _calendar.PackagePrice,
-            TutorName = string.IsNullOrWhiteSpace(week.TutorName) ? "SRI" : week.TutorName.Trim(),
+            TutorName = tutorName,
             TutorPhotoUrl = tutorPhotoUrl,
+            HasCustomTutor = week.HasCustomTutor,
             Slots = week.Slots.OrderBy(s => s.SlotType).Select(MapSlot).ToList()
+        };
+    }
+
+    private async Task<AdminLiveTutorDefaultResponse> MapTutorDefaultAsync(
+        Core.Entities.LiveTutorDefault tutorDefault,
+        CancellationToken cancellationToken)
+    {
+        var tutorPhotoUrl = await ProductImageResolver.ResolveAsync(
+            tutorDefault.TutorPhotoBlobPath,
+            _blob,
+            cancellationToken);
+        return new AdminLiveTutorDefaultResponse
+        {
+            TutorName = string.IsNullOrWhiteSpace(tutorDefault.TutorName) ? "SRI" : tutorDefault.TutorName.Trim(),
+            TutorPhotoUrl = tutorPhotoUrl
         };
     }
 

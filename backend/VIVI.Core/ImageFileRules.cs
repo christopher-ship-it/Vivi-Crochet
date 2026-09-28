@@ -78,4 +78,11 @@ public static class ImageFileRules
 
     public static bool IsOwnedLiveTutorPhotoPath(Guid weekId, string blobPath)
         => blobPath.StartsWith($"live/{weekId:D}/tutor/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Blob path prefix for the shared default tutor photo (used by every week without its own override).</summary>
+    public static string BuildLiveTutorDefaultPhotoBlobPath(string sanitizedFileName)
+        => $"live/tutor-default/{sanitizedFileName}";
+
+    public static bool IsOwnedLiveTutorDefaultPhotoPath(string blobPath)
+        => blobPath.StartsWith("live/tutor-default/", StringComparison.OrdinalIgnoreCase);
 }

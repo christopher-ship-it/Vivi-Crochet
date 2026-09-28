@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   Pressable,
@@ -13,12 +14,14 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getCourse, listCourses } from '../../src/api/courses';
+import { getCourse } from '../../src/api/courses';
+import { listMyEnrollments } from '../../src/api/enrollments';
 import {
-  getCoursePricing,
-  listMyEnrollments,
-  type CoursePricing,
-} from '../../src/api/enrollments';
+  getFoundingMembershipOffer,
+  getMyMembership,
+  type FoundingMembershipOffer,
+  type MyMembership,
+} from '../../src/api/offers';
 import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { AppImage } from '../../src/components/AppImage';
@@ -31,37 +34,12 @@ import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, radii, spacing } from '../../src/theme';
 import type { Course } from '../../src/types';
 import { formatInr } from '../../src/utils/format';
-import {
-  COMPLETE_COLLECTION_BUNDLE_ID,
-  MAIN_COURSE_CATALOG,
-  resolveCollectionOwnership,
-} from '../../src/utils/mainCourses';
+import { resolveCollectionOwnership } from '../../src/utils/mainCourses';
 import { applyStatusBar } from '../../src/utils/statusBar';
 
 const LESSON_COUNT = 27;
-/** Launch offer is capped at the first 100 buyers (see offers.launchTag). */
-const LAUNCH_SPOTS = 100;
 const STAGGER_MS = 50;
 const ENTRANCE_MS = 260;
-
-async function resolveBundleCourse(): Promise<Course> {
-  try {
-    return await getCourse(COMPLETE_COLLECTION_BUNDLE_ID);
-  } catch (err) {
-    if (!(err instanceof ApiClientError) || err.status !== 404) throw err;
-  }
-
-  const all = await listCourses();
-  const bundle =
-    all.find((c) => c.id === COMPLETE_COLLECTION_BUNDLE_ID)
-    ?? all.find((c) => c.type === 'Bundle')
-    ?? all.find((c) => /complete crochet collection|all-access crochet pass/i.test(c.name));
-
-  if (!bundle) {
-    throw new ApiClientError(404, 'OFFER_NOT_READY', 'OFFER_NOT_READY');
-  }
-  return bundle;
-}
 
 export default function OffersScreen() {
   const router = useRouter();
@@ -74,7 +52,8 @@ export default function OffersScreen() {
 
   const [course, setCourse] = useState<Course | null>(null);
   const [includedCourseDetails, setIncludedCourseDetails] = useState<Course[]>([]);
-  const [pricing, setPricing] = useState<CoursePricing | null>(null);
+  const [offer, setOffer] = useState<FoundingMembershipOffer | null>(null);
+  const [membership, setMembership] = useState<MyMembership | null>(null);
   const [owned, setOwned] = useState(false);
   const [accessUntil, setAccessUntil] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,6 +66,7 @@ export default function OffersScreen() {
   const ctaAnim = useRef(new Animated.Value(0)).current;
   const bannerBreath = useRef(new Animated.Value(1)).current;
   const ctaScale = useRef(new Animated.Value(1)).current;
+  const priceScale = useRef(new Animated.Value(1)).current;
   const hasPlayedEntrance = useRef(false);
 
   const load = useCallback(async (isRefresh = false) => {
@@ -94,14 +74,14 @@ export default function OffersScreen() {
     else setLoading(true);
     setError(null);
     try {
-      const courseData = await resolveBundleCourse();
-      const pricingData = await getCoursePricing(courseData.id);
+      const offerData = await getFoundingMembershipOffer();
+      const courseData = await getCourse(offerData.courseId);
+      setOffer(offerData);
       setCourse(courseData);
-      setPricing(pricingData);
 
       try {
         const included = await Promise.all(
-          MAIN_COURSE_CATALOG.map((entry) => getCourse(entry.id)),
+          offerData.includedCourses.map((entry) => getCourse(entry.id)),
         );
         setIncludedCourseDetails(included);
       } catch {
@@ -119,17 +99,24 @@ export default function OffersScreen() {
           setOwned(false);
           setAccessUntil(null);
         }
+        try {
+          setMembership(await getMyMembership());
+        } catch {
+          setMembership(null);
+        }
       } else {
         setOwned(false);
         setAccessUntil(null);
+        setMembership(null);
       }
     } catch (err) {
       setCourse(null);
       setIncludedCourseDetails([]);
-      setPricing(null);
+      setOffer(null);
       setOwned(false);
       setAccessUntil(null);
-      if (err instanceof ApiClientError && err.code === 'OFFER_NOT_READY') {
+      setMembership(null);
+      if (err instanceof ApiClientError && err.code === 'OFFER_NOT_FOUND') {
         setError(t('offers.notReady'));
       } else {
         setError(
@@ -202,11 +189,9 @@ export default function OffersScreen() {
     playEntrance(true);
   }, [refreshing, loading, error, course, playEntrance]);
 
-  const isRenewalOffer = Boolean(pricing?.isRenewalOffer);
-  const showAsOwned = owned && !isRenewalOffer;
-  const launchActive = Boolean(
-    !showAsOwned && (pricing?.launchOfferActive ?? pricing?.isLaunchOffer),
-  );
+  const showAsOwned = owned;
+  const offerExhausted = Boolean(offer && (!offer.isActive || offer.remaining <= 0));
+  const launchActive = Boolean(!showAsOwned && offer && !offerExhausted);
 
   useEffect(() => {
     if (!launchActive || loading || error || !course) {
@@ -235,23 +220,56 @@ export default function OffersScreen() {
     return () => loop.stop();
   }, [launchActive, loading, error, course, bannerBreath]);
 
-  const displayPrice = pricing?.applicablePrice ?? pricing?.price ?? course?.price ?? 0;
-  const displayMrp = pricing?.mrp ?? course?.mrp ?? null;
-  const accessDays = pricing?.accessDays ?? course?.accessDays ?? 30;
-  const title =
-    pricing?.name
-    || pricing?.courseName
-    || course?.name
-    || t('offers.collectionName');
+  // Subtle, slow premium pulse on the ₹999 price only (never the whole card) — a small
+  // scale-up, settle, pause, repeat. Skipped entirely when the OS reduced-motion setting is on.
+  useEffect(() => {
+    if (showAsOwned || loading || error || !course) {
+      priceScale.stopAnimation();
+      priceScale.setValue(1);
+      return;
+    }
 
-  const ctaLabel = showAsOwned
-    ? t('offers.ctaOwned')
-    : isRenewalOffer
-      ? t('learn.renewCtaWithDiscount', {
-          price: formatInr(displayPrice),
-          percent: pricing?.renewalPercentage ?? 50,
-        })
-      : t('offers.cta');
+    let loop: Animated.CompositeAnimation | null = null;
+    let cancelled = false;
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .catch(() => false)
+      .then((reduce) => {
+        if (cancelled || reduce) return;
+        loop = Animated.loop(
+          Animated.sequence([
+            Animated.timing(priceScale, {
+              toValue: 1.045,
+              duration: 700,
+              easing: Easing.inOut(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(priceScale, {
+              toValue: 1,
+              duration: 700,
+              easing: Easing.inOut(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.delay(1800),
+          ]),
+        );
+        loop.start();
+      });
+
+    return () => {
+      cancelled = true;
+      loop?.stop();
+      priceScale.setValue(1);
+    };
+  }, [showAsOwned, loading, error, course, priceScale]);
+
+  const displayPrice = launchActive
+    ? offer?.launchPrice ?? course?.price ?? 0
+    : offer?.regularPriceAfterLaunch ?? course?.price ?? 0;
+  const displayMrp = offer?.mrp ?? course?.mrp ?? null;
+  const accessDays = offer?.accessDurationDays ?? course?.accessDays ?? 30;
+  const title = offer?.offerName || course?.name || t('offers.collectionName');
+
+  const ctaLabel = showAsOwned ? t('offers.ctaOwned') : t('offers.cta');
 
   function openBundle() {
     if (showAsOwned) {
@@ -310,23 +328,31 @@ export default function OffersScreen() {
     displayMrp != null && displayMrp > displayPrice ? displayMrp - displayPrice : 0;
   const percentOff =
     savings > 0 && displayMrp ? Math.round((savings / displayMrp) * 100) : 0;
+  const launchLimit = offer?.launchLimit ?? 100;
   const spotsRemaining =
-    launchActive && pricing?.launchOfferRemaining != null
-      ? Math.max(0, Math.min(LAUNCH_SPOTS, pricing.launchOfferRemaining))
-      : null;
+    launchActive && offer ? Math.max(0, Math.min(launchLimit, offer.remaining)) : null;
   const spotsClaimedRatio =
-    spotsRemaining != null ? (LAUNCH_SPOTS - spotsRemaining) / LAUNCH_SPOTS : 0;
+    spotsRemaining != null && launchLimit > 0 ? (launchLimit - spotsRemaining) / launchLimit : 0;
 
-  const includedCourses = t('offers.includesCourses')
-    .split('·')
-    .map((name) => name.trim())
-    .filter(Boolean);
+  const includedCourses = offer?.includedCourses.length
+    ? offer.includedCourses.map((c) => c.name)
+    : t('offers.includesCourses')
+        .split('·')
+        .map((name) => name.trim())
+        .filter(Boolean);
+
+  const memberNumberLabel =
+    showAsOwned && membership?.isMember && membership.memberNumber
+      ? t('offers.founding.badgeLabel', { number: String(membership.memberNumber).padStart(3, '0') })
+      : null;
 
   const headTag = showAsOwned
     ? t('offers.ownedBadge')
     : launchActive
       ? t('offers.launchTag')
-      : t('offers.eyebrow');
+      : offerExhausted
+        ? t('offers.founding.offerEnded')
+        : t('offers.eyebrow');
 
   if (loading && !course) {
     return (
@@ -423,18 +449,30 @@ export default function OffersScreen() {
 
               <View style={styles.ticketBody}>
                 {showAsOwned ? (
-                  accessUntilLabel ? (
-                    <View style={styles.ownedRow}>
-                      <Ionicons name="calendar-outline" size={16} color={colors.pink} />
-                      <Text style={styles.ownedMeta}>
-                        {t('offers.ownedMeta', { date: accessUntilLabel })}
-                      </Text>
-                    </View>
-                  ) : null
+                  <>
+                    {memberNumberLabel ? (
+                      <View style={styles.ownedRow}>
+                        <Ionicons name="ribbon" size={16} color={colors.pink} />
+                        <Text style={styles.ownedMeta}>{memberNumberLabel}</Text>
+                      </View>
+                    ) : null}
+                    {accessUntilLabel ? (
+                      <View style={styles.ownedRow}>
+                        <Ionicons name="calendar-outline" size={16} color={colors.pink} />
+                        <Text style={styles.ownedMeta}>
+                          {t('offers.ownedMeta', { date: accessUntilLabel })}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </>
                 ) : (
                   <Animated.View style={fadeUp(priceAnim)}>
                     <View style={styles.priceRow}>
-                      <Text style={styles.price}>{formatInr(displayPrice)}</Text>
+                      <Animated.Text
+                        style={[styles.price, { transform: [{ scale: priceScale }] }]}
+                      >
+                        {formatInr(displayPrice)}
+                      </Animated.Text>
                       {savings > 0 && displayMrp != null ? (
                         <Text style={styles.mrp}>{formatInr(displayMrp)}</Text>
                       ) : null}
@@ -551,6 +589,28 @@ export default function OffersScreen() {
                 );
               })}
 
+              {offer?.viralProject ? (
+                <View style={styles.includedRow}>
+                  <View style={styles.includedIcon}>
+                    {offer.viralProject.thumbnailUrl ? (
+                      <AppImage
+                        uri={offer.viralProject.thumbnailUrl}
+                        style={styles.includedThumb}
+                        contentFit="cover"
+                        accessibilityLabel={offer.viralProject.name}
+                      />
+                    ) : (
+                      <Ionicons name="sparkles" size={18} color={colors.pinkDark} />
+                    )}
+                  </View>
+                  <View style={styles.includedTextWrap}>
+                    <Text style={styles.includedName}>{offer.viralProject.name}</Text>
+                    <Text style={styles.includedSub}>{t('offers.founding.viralProjectIncluded')}</Text>
+                  </View>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                </View>
+              ) : null}
+
               <View style={styles.includedDivider} />
 
               <View style={styles.perkRow}>
@@ -564,6 +624,10 @@ export default function OffersScreen() {
                 <Text style={styles.perkText}>
                   {t('offers.accessDays', { days: accessDays })}
                 </Text>
+              </View>
+              <View style={styles.perkRow}>
+                <Ionicons name="ribbon-outline" size={18} color={colors.pink} />
+                <Text style={styles.perkText}>{t('offers.founding.badgePerk')}</Text>
               </View>
               {course.languages ? (
                 <View style={styles.perkRow}>
@@ -749,6 +813,7 @@ function createStyles(fonts: UiFonts) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
+      marginBottom: 6,
     },
     ownedMeta: {
       fontFamily: fonts.semiBold,

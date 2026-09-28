@@ -21,7 +21,12 @@ import {
   type CartItemRecommendation,
 } from '../src/cart/recommendations';
 import { applyLiveStockToCartQuantity, canIncreaseQuantity } from '../src/cart/stock';
-import type { CartLineItem } from '../src/cart/types';
+import {
+  cartLineKey,
+  isCourseLine,
+  isProductLine,
+  type CartLineItem,
+} from '../src/cart/types';
 import { CartLineRow } from '../src/components/CartLineRow';
 import {
   CartRecommendBlock,
@@ -201,18 +206,29 @@ export default function CartScreen() {
     const stockNotes: string[] = [];
     const next: CartLineItem[] = [];
     const fetched: Record<string, Product> = {};
-    const snapshotIds = items.map((i) => i.productId);
-    const snapshotKey = snapshotIds.join(',');
+    const snapshotKey = items.map((i) => cartLineKey(i)).join(',');
 
     for (const item of items) {
+      if (isCourseLine(item)) {
+        next.push({ ...item, itemType: item.itemType ?? 'Course', quantity: 1 });
+        continue;
+      }
+
+      const productId = item.productId;
+      if (!productId) {
+        next.push(item);
+        continue;
+      }
+
       try {
-        const product = await getProduct(item.productId);
+        const product = await getProduct(productId);
         fetched[product.id] = product;
         const stock = product.availableStock ?? 0;
         if (stock <= 0) {
-          missing.add(item.productId);
+          missing.add(cartLineKey(item));
           stockNotes.push(t('cart.outOfStockNamed', { name: product.name }));
           next.push({
+            itemType: 'Product',
             productId: product.id,
             quantity: item.quantity,
             name: product.name,
@@ -230,6 +246,7 @@ export default function CartScreen() {
           stockNotes.push(`${product.name}: ${adjusted.message}`);
         }
         next.push({
+          itemType: 'Product',
           productId: product.id,
           quantity: adjusted.quantity,
           name: product.name,
@@ -252,22 +269,22 @@ export default function CartScreen() {
     // If the shopper added essentials (or other lines) while prices refreshed,
     // merge refreshed rows into the live cart instead of wiping new lines.
     const liveItems = peekItems();
-    const liveKey = liveItems.map((i) => i.productId).join(',');
+    const liveKey = liveItems.map((i) => cartLineKey(i)).join(',');
     const cartChangedDuringRefresh = liveKey !== snapshotKey;
 
     let toPersist = next;
     if (cartChangedDuringRefresh) {
-      const refreshedById = new Map(next.map((line) => [line.productId, line]));
-      toPersist = liveItems.map((line) => refreshedById.get(line.productId) ?? line);
-      const liveIdSet = new Set(liveItems.map((i) => i.productId));
+      const refreshedByKey = new Map(next.map((line) => [cartLineKey(line), line]));
+      toPersist = liveItems.map((line) => refreshedByKey.get(cartLineKey(line)) ?? line);
+      const liveKeySet = new Set(liveItems.map((i) => cartLineKey(i)));
       for (const id of [...missing]) {
-        if (!liveIdSet.has(id)) missing.delete(id);
+        if (!liveKeySet.has(id)) missing.delete(id);
       }
     }
 
     const changed = toPersist.some((line, i) => {
       const prev = liveItems[i];
-      if (!prev || prev.productId !== line.productId) return true;
+      if (!prev || cartLineKey(prev) !== cartLineKey(line)) return true;
       return (
         line.quantity !== prev.quantity ||
         line.price !== prev.price ||
@@ -294,7 +311,10 @@ export default function CartScreen() {
     }
   }, [isLoading]); // eslint-disable-line react-hooks/exhaustive-deps — refresh once after hydrate
 
-  const cartProductIdsKey = items.map((i) => i.productId).join(',');
+  const cartProductIdsKey = items
+    .filter(isProductLine)
+    .map((i) => i.productId)
+    .join(',');
 
   /** Load enrollments + Foundation for recommendation layer (never blocks cart). */
   useEffect(() => {
@@ -338,7 +358,9 @@ export default function CartScreen() {
       handmadeProducts: handmade,
       enrollments: isAuthenticated ? enrollments : null,
       foundationCourse,
-      cartProductIds: new Set(items.map((i) => i.productId)),
+      cartProductIds: new Set(
+        items.filter(isProductLine).map((i) => i.productId!).filter(Boolean),
+      ),
     });
   }, [productById, enrollments, foundationCourse, items, isAuthenticated]);
 
@@ -368,7 +390,7 @@ export default function CartScreen() {
 
   const handleRemoveEssential = useCallback(
     async (productId: string) => {
-      await removeItem(productId);
+      await removeItem(`product:${productId}`);
     },
     [removeItem],
   );
@@ -425,36 +447,43 @@ export default function CartScreen() {
         {refreshing && <Text style={styles.refreshing}>{t('cart.updatingPrices')}</Text>}
 
         {items.map((item, index) => {
-          const reco = recommendations[item.productId];
+          const key = cartLineKey(item);
+          const productId = isProductLine(item) ? item.productId : undefined;
+          const reco = productId ? recommendations[productId] : undefined;
           const showReco = Boolean(reco && (reco.course || reco.essentials.length > 0));
+          const digital = isCourseLine(item);
           return (
-            <View key={item.productId}>
+            <View key={key}>
               <CartLineRow
                 item={item}
                 index={index}
-                unavailable={unavailableIds.has(item.productId)}
+                unavailable={unavailableIds.has(key)}
+                readOnly={false}
                 attachBelow={showReco}
                 compact={
-                  item.productType === 'Resell' ||
-                  productById[item.productId]?.productType === 'Resell'
+                  !digital &&
+                  (item.productType === 'Resell' ||
+                    (productId ? productById[productId]?.productType === 'Resell' : false))
                 }
                 onIncrease={() => {
+                  if (digital) return;
                   if (
                     typeof item.availableStock === 'number' &&
                     !canIncreaseQuantity(item.quantity, item.availableStock)
                   ) {
                     return;
                   }
-                  void updateQuantity(item.productId, item.quantity + 1);
+                  void updateQuantity(key, item.quantity + 1);
                 }}
                 onDecrease={() => {
+                  if (digital) return;
                   if (item.quantity <= 1) {
-                    void removeItem(item.productId);
+                    void removeItem(key);
                   } else {
-                    void updateQuantity(item.productId, item.quantity - 1);
+                    void updateQuantity(key, item.quantity - 1);
                   }
                 }}
-                onRemove={() => void removeItem(item.productId)}
+                onRemove={() => void removeItem(key)}
               />
               {showReco && reco ? (
                 <CartRecommendBlock
@@ -462,9 +491,12 @@ export default function CartScreen() {
                   onAddEssential={handleAddEssential}
                   onRemoveEssential={handleRemoveEssential}
                   onOpenCourse={(courseId) => router.push(`/course/${courseId}`)}
-                  isInCart={(productId) => items.some((line) => line.productId === productId)}
-                  cartQuantity={(productId) =>
-                    items.find((line) => line.productId === productId)?.quantity ?? 0
+                  isInCart={(pid) =>
+                    items.some((line) => isProductLine(line) && line.productId === pid)
+                  }
+                  cartQuantity={(pid) =>
+                    items.find((line) => isProductLine(line) && line.productId === pid)
+                      ?.quantity ?? 0
                   }
                 />
               ) : null}
@@ -491,7 +523,11 @@ export default function CartScreen() {
           <Text style={styles.subtotalLabel}>{t('cart.subtotal')}</Text>
           <Text style={styles.subtotalValue}>{formatInr(subtotal)}</Text>
         </View>
-        <Text style={styles.footerHint}>{t('cart.deliveryHint')}</Text>
+        <Text style={styles.footerHint}>
+          {items.some(isCourseLine) && items.some(isProductLine)
+            ? t('cart.mixedCheckoutHint')
+            : t('cart.deliveryHint')}
+        </Text>
         <Pressable
           style={[styles.checkoutBtn, hasUnavailable && styles.checkoutBtnDisabled]}
           disabled={hasUnavailable}

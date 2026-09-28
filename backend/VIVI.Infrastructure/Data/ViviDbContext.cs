@@ -26,11 +26,13 @@ public sealed class ViviDbContext : DbContext
     public DbSet<CourseEnrollment> CourseEnrollments => Set<CourseEnrollment>();
     public DbSet<CourseBundleItem> CourseBundleItems => Set<CourseBundleItem>();
     public DbSet<LaunchOfferCounter> LaunchOfferCounters => Set<LaunchOfferCounter>();
+    public DbSet<LaunchMembership> LaunchMemberships => Set<LaunchMembership>();
     public DbSet<EmailNotification> EmailNotifications => Set<EmailNotification>();
     public DbSet<OrderDeliveryUpdate> OrderDeliveryUpdates => Set<OrderDeliveryUpdate>();
     public DbSet<LiveWeek> LiveWeeks => Set<LiveWeek>();
     public DbSet<LiveWeekSlot> LiveWeekSlots => Set<LiveWeekSlot>();
     public DbSet<LiveBooking> LiveBookings => Set<LiveBooking>();
+    public DbSet<LiveTutorDefault> LiveTutorDefaults => Set<LiveTutorDefault>();
     public DbSet<SupportInquiry> SupportInquiries => Set<SupportInquiry>();
     public DbSet<DevicePushToken> DevicePushTokens => Set<DevicePushToken>();
 
@@ -357,6 +359,14 @@ public sealed class ViviDbContext : DbContext
             entity.HasIndex(x => x.StartDate);
         });
 
+        modelBuilder.Entity<LiveTutorDefault>(entity =>
+        {
+            entity.ToTable("LiveTutorDefaults");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.TutorName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.TutorPhotoBlobPath).HasMaxLength(500);
+        });
+
         modelBuilder.Entity<LiveWeekSlot>(entity =>
         {
             entity.ToTable("LiveWeekSlots");
@@ -402,7 +412,7 @@ public sealed class ViviDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Provider).HasConversion<int>().IsRequired();
             entity.Property(x => x.ProviderOrderId).HasMaxLength(64).IsRequired();
-            entity.Property(x => x.ProviderPaymentId).HasMaxLength(64);
+            entity.Property(x => x.ProviderPaymentId).HasMaxLength(512);
             entity.Property(x => x.Amount).HasPrecision(18, 2);
             entity.Property(x => x.Currency).HasMaxLength(3).IsRequired();
             entity.Property(x => x.Status).HasConversion<int>().IsRequired();
@@ -467,12 +477,55 @@ public sealed class ViviDbContext : DbContext
         {
             entity.ToTable("LaunchOfferCounters");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.OfferName).HasMaxLength(200).IsRequired();
             entity.HasIndex(x => x.CourseId).IsUnique();
 
             entity.HasOne(x => x.Course)
                 .WithOne(x => x.LaunchOffer)
                 .HasForeignKey<LaunchOfferCounter>(x => x.CourseId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict, not SetNull: Courses already reaches LaunchOfferCounters via a Cascade
+            // path (CourseId). A second cascading path (SetNull) from the same table triggers
+            // SQL Server's "may cause cycles or multiple cascade paths" error at migration time.
+            entity.HasOne(x => x.ViralProjectCourse)
+                .WithMany()
+                .HasForeignKey(x => x.ViralProjectCourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<LaunchMembership>(entity =>
+        {
+            entity.ToTable("LaunchMemberships");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.CourseId, x.MemberNumber }).IsUnique();
+            entity.HasIndex(x => x.OrderItemId).IsUnique();
+            entity.HasIndex(x => x.CustomerId);
+
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Course)
+                .WithMany()
+                .HasForeignKey(x => x.CourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Order)
+                .WithMany()
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.OrderItem)
+                .WithMany()
+                .HasForeignKey(x => x.OrderItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.ViralProjectCourse)
+                .WithMany()
+                .HasForeignKey(x => x.ViralProjectCourseId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<EmailNotification>(entity =>

@@ -34,7 +34,13 @@ import {
 } from '../src/checkout/checkoutAddressDraft';
 import { useCart } from '../src/cart/CartContext';
 import { lineTotal } from '../src/cart/calculations';
-import type { CartLineItem } from '../src/cart/types';
+import {
+  cartLineKey,
+  isCourseLine,
+  isProductLine,
+  normalizeCartItemType,
+  type CartLineItem,
+} from '../src/cart/types';
 import { BackButton } from '../src/components/BackButton';
 import {
   RazorpayCheckoutModal,
@@ -155,7 +161,11 @@ function SummaryLine({
       </View>
       <View style={styles.summaryLineBody}>
         <Text style={styles.summaryLineName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.summaryLineMeta}>{t('checkout.qtyShort', { count: item.quantity })}</Text>
+        <Text style={styles.summaryLineMeta}>
+          {isCourseLine(item)
+            ? t('cart.digitalAccess')
+            : t('checkout.qtyShort', { count: item.quantity })}
+        </Text>
       </View>
       <Text style={styles.summaryLinePrice}>{formatInr(lineTotal(item))}</Text>
     </View>
@@ -233,6 +243,8 @@ export default function CheckoutScreen() {
   const { isLoading: authLoading } = useSession();
   const { profile: learningProfile, saveProfile } = useLearningCustomer();
   const { items, subtotal, itemCount, isLoading: cartLoading, clearCart } = useCart();
+  const hasPhysicalItems = useMemo(() => items.some(isProductLine), [items]);
+  const hasDigitalItems = useMemo(() => items.some(isCourseLine), [items]);
 
   const [fullName, setFullName] = useState(() =>
     realCustomerName(learningProfile?.fullName, user?.name),
@@ -522,20 +534,21 @@ export default function CheckoutScreen() {
     }, []),
   );
 
-  const shippingAddressError = isAuthenticated
-    ? getShippingAddressError({
-        fullName,
-        phone: effectivePhone,
-        address1,
-        city,
-        state,
-        pinCode,
-        requireIndianPhone: indiaAccount,
-        requireIndianPin: indiaAccount,
-      })
-    : null;
+  const shippingAddressError =
+    hasPhysicalItems && isAuthenticated
+      ? getShippingAddressError({
+          fullName,
+          phone: effectivePhone,
+          address1,
+          city,
+          state,
+          pinCode,
+          requireIndianPhone: indiaAccount,
+          requireIndianPin: indiaAccount,
+        })
+      : null;
 
-  const shippingReady = shippingAddressError === null;
+  const shippingReady = !hasPhysicalItems || shippingAddressError === null;
   const emailNormalized = email.trim().toLowerCase();
   const emailNeedsVerification =
     isUsableCheckoutEmail(email)
@@ -649,7 +662,7 @@ export default function CheckoutScreen() {
   }
 
   useEffect(() => {
-    if (!isAuthenticated || !shippingReady || items.length === 0) {
+    if (!isAuthenticated || !hasPhysicalItems || !shippingReady || items.length === 0) {
       setQuote(null);
       return;
     }
@@ -665,8 +678,9 @@ export default function CheckoutScreen() {
     const handle = setTimeout(() => {
       void (async () => {
         try {
+          const productLines = items.filter(isProductLine);
           const result = await quoteDelivery(
-            items.map((item) => ({
+            productLines.map((item) => ({
               itemType: 'Product' as const,
               productId: item.productId,
               quantity: item.quantity,
@@ -692,6 +706,7 @@ export default function CheckoutScreen() {
     };
   }, [
     isAuthenticated,
+    hasPhysicalItems,
     shippingReady,
     indiaAccount,
     items,
@@ -714,10 +729,10 @@ export default function CheckoutScreen() {
       throw new Error('Enter a valid email — we will notify you there.');
     }
 
-    const shippingAddress = buildShippingAddress();
+    const shippingAddress = hasPhysicalItems ? buildShippingAddress() : null;
     await updateMyProfile({
       fullName: fullName.trim(),
-      ...(saveAddress
+      ...(saveAddress && shippingAddress
         ? {
             shippingAddress: {
               fullName: shippingAddress.fullName,
@@ -758,16 +773,18 @@ export default function CheckoutScreen() {
       return;
     }
 
-    const addressError = getShippingAddressError({
-      fullName,
-      phone: effectivePhone,
-      address1,
-      city,
-      state,
-      pinCode,
-      requireIndianPhone: indiaAccount,
-      requireIndianPin: indiaAccount,
-    });
+    const addressError = hasPhysicalItems
+      ? getShippingAddressError({
+          fullName,
+          phone: effectivePhone,
+          address1,
+          city,
+          state,
+          pinCode,
+          requireIndianPhone: indiaAccount,
+          requireIndianPin: indiaAccount,
+        })
+      : null;
     if (addressError) {
       navigateToAddDeliveryAddress();
       setStatus(addressError);
@@ -780,18 +797,28 @@ export default function CheckoutScreen() {
     try {
       await syncProfileForEmail();
 
-      const shippingAddress = buildShippingAddress();
+      const shippingAddress = hasPhysicalItems ? buildShippingAddress() : undefined;
 
       const order = await createOrder(
-        items.map((item) => ({
-          itemType: 'Product' as const,
-          productId: item.productId,
-          quantity: item.quantity,
-        })),
+        items.map((item) => {
+          const itemType = normalizeCartItemType(item);
+          if (itemType === 'Course' || itemType === 'CourseBundle') {
+            return {
+              itemType,
+              courseId: item.courseId,
+              quantity: 1,
+            };
+          }
+          return {
+            itemType: 'Product' as const,
+            productId: item.productId,
+            quantity: item.quantity,
+          };
+        }),
         {
           paymentMethod: 'OnlinePayment',
           shippingAddress,
-          saveShippingAddress: saveAddress,
+          saveShippingAddress: hasPhysicalItems ? saveAddress : false,
         },
       );
 
@@ -929,6 +956,7 @@ export default function CheckoutScreen() {
               </View>
             </Section>
 
+            {hasPhysicalItems ? (
             <Section step="2" title={t('checkout.deliveryTitle')} styles={styles}>
               <View style={styles.cardStack}>
                 <View style={styles.card}>
@@ -1011,11 +1039,16 @@ export default function CheckoutScreen() {
                 </View>
               </View>
             </Section>
+            ) : null}
 
-            <Section step="3" title={t('checkout.orderSummary')} styles={styles}>
+            <Section
+              step={hasPhysicalItems ? '3' : '2'}
+              title={t('checkout.orderSummary')}
+              styles={styles}
+            >
               <View style={styles.card}>
                 {items.map((item, index) => (
-                  <SummaryLine key={item.productId} item={item} index={index} styles={styles} />
+                  <SummaryLine key={cartLineKey(item)} item={item} index={index} styles={styles} />
                 ))}
                 <View style={styles.breakdown}>
                   <View style={styles.orderSummaryRow}>
@@ -1024,10 +1057,17 @@ export default function CheckoutScreen() {
                     </Text>
                     <Text style={styles.orderSummaryVal}>{formatInr(subtotal)}</Text>
                   </View>
-                  <View style={styles.orderSummaryRow}>
-                    <Text style={styles.orderSummaryKey}>{t('cart.delivery')}</Text>
-                    <Text style={styles.orderSummaryMuted}>{t('checkout.deliveryCalcNext')}</Text>
-                  </View>
+                  {hasPhysicalItems ? (
+                    <View style={styles.orderSummaryRow}>
+                      <Text style={styles.orderSummaryKey}>{t('cart.delivery')}</Text>
+                      <Text style={styles.orderSummaryMuted}>{t('checkout.deliveryCalcNext')}</Text>
+                    </View>
+                  ) : hasDigitalItems ? (
+                    <View style={styles.orderSummaryRow}>
+                      <Text style={styles.orderSummaryKey}>{t('cart.delivery')}</Text>
+                      <Text style={styles.orderSummaryMuted}>{t('cart.noDeliveryDigital')}</Text>
+                    </View>
+                  ) : null}
                   <View style={[styles.orderSummaryRow, styles.orderSummaryTotal]}>
                     <Text style={styles.orderSummaryTotalKey}>{t('checkout.totalAmount')}</Text>
                     <Text style={styles.orderSummaryTotalVal}>{formatInr(subtotal)}</Text>
@@ -1066,7 +1106,7 @@ export default function CheckoutScreen() {
                 setEditingEmail(true);
                 return;
               }
-              if (isAuthenticated && !shippingReady) {
+              if (isAuthenticated && hasPhysicalItems && !shippingReady) {
                 navigateToAddDeliveryAddress();
                 return;
               }

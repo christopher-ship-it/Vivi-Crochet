@@ -30,6 +30,31 @@ public static class LiveSchemaBootstrapper
                AND COL_LENGTH('LiveWeeks', 'TutorPhotoBlobPath') IS NULL
                 ALTER TABLE [LiveWeeks]
                 ADD [TutorPhotoBlobPath] nvarchar(500) NULL;
+
+            IF OBJECT_ID(N'[LiveWeeks]', N'U') IS NOT NULL
+               AND COL_LENGTH('LiveWeeks', 'HasCustomTutor') IS NULL
+                ALTER TABLE [LiveWeeks]
+                ADD [HasCustomTutor] bit NOT NULL
+                    CONSTRAINT [DF_LiveWeeks_HasCustomTutor] DEFAULT CAST(0 AS bit);
+
+            IF OBJECT_ID(N'[LiveTutorDefaults]', N'U') IS NULL
+                CREATE TABLE [LiveTutorDefaults] (
+                    [Id] uniqueidentifier NOT NULL,
+                    [TutorName] nvarchar(100) NOT NULL,
+                    [TutorPhotoBlobPath] nvarchar(500) NULL,
+                    [UpdatedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_LiveTutorDefaults] PRIMARY KEY ([Id])
+                );
+
+            -- Preserve every week that already had its own name/photo before HasCustomTutor
+            -- existed — otherwise they'd silently start showing the shared default instead.
+            -- Safe to re-run: a week reverted via "Use default" resets both fields first,
+            -- so it never matches this condition again.
+            IF OBJECT_ID(N'[LiveWeeks]', N'U') IS NOT NULL
+                UPDATE [LiveWeeks]
+                SET [HasCustomTutor] = 1
+                WHERE [HasCustomTutor] = 0
+                  AND ([TutorPhotoBlobPath] IS NOT NULL OR [TutorName] <> N'SRI');
             """,
             cancellationToken);
 

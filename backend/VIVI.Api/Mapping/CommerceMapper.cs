@@ -52,12 +52,15 @@ public static class CommerceMapper
         ItemNameSnapshot = item.ItemNameSnapshot
     };
 
-    public static CreateOrderResponse ToCheckoutResponse(this Order order, CheckoutResult result) => new()
+    public static CreateOrderResponse ToCheckoutResponse(
+        this Order order,
+        CheckoutResult result) => new()
     {
         OrderId = order.Id,
         OrderNumber = order.OrderNumber,
-        RazorpayOrderId = result.RazorpayOrderId,
-        RazorpayKeyId = result.RazorpayKeyId,
+        PaymentProvider = result.Provider.ToString(),
+        RazorpayOrderId = result.RazorpayOrderId ?? string.Empty,
+        RazorpayKeyId = result.RazorpayKeyId ?? string.Empty,
         AmountPaise = result.AmountPaise,
         Currency = result.Currency,
         TotalAmount = order.TotalAmount,

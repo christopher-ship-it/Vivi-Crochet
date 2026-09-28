@@ -56,7 +56,11 @@ public sealed class EmailTests : IClassFixture<ApiFactory>
             || m.Subject.Contains("order has been placed", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(emails.SentMessages, m =>
             m.Subject.Contains("course is ready", StringComparison.OrdinalIgnoreCase));
-        Assert.Single(emails.SentMessages);
+        // This purchase is at the launch price, so it is also a founding-membership purchase —
+        // order confirmation + membership welcome, still no per-course "course is ready" emails.
+        Assert.Contains(emails.SentMessages, m =>
+            m.Subject.Contains("Founding Member", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, emails.SentMessages.Count);
     }
 
     [Fact]
@@ -113,7 +117,11 @@ public sealed class EmailTests : IClassFixture<ApiFactory>
 
         var result = await fulfillment.VerifyAndFulfillAsync(
             customerEntity.Id,
-            new PaymentVerificationInput(orderResponse.OrderId, orderResponse.RazorpayOrderId, paymentId, signature),
+            new PaymentVerificationInput(
+                orderResponse.OrderId,
+                orderResponse.RazorpayOrderId,
+                paymentId,
+                signature),
             CancellationToken.None);
 
         Assert.False(result.AlreadyProcessed);
@@ -187,13 +195,13 @@ internal static class OrderTestsHelper
     {
         var paymentId = FakeRazorpayPaymentGateway.BuildTestPaymentId(order.RazorpayOrderId);
         var signature = FakeRazorpayPaymentGateway.BuildTestSignature(order.RazorpayOrderId, paymentId);
-        var verify = await customer.PostAsJsonAsync("/api/payments/razorpay/verify", new
+        var rzVerify = await customer.PostAsJsonAsync("/api/payments/razorpay/verify", new
         {
             internalOrderId = order.OrderId,
             razorpayOrderId = order.RazorpayOrderId,
             razorpayPaymentId = paymentId,
             razorpaySignature = signature
         });
-        verify.EnsureSuccessStatusCode();
+        rzVerify.EnsureSuccessStatusCode();
     }
 }

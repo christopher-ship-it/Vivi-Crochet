@@ -24,6 +24,8 @@ import { getMyProfile, updateMyProfile } from '../../src/api/me';
 import { verifyRazorpayPayment } from '../../src/api/payments';
 import { ApiClientError } from '../../src/api/client';
 import { useLearningCustomer, useShoppingSession } from '../../src/auth/SessionContext';
+import { useCart } from '../../src/cart/CartContext';
+import { cartLineKey } from '../../src/cart/types';
 import {
   isUsableCustomerEmail,
   isValidName,
@@ -68,6 +70,7 @@ export default function CourseDetailScreen() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, user } = useShoppingSession();
   const { profile: learningProfile, saveProfile: saveLearningProfile } = useLearningCustomer();
+  const { addCourse, items: cartItems } = useCart();
   const [course, setCourse] = useState<Course | null>(null);
   const [pricing, setPricing] = useState<CoursePricing | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
@@ -78,6 +81,7 @@ export default function CourseDetailScreen() {
   const [unlockAutoSendCode, setUnlockAutoSendCode] = useState(false);
   const [pendingLesson, setPendingLesson] = useState<CourseLesson | null>(null);
   const [purchasing, setPurchasing] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
   const [checkoutVisible, setCheckoutVisible] = useState(false);
   const [checkoutPayload, setCheckoutPayload] = useState<RazorpayCheckoutPayload | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
@@ -271,6 +275,28 @@ export default function CourseDetailScreen() {
     setBanner(message ?? null);
   }
 
+  async function handleAddToCart() {
+    if (!course || addingToCart) return;
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
+    setAddingToCart(true);
+    setBanner(null);
+    try {
+      const price = pricing?.applicablePrice ?? course.price;
+      await addCourse(course, price);
+      router.push('/cart');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : t('product.couldNotAddCart');
+      setBanner(message);
+      Alert.alert(t('cart.title'), message);
+    } finally {
+      setAddingToCart(false);
+    }
+  }
+
   async function startPurchase() {
     if (!course || !id) return;
 
@@ -337,6 +363,7 @@ export default function CourseDetailScreen() {
       ]);
 
       setPendingOrderId(order.orderId);
+
       setCheckoutPayload({
         keyId: order.razorpayKeyId,
         orderId: order.razorpayOrderId,
@@ -439,6 +466,12 @@ export default function CourseDetailScreen() {
     course.about?.trim() ||
     course.description?.trim() ||
     (packageWhatYouGetKey ? t(packageWhatYouGetKey) : null);
+  const alreadyInCart = Boolean(
+    course &&
+      cartItems.some(
+        (line) => cartLineKey(line) === `course:${course.id}`,
+      ),
+  );
   const payButtonLabel = purchasing
     ? 'Starting checkout…'
     : isRenewalOffer
@@ -446,7 +479,17 @@ export default function CourseDetailScreen() {
           price: formatInr(displayPrice),
           percent: renewalPercent,
         })
-      : `Pay Online · ${formatInr(displayPrice)}`;
+      : t('learn.buyNowPrice', { price: formatInr(displayPrice) });
+  const addCartLabel = addingToCart
+    ? t('common.loading')
+    : alreadyInCart
+      ? t('learn.viewCart')
+      : isRenewalOffer
+        ? t('learn.addRenewalToCart', {
+            price: formatInr(displayPrice),
+            percent: renewalPercent,
+          })
+        : t('learn.addToCartPrice', { price: formatInr(displayPrice) });
   const pathCurrentIndex = Math.max(
     0,
     lessons.findIndex((lesson) => lesson.id === pathCursorId),
@@ -666,16 +709,29 @@ export default function CourseDetailScreen() {
         {showPurchaseFooter ? (
           <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
             <Pressable
-              style={[styles.unlockBtn, purchasing && styles.btnDisabled]}
-              onPress={() => void startPurchase()}
-              disabled={purchasing}
+              style={[styles.unlockBtn, (purchasing || addingToCart) && styles.btnDisabled]}
+              onPress={() => {
+                if (alreadyInCart) {
+                  router.push('/cart');
+                  return;
+                }
+                void handleAddToCart();
+              }}
+              disabled={purchasing || addingToCart}
             >
-              <Text style={styles.unlockBtnText}>{payButtonLabel}</Text>
+              <Text style={styles.unlockBtnText}>{addCartLabel}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.secondaryBtn, (purchasing || addingToCart) && styles.btnDisabled]}
+              onPress={() => void startPurchase()}
+              disabled={purchasing || addingToCart}
+            >
+              <Text style={styles.secondaryBtnText}>{payButtonLabel}</Text>
             </Pressable>
             <Text style={styles.payNote}>
               {isRenewalOffer
                 ? t('learn.renewPayNote')
-                : 'Payment method: Pay Online. Courses have no delivery.'}
+                : t('learn.mixedCartPayNote')}
             </Text>
             {!hasLearningProfile && isAuthenticated ? (
               <Pressable

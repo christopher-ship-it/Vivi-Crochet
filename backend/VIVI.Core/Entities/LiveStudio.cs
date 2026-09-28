@@ -15,15 +15,36 @@ public sealed class LiveWeek
     /// <summary>Optional single Mon–Fri studio break day. Saturday remains replacement-only; Sunday always OFF.</summary>
     public DayOfWeek? BreakWeekday { get; set; }
     public bool IsBookable { get; set; } = true;
-    /// <summary>Display name of the tutor for this week (default SRI).</summary>
+    /// <summary>Display name of the tutor for this week (default SRI). Ignored unless <see cref="HasCustomTutor"/>.</summary>
     public string TutorName { get; set; } = "SRI";
-    /// <summary>Blob path for the tutor portrait photo; null shows the mobile placeholder.</summary>
+    /// <summary>Blob path for the tutor portrait photo. Ignored unless <see cref="HasCustomTutor"/>.</summary>
     public string? TutorPhotoBlobPath { get; set; }
+    /// <summary>
+    /// When false (the default), this week shows the shared <see cref="LiveTutorDefault"/> name/photo.
+    /// When true, it shows this week's own <see cref="TutorName"/>/<see cref="TutorPhotoBlobPath"/> instead —
+    /// set automatically the first time an admin edits the tutor for this specific week.
+    /// </summary>
+    public bool HasCustomTutor { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
     public ICollection<LiveWeekSlot> Slots { get; set; } = new List<LiveWeekSlot>();
     public ICollection<LiveBooking> Bookings { get; set; } = new List<LiveBooking>();
+}
+
+/// <summary>
+/// Singleton row holding the shared tutor name/photo shown for every Live week that has not
+/// been individually customized (<see cref="LiveWeek.HasCustomTutor"/> is false).
+/// </summary>
+public sealed class LiveTutorDefault
+{
+    /// <summary>Fixed id — there is only ever one row in this table.</summary>
+    public static readonly Guid SingletonId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+    public Guid Id { get; set; } = SingletonId;
+    public string TutorName { get; set; } = "SRI";
+    public string? TutorPhotoBlobPath { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 public sealed class LiveWeekSlot

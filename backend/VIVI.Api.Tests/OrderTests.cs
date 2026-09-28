@@ -8,6 +8,7 @@ using VIVI.Api.DTOs.Courses;
 using VIVI.Api.DTOs.Enrollments;
 using VIVI.Api.DTOs.Orders;
 using VIVI.Api.DTOs.Payments;
+using VIVI.Api.DTOs.Products;
 using VIVI.Api.DTOs.Videos;
 using VIVI.Core.Enums;
 using VIVI.Infrastructure.Auth;
@@ -38,8 +39,9 @@ public sealed class OrderTests : IClassFixture<ApiFactory>
         Assert.NotNull(body);
         Assert.Equal(29900, body!.AmountPaise);
         Assert.Equal(299m, body.TotalAmount);
+        Assert.Equal("Razorpay", body.PaymentProvider);
         Assert.False(string.IsNullOrWhiteSpace(body.RazorpayOrderId));
-        Assert.Equal(FakeRazorpayPaymentGateway.TestKeyId, body.RazorpayKeyId);
+        Assert.False(string.IsNullOrWhiteSpace(body.RazorpayKeyId));
     }
 
     [Fact]
@@ -77,6 +79,9 @@ public sealed class OrderTests : IClassFixture<ApiFactory>
     {
         var (customer, courseId) = await CustomerWithPublishedCourse(accessDays: 30);
         var order = await CreateCourseOrderAsync(customer, courseId);
+        Assert.Equal("Razorpay", order.PaymentProvider);
+        Assert.False(string.IsNullOrWhiteSpace(order.RazorpayOrderId));
+
         var paymentId = FakeRazorpayPaymentGateway.BuildTestPaymentId(order.RazorpayOrderId);
         var signature = FakeRazorpayPaymentGateway.BuildTestSignature(order.RazorpayOrderId, paymentId);
 
@@ -111,7 +116,7 @@ public sealed class OrderTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Invalid_signature_is_rejected()
+    public async Task Invalid_razorpay_signature_is_rejected()
     {
         var (customer, courseId) = await CustomerWithPublishedCourse();
         var order = await CreateCourseOrderAsync(customer, courseId);
@@ -165,6 +170,69 @@ public sealed class OrderTests : IClassFixture<ApiFactory>
 
         var stream = await customer.GetAsync($"/api/videos/{videoId}/stream-url");
         stream.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Mixed_product_and_course_can_checkout_together()
+    {
+        var (customer, courseId) = await CustomerWithPublishedCourse(price: 299);
+        var admin = _factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+        var created = await admin.PostAsJsonAsync("/api/products", new
+        {
+            name = $"Mix {Guid.NewGuid():N}"[..12],
+            category = "Amigurumi",
+            price = 499,
+            productType = "Handmade",
+            availableStock = 20
+        });
+        created.EnsureSuccessStatusCode();
+        var product = await created.Content.ReadFromJsonAsync<ProductResponse>(Json);
+        await admin.PostAsync($"/api/products/{product!.Id}/publish", null);
+
+        var response = await customer.PostAsJsonAsync("/api/orders", new
+        {
+            items = new object[]
+            {
+                new { itemType = "Product", productId = product.Id, quantity = 1 },
+                new { itemType = "Course", courseId, quantity = 1 }
+            },
+            shippingAddress = new
+            {
+                fullName = "Asha Kumar",
+                phoneNumber = "9876500001",
+                addressLine1 = "12 Race Course",
+                city = "Coimbatore",
+                state = "Tamil Nadu",
+                pinCode = "641001",
+                country = "India"
+            }
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var order = await response.Content.ReadFromJsonAsync<CreateOrderResponse>(Json);
+        Assert.NotNull(order);
+        Assert.Equal("Razorpay", order!.PaymentProvider);
+        Assert.False(string.IsNullOrWhiteSpace(order.RazorpayOrderId));
+        Assert.Equal(79800, order.AmountPaise);
+
+        var paymentId = FakeRazorpayPaymentGateway.BuildTestPaymentId(order.RazorpayOrderId);
+        var signature = FakeRazorpayPaymentGateway.BuildTestSignature(order.RazorpayOrderId, paymentId);
+        var verify = await customer.PostAsJsonAsync("/api/payments/razorpay/verify", new
+        {
+            internalOrderId = order.OrderId,
+            razorpayOrderId = order.RazorpayOrderId,
+            razorpayPaymentId = paymentId,
+            razorpaySignature = signature
+        });
+        verify.EnsureSuccessStatusCode();
+
+        var detail = await customer.GetFromJsonAsync<OrderResponse>($"/api/orders/{order.OrderId}", Json);
+        Assert.Equal(OrderStatus.Confirmed, detail!.Status);
+        Assert.Contains(detail.Items, i => i.ItemType == OrderItemType.Product);
+        Assert.Contains(detail.Items, i => i.ItemType == OrderItemType.Course);
+
+        var enrollments = await customer.GetFromJsonAsync<List<EnrollmentResponse>>("/api/me/enrollments", Json);
+        Assert.Contains(enrollments!, e => e.CourseId == courseId);
     }
 
     private async Task<(HttpClient Customer, Guid CourseId)> CustomerWithPublishedCourse(

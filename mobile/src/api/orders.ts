@@ -44,6 +44,7 @@ export interface DeliveryQuote {
 export interface CreateOrderResponse {
   orderId: string;
   orderNumber: string;
+  paymentProvider?: 'Razorpay' | string;
   razorpayOrderId: string;
   razorpayKeyId: string;
   amountPaise: number;

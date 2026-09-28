@@ -18,6 +18,8 @@ import { OrderDetailPage } from './pages/OrderDetailPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { ProductFormPage } from './pages/ProductFormPage';
 import { ProductsPage } from './pages/ProductsPage';
+import { SpecialOffersPage } from './pages/SpecialOffersPage';
+import { ViralProjectsPage } from './pages/ViralProjectsPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { SupportPage } from './pages/SupportPage';
 import { AccountPage } from './pages/AccountPage';
@@ -51,6 +53,8 @@ export default function App() {
               <Route path="courses/:id" element={<CourseDetailPage />} />
               <Route path="courses/:id/edit" element={<CourseFormPage />} />
               <Route path="categories" element={<CategoriesPage />} />
+              <Route path="special-offers" element={<SpecialOffersPage />} />
+              <Route path="viral-projects" element={<ViralProjectsPage />} />
               <Route path="customers" element={<CustomersPage />} />
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="support" element={<SupportPage />} />

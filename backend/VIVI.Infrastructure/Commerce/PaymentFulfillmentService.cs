@@ -78,6 +78,9 @@ public sealed class PaymentFulfillmentService
         var payment = order.Payments.SingleOrDefault(p => p.ProviderOrderId == input.RazorpayOrderId)
             ?? throw ViviException.NotFound("PAYMENT_NOT_FOUND", "Payment record was not found.");
 
+        if (payment.Provider != PaymentProvider.Razorpay)
+            throw ViviException.Conflict("WRONG_PROVIDER", "This order must be paid with Razorpay.");
+
         if (payment.Status == PaymentStatus.Captured && payment.SignatureVerified)
         {
             if (transaction is not null)
@@ -107,29 +110,10 @@ public sealed class PaymentFulfillmentService
                 throw ViviException.Conflict("AMOUNT_MISMATCH", "Paid amount does not match the order total.");
         }
 
-        var now = DateTime.UtcNow;
         payment.ProviderPaymentId = input.RazorpayPaymentId;
         payment.SignatureVerified = true;
-        payment.Status = PaymentStatus.Captured;
-        payment.CompletedAt = now;
-        payment.UpdatedAt = now;
 
-        order.Status = HasPhysicalProducts(order) ? OrderStatus.Confirmed : OrderStatus.Confirmed;
-        order.PaidAt = now;
-        order.ConfirmedAt = now;
-        order.UpdatedAt = now;
-        _delivery.ApplyConfirmedDates(order, now);
-
-        await _inventory.DeductForOrderAsync(order, cancellationToken);
-        await CreateEnrollmentsAsync(order, now, cancellationToken);
-        await _liveBookings.ConfirmBookingForOrderAsync(order, cancellationToken);
-        await _db.SaveChangesAsync(cancellationToken);
-        if (transaction is not null)
-            await transaction.CommitAsync(cancellationToken);
-
-        await _emails.NotifyPaymentSucceededAsync(order.Id, cancellationToken);
-
-        return new PaymentFulfillmentResult(order, payment, AlreadyProcessed: false);
+        return await CompleteFulfillmentAsync(order, payment, transaction, cancellationToken);
     }
 
     public async Task<PaymentFulfillmentResult> ProcessWebhookPaymentAsync(
@@ -164,9 +148,19 @@ public sealed class PaymentFulfillmentService
         if (existingPayment is not null && existingPayment.Id != payment.Id)
             return new PaymentFulfillmentResult(order, existingPayment, AlreadyProcessed: true);
 
-        var now = DateTime.UtcNow;
         payment.ProviderPaymentId = razorpayPaymentId;
         payment.SignatureVerified = true;
+
+        return await CompleteFulfillmentAsync(order, payment, transaction, cancellationToken);
+    }
+
+    private async Task<PaymentFulfillmentResult> CompleteFulfillmentAsync(
+        Order order,
+        Payment payment,
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? transaction,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
         payment.Status = PaymentStatus.Captured;
         payment.CompletedAt = now;
         payment.UpdatedAt = now;
@@ -209,8 +203,11 @@ public sealed class PaymentFulfillmentService
             var isRenewalPurchase = renewal is not null
                 && decimal.Round(item.UnitPrice, 0, MidpointRounding.AwayFromZero) == renewal.RenewalPrice;
 
+            int? memberNumber = null;
             if (!isRenewalPurchase)
-                await _launchOffers.EnsureLaunchSlotForPricedOrderOrThrowAsync(course, item.UnitPrice, cancellationToken);
+                memberNumber = await _launchOffers.EnsureLaunchSlotForPricedOrderOrThrowAsync(course, item.UnitPrice, cancellationToken);
+
+            var isFoundingMembership = memberNumber.HasValue && course.LaunchOffer is not null;
 
             var targetCourseIds = course.Type == CourseType.Bundle
                 ? course.BundleItems.OrderBy(b => b.SortOrder).Select(b => b.IncludedCourseId).ToList()
@@ -219,8 +216,19 @@ public sealed class PaymentFulfillmentService
             if (course.Type == CourseType.Bundle && targetCourseIds.Count == 0)
                 throw ViviException.Conflict("BUNDLE_EMPTY", "This bundle has no included courses configured.");
 
+            if (isFoundingMembership && course.LaunchOffer!.ViralProjectCourseId is Guid viralProjectCourseId
+                && !targetCourseIds.Contains(viralProjectCourseId))
+            {
+                targetCourseIds.Add(viralProjectCourseId);
+            }
+
             if (isRenewalPurchase)
                 await _pricing.MarkRenewalOffersUsedAsync(order.CustomerId, course, now, cancellationToken);
+
+            var accessStart = now;
+            var membershipAccessExpiry = isFoundingMembership
+                ? accessStart.AddDays(course.LaunchOffer!.AccessDurationDays)
+                : (DateTime?)null;
 
             foreach (var targetCourseId in targetCourseIds)
             {
@@ -236,15 +244,16 @@ public sealed class PaymentFulfillmentService
                 if (exists)
                     continue;
 
-                var accessStart = now;
-                var accessExpiry = isRenewalPurchase
-                    ? await _pricing.ResolveRenewalAccessExpiryAsync(
-                        order.CustomerId,
-                        [targetCourseId],
-                        course.AccessDays,
-                        now,
-                        cancellationToken)
-                    : accessStart.AddDays(course.AccessDays);
+                var accessExpiry = isFoundingMembership
+                    ? membershipAccessExpiry!.Value
+                    : isRenewalPurchase
+                        ? await _pricing.ResolveRenewalAccessExpiryAsync(
+                            order.CustomerId,
+                            [targetCourseId],
+                            course.AccessDays,
+                            now,
+                            cancellationToken)
+                        : accessStart.AddDays(course.AccessDays);
 
                 _db.CourseEnrollments.Add(new CourseEnrollment
                 {
@@ -261,9 +270,30 @@ public sealed class PaymentFulfillmentService
                     UpdatedAt = now
                 });
             }
+
+            if (isFoundingMembership)
+            {
+                var membershipExists = await _db.LaunchMemberships.AnyAsync(
+                    m => m.OrderItemId == item.Id, cancellationToken);
+                if (!membershipExists)
+                {
+                    _db.LaunchMemberships.Add(new LaunchMembership
+                    {
+                        Id = Guid.NewGuid(),
+                        CustomerId = order.CustomerId,
+                        CourseId = course.Id,
+                        OrderId = order.Id,
+                        OrderItemId = item.Id,
+                        MemberNumber = memberNumber!.Value,
+                        ViralProjectCourseId = course.LaunchOffer!.ViralProjectCourseId,
+                        AccessStartDate = accessStart,
+                        AccessExpiryDate = membershipAccessExpiry!.Value,
+                        BadgeGrantedAt = now,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    });
+                }
+            }
         }
     }
-
-    private static bool HasPhysicalProducts(Order order)
-        => order.Items.Any(i => i.ItemType == OrderItemType.Product);
 }

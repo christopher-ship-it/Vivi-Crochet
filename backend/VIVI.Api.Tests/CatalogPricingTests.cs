@@ -155,7 +155,7 @@ public sealed class CatalogPricingTests
         {
             internalOrderId = order.OrderId,
             razorpayOrderId = order.RazorpayOrderId,
-            razorpayPaymentId = "pay_failed",
+            razorpayPaymentId = "pay_bad",
             razorpaySignature = "bad_signature"
         });
         Assert.Equal(HttpStatusCode.Conflict, failed.StatusCode);
@@ -169,12 +169,13 @@ public sealed class CatalogPricingTests
         var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
         var order = await CreateBundleOrderAsync(customer);
         Assert.Equal(999m, order.TotalAmount);
+        Assert.Equal("Razorpay", order.PaymentProvider);
         Assert.False(string.IsNullOrWhiteSpace(order.RazorpayOrderId));
         Assert.Equal(0, await GetLaunchCountAsync());
     }
 
     [Fact]
-    public async Task Razorpay_order_creation_does_not_consume_launch_slot()
+    public async Task Order_creation_does_not_consume_launch_slot()
     {
         await ResetLaunchCountAsync(5);
         var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
@@ -207,6 +208,17 @@ public sealed class CatalogPricingTests
         var pricing = await GetPricingAsync(DatabaseSeeder.Catalog.BundleId);
         Assert.Equal(1699, pricing.Price);
         Assert.False(pricing.IsLaunchOffer);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+        var orderIds = new[] { orderA.OrderId, orderB.OrderId };
+        var memberships = await db.LaunchMemberships
+            .Where(m => orderIds.Contains(m.OrderId))
+            .ToListAsync();
+        var winningOrderId = results[0].IsSuccessStatusCode ? orderA.OrderId : orderB.OrderId;
+        Assert.Single(memberships);
+        Assert.Equal(100, memberships[0].MemberNumber);
+        Assert.Equal(winningOrderId, memberships[0].OrderId);
     }
 
     [Fact]
@@ -316,8 +328,13 @@ public sealed class CatalogPricingTests
         Assert.Equal(3, await db.CourseBundleItems.CountAsync(b => b.BundleCourseId == DatabaseSeeder.Catalog.BundleId));
     }
 
+    /// <summary>
+    /// At the launch price this purchase is a founding-membership purchase, so access uses the
+    /// offer's AccessDurationDays (365) rather than the bundle course's own AccessDays (30) —
+    /// see LaunchMembershipTests for the dedicated founding-membership coverage.
+    /// </summary>
     [Fact]
-    public async Task Bundle_enrollment_uses_bundle_access_days()
+    public async Task Bundle_enrollment_at_launch_price_uses_offer_access_duration()
     {
         await ResetLaunchCountAsync(0);
         var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
@@ -327,12 +344,28 @@ public sealed class CatalogPricingTests
         var enrollments = await customer.GetFromJsonAsync<List<EnrollmentResponse>>("/api/me/enrollments", Json);
         Assert.Equal(3, enrollments!.Count);
         Assert.All(enrollments, e =>
-            Assert.Equal(30, (e.AccessExpiryDate - e.AccessStartDate).Days));
+            Assert.Equal(365, (e.AccessExpiryDate - e.AccessStartDate).Days));
         var enrolledCourseIds = enrollments.Select(e => e.CourseId).ToHashSet();
         Assert.Contains(DatabaseSeeder.Catalog.FoundationId, enrolledCourseIds);
         Assert.Contains(DatabaseSeeder.Catalog.SignatureId, enrolledCourseIds);
         Assert.Contains(DatabaseSeeder.Catalog.MasterId, enrolledCourseIds);
         Assert.DoesNotContain(DatabaseSeeder.Catalog.BundleId, enrolledCourseIds);
+    }
+
+    /// <summary>Once the offer is exhausted, a regular-priced bundle purchase is not a membership and falls back to the bundle course's own AccessDays.</summary>
+    [Fact]
+    public async Task Bundle_enrollment_at_regular_price_uses_course_access_days()
+    {
+        await ResetLaunchCountAsync(100);
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        var created = await CreateBundleOrderAsync(customer);
+        Assert.Equal(1699m, created.TotalAmount);
+        await VerifyPaymentAsync(customer, created);
+
+        var enrollments = await customer.GetFromJsonAsync<List<EnrollmentResponse>>("/api/me/enrollments", Json);
+        Assert.Equal(3, enrollments!.Count);
+        Assert.All(enrollments, e =>
+            Assert.Equal(30, (e.AccessExpiryDate - e.AccessStartDate).Days));
     }
 
     [Fact]
@@ -481,6 +514,10 @@ public sealed class CatalogPricingTests
         var offer = await db.LaunchOfferCounters
             .SingleAsync(c => c.CourseId == DatabaseSeeder.Catalog.BundleId);
         offer.CompletedPurchaseCount = count;
+        // Other tests in this shared collection may have pointed the offer at a viral project
+        // or a non-default access window — reset to baseline so this test starts clean.
+        offer.ViralProjectCourseId = null;
+        offer.AccessDurationDays = 365;
         offer.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
     }

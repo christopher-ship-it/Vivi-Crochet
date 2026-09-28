@@ -15,8 +15,9 @@ namespace VIVI.Infrastructure.Commerce;
 public sealed record LiveCheckoutResult(
     LiveBooking Booking,
     Order Order,
-    string RazorpayOrderId,
-    string RazorpayKeyId,
+    PaymentProvider Provider,
+    string? RazorpayOrderId,
+    string? RazorpayKeyId,
     int AmountPaise,
     string Currency);
 
@@ -244,9 +245,12 @@ public sealed class LiveBookingService
             order.Items.Add(orderItem);
 
             var amountPaise = (int)Math.Round(price * 100m, MidpointRounding.AwayFromZero);
-            var razorpayOrder = await _razorpay.CreateOrderAsync(order.OrderNumber, amountPaise, order.Currency, cancellationToken);
+            var razorpayOrder = await _razorpay.CreateOrderAsync(
+                order.OrderNumber,
+                amountPaise,
+                order.Currency,
+                cancellationToken);
             order.RazorpayOrderId = razorpayOrder.RazorpayOrderId;
-
             var payment = new Payment
             {
                 Id = Guid.NewGuid(),
@@ -284,10 +288,11 @@ public sealed class LiveBookingService
             return new LiveCheckoutResult(
                 booking,
                 order,
-                razorpayOrder.RazorpayOrderId,
-                _razorpayOptions.KeyId,
-                razorpayOrder.AmountPaise,
-                razorpayOrder.Currency);
+                PaymentProvider.Razorpay,
+                RazorpayOrderId: razorpayOrder.RazorpayOrderId,
+                RazorpayKeyId: _razorpayOptions.KeyId,
+                amountPaise,
+                order.Currency);
         }
         finally
         {

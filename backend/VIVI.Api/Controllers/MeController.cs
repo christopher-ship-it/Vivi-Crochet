@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using VIVI.Api.DTOs.Customers;
 using VIVI.Api.DTOs.Enrollments;
+using VIVI.Api.DTOs.Offers;
 using VIVI.Api.Extensions;
 using VIVI.Api.Mapping;
 using VIVI.Core.Entities;
@@ -263,6 +264,29 @@ public sealed class MeController : ControllerBase
             .ToListAsync(cancellationToken);
 
         return Ok(enrollments.Select(e => e.ToDto(now)).ToList());
+    }
+
+    /// <summary>Returns the authenticated customer's founding-membership status, if any.</summary>
+    [HttpGet("membership")]
+    [ProducesResponseType(typeof(MyMembershipResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MyMembershipResponse>> GetMembership(CancellationToken cancellationToken)
+    {
+        var customer = await _customers.ResolveForUserAsync(User.GetUserId(), cancellationToken);
+        var membership = await _db.LaunchMemberships
+            .AsNoTracking()
+            .Include(m => m.ViralProjectCourse)
+            .Where(m => m.CustomerId == customer.Id)
+            .OrderByDescending(m => m.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (membership is null)
+            return Ok(new MyMembershipResponse { IsMember = false });
+
+        var offer = await _db.LaunchOfferCounters
+            .AsNoTracking()
+            .SingleOrDefaultAsync(o => o.CourseId == membership.CourseId, cancellationToken);
+
+        return Ok(membership.ToMembershipDto(offer, DateTime.UtcNow));
     }
 
     /// <summary>Returns one enrollment for a specific course.</summary>

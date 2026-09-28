@@ -15,6 +15,10 @@ public static class ProductEssentialSchemaBootstrapper
         CancellationToken cancellationToken,
         ILogger? logger = null)
     {
+        // In-memory / non-relational providers (unit tests) have no SQL Server DDL.
+        if (!db.Database.IsRelational())
+            return;
+
         // Table first — product save must work even if FKs fail to attach.
         await db.Database.ExecuteSqlRawAsync(
             """

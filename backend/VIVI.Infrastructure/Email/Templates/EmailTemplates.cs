@@ -415,6 +415,66 @@ See you in the Live Crochet Studio.
     }
 }
 
+public static class LaunchMembershipConfirmationEmail
+{
+    public static (string Subject, string Html, string Text) Render(
+        Customer customer,
+        Order order,
+        LaunchMembership membership,
+        string offerName,
+        string? viralProjectName)
+    {
+        var memberTag = $"#{membership.MemberNumber:D3}";
+        var benefits = new List<string>
+        {
+            "1-year access",
+            "Foundation Course",
+            "Signature Course",
+            "Master Course"
+        };
+        if (!string.IsNullOrWhiteSpace(viralProjectName))
+            benefits.Add($"{viralProjectName} (Viral Project) FREE");
+        benefits.Add("Founding Member Badge");
+
+        var benefitsHtml = string.Join("\n", benefits.Select(b => $"<li>{WebUtility.HtmlEncode(b)}</li>"));
+        var benefitsText = string.Join("\n", benefits.Select(b => $"- {b}"));
+
+        var body = $"""
+<p>Hi {WebUtility.HtmlEncode(customer.FullName)},</p>
+<p>Welcome to {WebUtility.HtmlEncode(offerName)}. You are Founding Member {memberTag}.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;font-size:14px;">
+  <tr><td><strong>Order</strong></td><td align="right">{WebUtility.HtmlEncode(order.OrderNumber)}</td></tr>
+  <tr><td><strong>Founding member number</strong></td><td align="right">{memberTag}</td></tr>
+  <tr><td><strong>Amount paid</strong></td><td align="right">{EmailLayout.FormatInr(order.TotalAmount)}</td></tr>
+  <tr><td><strong>Access expires</strong></td><td align="right">{EmailLayout.FormatDate(membership.AccessExpiryDate)}</td></tr>
+</table>
+<p style="margin:16px 0 0 0;"><strong>Your benefits:</strong></p>
+<ul style="margin:8px 0 0 0;padding-left:20px;">
+{benefitsHtml}
+</ul>
+""";
+
+        var text = $"""
+Hi {customer.FullName},
+
+Welcome to {offerName}. You are Founding Member {memberTag}.
+
+Order: {order.OrderNumber}
+Founding member number: {memberTag}
+Amount paid: {EmailLayout.FormatInr(order.TotalAmount)}
+Access expires: {EmailLayout.FormatDate(membership.AccessExpiryDate)}
+
+Your benefits:
+{benefitsText}
+""";
+
+        return (
+            $"Welcome, Founding Member {memberTag}",
+            EmailLayout.Wrap("Welcome, Founding Member", body),
+            text);
+    }
+}
+
 public static class PasswordResetEmail
 {
     public static (string Subject, string Html, string Text) Render(string code, int expiresMinutes)

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { lineTotal } from '../cart/calculations';
 import { canIncreaseQuantity } from '../cart/stock';
-import type { CartLineItem } from '../cart/types';
+import { isCourseLine, type CartLineItem } from '../cart/types';
 import { useI18n } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
 import { colors, radii } from '../theme';
@@ -169,7 +169,8 @@ export function CartLineRow({
   onRemove,
 }: CartLineRowProps) {
   const { t, language } = useI18n();
-  const compact = compactProp ?? item.productType === 'Resell';
+  const digital = isCourseLine(item);
+  const compact = compactProp ?? (!digital && item.productType === 'Resell');
   const fonts = uiFonts(language);
   const styles = useMemo(() => createStyles(fonts, compact), [language, compact]);
 
@@ -177,6 +178,11 @@ export function CartLineRow({
   const stock = item.availableStock;
   const atMax =
     typeof stock === 'number' ? !canIncreaseQuantity(item.quantity, stock) : false;
+  const categoryLabel = digital
+    ? item.itemType === 'CourseBundle'
+      ? t('cart.courseBundleLabel')
+      : t('cart.courseLabel')
+    : item.category;
 
   return (
     <View
@@ -198,8 +204,8 @@ export function CartLineRow({
         <Text style={styles.name} numberOfLines={compact ? 1 : 2}>
           {item.name}
         </Text>
-        {!compact && item.category ? (
-          <Text style={styles.category}>{item.category}</Text>
+        {!compact && categoryLabel ? (
+          <Text style={styles.category}>{categoryLabel}</Text>
         ) : null}
         <Text style={styles.unitPrice}>
           {formatInr(item.price)} {t('cart.eachSuffix')}
@@ -207,9 +213,11 @@ export function CartLineRow({
 
         {unavailable ? (
           <Text style={styles.unavailable}>{t('cart.productUnavailable')}</Text>
-        ) : readOnly ? (
+        ) : readOnly || digital ? (
           <View style={styles.qtyRow}>
-            <Text style={styles.readOnlyQty}>{t('cart.qtyShort', { count: item.quantity })}</Text>
+            <Text style={styles.readOnlyQty}>
+              {digital ? t('cart.digitalAccess') : t('cart.qtyShort', { count: item.quantity })}
+            </Text>
             <Text style={styles.lineTotal}>{formatInr(lineTotal(item))}</Text>
           </View>
         ) : (
@@ -240,13 +248,13 @@ export function CartLineRow({
             {atMax && typeof stock === 'number' && stock > 0 ? (
               <Text style={styles.stockCap}>{t('cart.maxStockReached')}</Text>
             ) : null}
-            {onRemove ? (
-              <Pressable style={styles.removeBtn} onPress={onRemove} hitSlop={8}>
-                <Text style={styles.removeBtnText}>{t('cart.remove')}</Text>
-              </Pressable>
-            ) : null}
           </>
         )}
+        {onRemove && !unavailable ? (
+          <Pressable style={styles.removeBtn} onPress={onRemove} hitSlop={8}>
+            <Text style={styles.removeBtnText}>{t('cart.remove')}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );

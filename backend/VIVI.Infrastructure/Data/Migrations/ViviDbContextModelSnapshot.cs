@@ -543,11 +543,70 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.ToTable("EmailVerificationChallenges", (string)null);
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.LaunchMembership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AccessExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("AccessStartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("BadgeGrantedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CourseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("MemberNumber")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ViralProjectCourseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("OrderItemId")
+                        .IsUnique();
+
+                    b.HasIndex("ViralProjectCourseId");
+
+                    b.HasIndex("CourseId", "MemberNumber")
+                        .IsUnique();
+
+                    b.ToTable("LaunchMemberships", (string)null);
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.LaunchOfferCounter", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AccessDurationDays")
+                        .HasColumnType("int");
 
                     b.Property<int>("CompletedPurchaseCount")
                         .HasColumnType("int");
@@ -558,6 +617,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
                     b.Property<int>("LaunchLimit")
                         .HasColumnType("int");
 
@@ -567,16 +629,26 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<int>("Mrp")
                         .HasColumnType("int");
 
+                    b.Property<string>("OfferName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<int>("RegularPriceAfterLaunch")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("ViralProjectCourseId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CourseId")
                         .IsUnique();
+
+                    b.HasIndex("ViralProjectCourseId");
 
                     b.ToTable("LaunchOfferCounters", (string)null);
                 });
@@ -631,6 +703,29 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.ToTable("LiveBookings", (string)null);
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.LiveTutorDefault", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TutorName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("TutorPhotoBlobPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LiveTutorDefaults", (string)null);
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.LiveWeek", b =>
                 {
                     b.Property<Guid>("Id")
@@ -645,6 +740,9 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
+
+                    b.Property<bool>("HasCustomTutor")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsBookable")
                         .HasColumnType("bit");
@@ -1068,8 +1166,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ProviderPaymentId")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<bool>("SignatureVerified")
                         .HasColumnType("bit");
@@ -1467,6 +1565,48 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.LaunchMembership", b =>
+                {
+                    b.HasOne("VIVI.Core.Entities.Course", "Course")
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VIVI.Core.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VIVI.Core.Entities.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VIVI.Core.Entities.OrderItem", "OrderItem")
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VIVI.Core.Entities.Course", "ViralProjectCourse")
+                        .WithMany()
+                        .HasForeignKey("ViralProjectCourseId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Course");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("OrderItem");
+
+                    b.Navigation("ViralProjectCourse");
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.LaunchOfferCounter", b =>
                 {
                     b.HasOne("VIVI.Core.Entities.Course", "Course")
@@ -1475,7 +1615,14 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("VIVI.Core.Entities.Course", "ViralProjectCourse")
+                        .WithMany()
+                        .HasForeignKey("ViralProjectCourseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Course");
+
+                    b.Navigation("ViralProjectCourse");
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.LiveBooking", b =>

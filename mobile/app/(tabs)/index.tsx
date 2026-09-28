@@ -179,6 +179,8 @@ const PROJECTS: Room = {
   title: 'home.roomProjectsTitle',
   sub: 'home.roomProjectsSub',
   cta: 'home.roomProjectsCta',
+  featured: true,
+  badge: 'home.badgeProjects',
 };
 
 export default function HomeScreen() {
@@ -435,8 +437,22 @@ export default function HomeScreen() {
           />
         </View>
         <View style={[styles.tallBody, room.id === 'learn' && styles.tallBodyLearn]}>
-          <Text style={styles.tallTitle} numberOfLines={2}>
-            {title}
+          <Text
+            style={styles.tallTitle}
+            numberOfLines={room.id === 'live' ? 1 : 2}
+            adjustsFontSizeToFit={room.id === 'live'}
+            minimumFontScale={room.id === 'live' ? 0.8 : undefined}
+          >
+            {room.id === 'live' ? (
+              <>
+                {t('home.roomLiveTitlePrefix')}
+                <Text style={{ color: room.accent }}>
+                  {t('home.roomLiveTitleHighlight')}
+                </Text>
+              </>
+            ) : (
+              title
+            )}
           </Text>
           {room.id === 'live' ? (
             <>
@@ -537,6 +553,7 @@ export default function HomeScreen() {
         style={({ pressed }) => [
           styles.card,
           { flexGrow: grow, flexBasis: 0 },
+          room.featured && { borderWidth: 2, borderColor: room.accent, shadowColor: room.accent, shadowOpacity: 0.32, shadowRadius: 16, elevation: 8 },
           pressed && styles.pressed,
         ]}
         onPress={() => open(room)}
@@ -550,6 +567,13 @@ export default function HomeScreen() {
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
+        {room.badge ? (
+          <View style={[styles.badge, { backgroundColor: room.accent }]}>
+            <Text style={styles.badgeText} numberOfLines={1}>
+              {t(room.badge)}
+            </Text>
+          </View>
+        ) : null}
         <View
           style={[
             styles.squareImageWrap,
@@ -573,8 +597,17 @@ export default function HomeScreen() {
         </View>
         <View style={styles.squareBody}>
           <View style={styles.squareCopy}>
-            <Text style={styles.squareTitle} numberOfLines={2}>
-              {title}
+            <Text style={styles.squareTitle} numberOfLines={room.id === 'projects' ? 3 : 2}>
+              {room.id === 'projects' ? (
+                <>
+                  {t('home.roomProjectsTitleViral')}
+                  <Text style={{ color: room.accent }}>
+                    {t('home.roomProjectsTitleTrending')}
+                  </Text>
+                </>
+              ) : (
+                title
+              )}
             </Text>
           </View>
           <View style={[styles.arrow, { backgroundColor: room.accent }]}>
@@ -614,7 +647,10 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.greeting}>
-            <Text style={styles.greetingTitle}>{t('home.greetingTitle')}</Text>
+            <View style={styles.greetingTitleRow}>
+              <Text style={styles.greetingTitle}>{t('home.greetingTitle')}</Text>
+              <Ionicons name="sparkles" size={16} color={colors.pinkDark} />
+            </View>
             <Text style={styles.greetingSub}>{t('home.greetingSub')}</Text>
           </View>
           <Text style={styles.heading}>{t('home.roomsHeading')}</Text>
@@ -686,6 +722,11 @@ function createStyles(fonts: UiFonts, compact = false) {
     greeting: {
       paddingHorizontal: 2,
       paddingTop: 2,
+    },
+    greetingTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
     },
     greetingTitle: {
       fontFamily: fonts.extraBold,
@@ -925,9 +966,10 @@ function createStyles(fonts: UiFonts, compact = false) {
       paddingTop: 6,
       paddingHorizontal: 6,
     },
-    /* Two-line title, so a little less than Shop but more than the default. */
+    /* Up to three-line title ("Viral & " + highlighted "Trending Tutorials" wrapping),
+       so less than Shop's one-liner and less than the plain two-line default. */
     squareImageWrapProjects: {
-      height: '69%',
+      height: '56%',
       paddingTop: 6,
       paddingHorizontal: 6,
     },
