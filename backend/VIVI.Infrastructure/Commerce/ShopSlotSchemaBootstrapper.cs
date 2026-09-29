@@ -17,6 +17,21 @@ public static class ShopSlotSchemaBootstrapper
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Products_ProductCode' AND object_id = OBJECT_ID(N'[Products]'))
             EXEC(N'CREATE UNIQUE INDEX [IX_Products_ProductCode] ON [Products] ([ProductCode]) WHERE [ProductCode] IS NOT NULL');
 
+        IF COL_LENGTH('Products', 'BallWeight') IS NULL
+            ALTER TABLE [Products] ADD [BallWeight] nvarchar(40) NULL;
+
+        IF COL_LENGTH('Products', 'YarnLength') IS NULL
+            ALTER TABLE [Products] ADD [YarnLength] nvarchar(40) NULL;
+
+        IF COL_LENGTH('Products', 'CrochetHookSize') IS NULL
+            ALTER TABLE [Products] ADD [CrochetHookSize] nvarchar(40) NULL;
+
+        IF COL_LENGTH('Products', 'ColourName') IS NULL
+            ALTER TABLE [Products] ADD [ColourName] nvarchar(40) NULL;
+
+        IF COL_LENGTH('Products', 'ColourHex') IS NULL
+            ALTER TABLE [Products] ADD [ColourHex] nvarchar(7) NULL;
+
         IF OBJECT_ID(N'[ShopSlots]', N'U') IS NULL
         BEGIN
             CREATE TABLE [ShopSlots] (

@@ -41,12 +41,36 @@ export function SlotVariantPicker({ product, onSelect }: SlotVariantPickerProps)
 
   if (!slot) return null;
 
+  const optionName = (p: Product) =>
+    [p.colourName?.trim(), p.productCode?.trim()].filter(Boolean).join(' · ') || p.name;
+  const useSwatches = slot.products.every((p) => /^#[0-9a-f]{6}$/i.test(p.colourHex ?? ''));
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.label} numberOfLines={1}>
         {t('product.colourLabel')}{' '}
-        <Text style={styles.labelValue}>{product.productCode?.trim() || product.name}</Text>
+        <Text style={styles.labelValue}>{optionName(product)}</Text>
       </Text>
+      {useSwatches ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
+          {slot.products.map((option) => {
+            const selected = option.id === product.id;
+            const out = isOutOfStock(option.availableStock ?? 0);
+            return (
+              <Pressable
+                key={option.id}
+                style={[styles.swatchRing, selected && styles.swatchRingSelected]}
+                onPress={() => (selected ? undefined : onSelect(option.id))}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${optionName(option)}${out ? `, ${t('product.outOfStock')}` : ''}`}
+              >
+                <View style={[styles.swatch, { backgroundColor: option.colourHex! }, out && styles.swatchOut]} />
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
         {slot.products.map((option) => {
           const selected = option.id === product.id;
@@ -73,6 +97,7 @@ export function SlotVariantPicker({ product, onSelect }: SlotVariantPickerProps)
           );
         })}
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -94,6 +119,28 @@ function createStyles(fonts: UiFonts) {
     strip: {
       gap: spacing.sm,
       paddingVertical: spacing.sm,
+    },
+    swatchRing: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 2,
+      borderColor: 'transparent',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    swatchRingSelected: {
+      borderColor: colors.pink,
+    },
+    swatch: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    swatchOut: {
+      opacity: 0.35,
     },
     card: {
       width: 104,

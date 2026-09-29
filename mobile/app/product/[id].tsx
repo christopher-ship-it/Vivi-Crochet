@@ -488,7 +488,9 @@ export default function ProductDetailScreen() {
               </View>
             ) : null}
 
-            {product.productCode?.trim() || product.spec1?.trim() || product.spec2?.trim() || stock > 0 ? (
+            {product.productCode?.trim() || product.spec1?.trim() || product.spec2?.trim() ||
+            product.ballWeight?.trim() || product.yarnLength?.trim() || product.crochetHookSize?.trim() ||
+            stock > 0 ? (
               <View style={styles.detailsBlock}>
                 <Text style={[styles.sectionLabel, isEssentials && styles.sectionLabelCompact]}>
                   {t('product.productDetails')}
@@ -507,6 +509,24 @@ export default function ProductDetailScreen() {
                 {product.spec2?.trim() ? (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailValue}>{product.spec2.trim()}</Text>
+                  </View>
+                ) : null}
+                {product.ballWeight?.trim() ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailKey}>{t('product.ballWeightLabel')}</Text>
+                    <Text style={styles.detailValue}>{product.ballWeight.trim()}</Text>
+                  </View>
+                ) : null}
+                {product.yarnLength?.trim() ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailKey}>{t('product.yarnLengthLabel')}</Text>
+                    <Text style={styles.detailValue}>{product.yarnLength.trim()}</Text>
+                  </View>
+                ) : null}
+                {product.crochetHookSize?.trim() ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailKey}>{t('product.hookSizeLabel')}</Text>
+                    <Text style={styles.detailValue}>{product.crochetHookSize.trim()}</Text>
                   </View>
                 ) : null}
                 {stock > 0 ? (

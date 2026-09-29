@@ -19,8 +19,12 @@ export function ShopSlotSection({ slot, showStock, compact, onPressProduct }: Sh
   const fonts = uiFonts(language);
   const styles = useMemo(() => createStyles(fonts), [language]);
 
+  // One slot = one card: the first product is the cover, and the product page's option picker
+  // (colour swatches or cards) lets the shopper switch to the others.
+  const visibleProducts = slot.products.slice(0, 1);
+
   const rows: Product[][] = [];
-  for (let i = 0; i < slot.products.length; i += 2) rows.push(slot.products.slice(i, i + 2));
+  for (let i = 0; i < visibleProducts.length; i += 2) rows.push(visibleProducts.slice(i, i + 2));
 
   return (
     <View style={styles.section}>

@@ -19,7 +19,10 @@ export async function downloadExcel<T>(
     columns.map((c) => {
       const v = c.value(row);
       // Keep blanks empty (rather than "—") so filters and formulas work in Excel.
-      return v === undefined || v === null || v === '' ? null : v;
+      if (v === undefined || v === null || v === '') return null;
+      // write-excel-file rejects Date cells without an explicit number format.
+      if (v instanceof Date) return { value: v, format: 'dd mmm yyyy hh:mm' };
+      return v;
     }),
   );
 

@@ -14,6 +14,11 @@ public sealed class ProductRequest
     public int? Mrp { get; set; }
     public string? Spec1 { get; set; }
     public string? Spec2 { get; set; }
+    public string? BallWeight { get; set; }
+    public string? YarnLength { get; set; }
+    public string? CrochetHookSize { get; set; }
+    public string? ColourName { get; set; }
+    public string? ColourHex { get; set; }
     public Guid? CourseId { get; set; }
     public int SortOrder { get; set; }
     public ProductType ProductType { get; set; } = ProductType.Handmade;
@@ -89,6 +94,11 @@ public sealed class ProductResponse
     public IReadOnlyList<ProductImageResponse> Images { get; set; } = Array.Empty<ProductImageResponse>();
     public string? Spec1 { get; set; }
     public string? Spec2 { get; set; }
+    public string? BallWeight { get; set; }
+    public string? YarnLength { get; set; }
+    public string? CrochetHookSize { get; set; }
+    public string? ColourName { get; set; }
+    public string? ColourHex { get; set; }
     public Guid? CourseId { get; set; }
     public LinkedCourseSummary? LinkedCourse { get; set; }
     public int SortOrder { get; set; }

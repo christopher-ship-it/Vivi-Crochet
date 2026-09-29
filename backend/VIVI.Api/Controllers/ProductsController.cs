@@ -670,6 +670,9 @@ public sealed class ProductsController : ControllerBase
             throw ViviException.NotFound("COURSE_NOT_FOUND", "Course was not found.");
     }
 
+    private static string? NullIfBlank(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private static Product Apply(Product product, ProductRequest request, DateTime now)
     {
         product.Name = request.Name.Trim();
@@ -680,6 +683,13 @@ public sealed class ProductsController : ControllerBase
         product.Mrp = request.Mrp;
         product.Spec1 = request.Spec1?.Trim();
         product.Spec2 = request.Spec2?.Trim();
+        // Yarn/hook specifications only apply to Crochet Essentials.
+        var essentials = request.ProductType == ProductType.Resell;
+        product.BallWeight = essentials ? NullIfBlank(request.BallWeight) : null;
+        product.YarnLength = essentials ? NullIfBlank(request.YarnLength) : null;
+        product.CrochetHookSize = essentials ? NullIfBlank(request.CrochetHookSize) : null;
+        product.ColourName = essentials ? NullIfBlank(request.ColourName) : null;
+        product.ColourHex = essentials ? NullIfBlank(request.ColourHex)?.ToUpperInvariant() : null;
         product.CourseId = request.ProductType == ProductType.Handmade ? request.CourseId : null;
         product.SortOrder = request.SortOrder;
         product.ProductType = request.ProductType;

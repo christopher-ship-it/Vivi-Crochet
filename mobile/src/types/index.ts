@@ -130,6 +130,11 @@ export interface Product {
   images?: ProductImage[];
   spec1?: string | null;
   spec2?: string | null;
+  ballWeight?: string | null;
+  yarnLength?: string | null;
+  crochetHookSize?: string | null;
+  colourName?: string | null;
+  colourHex?: string | null;
   courseId?: string | null;
   linkedCourse?: LinkedCourseSummary | null;
   recommendedEssentials?: RecommendedEssentialSummary[];

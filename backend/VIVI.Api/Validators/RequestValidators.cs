@@ -251,6 +251,14 @@ public sealed class ProductRequestValidator : AbstractValidator<ProductRequest>
         RuleFor(x => x.Name).NotEmpty().MaximumLength(160);
         RuleFor(x => x.Category).NotEmpty().MaximumLength(80);
         RuleFor(x => x.ProductCode).MaximumLength(40);
+        RuleFor(x => x.BallWeight).MaximumLength(40);
+        RuleFor(x => x.YarnLength).MaximumLength(40);
+        RuleFor(x => x.CrochetHookSize).MaximumLength(40);
+        RuleFor(x => x.ColourName).MaximumLength(40);
+        RuleFor(x => x.ColourHex)
+            .Matches("^#[0-9A-Fa-f]{6}$")
+            .When(x => !string.IsNullOrWhiteSpace(x.ColourHex))
+            .WithMessage("Colour must be a hex value like #F5E6A8.");
         RuleFor(x => x.Price).GreaterThanOrEqualTo(0);
         RuleFor(x => x.Mrp).GreaterThanOrEqualTo(0).When(x => x.Mrp.HasValue);
         RuleFor(x => x.ProductType).IsInEnum();

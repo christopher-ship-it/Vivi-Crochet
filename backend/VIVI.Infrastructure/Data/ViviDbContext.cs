@@ -134,6 +134,11 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.ImageUrl).HasMaxLength(512);
             entity.Property(x => x.Spec1).HasMaxLength(120);
             entity.Property(x => x.Spec2).HasMaxLength(120);
+            entity.Property(x => x.BallWeight).HasMaxLength(40);
+            entity.Property(x => x.YarnLength).HasMaxLength(40);
+            entity.Property(x => x.CrochetHookSize).HasMaxLength(40);
+            entity.Property(x => x.ColourName).HasMaxLength(40);
+            entity.Property(x => x.ColourHex).HasMaxLength(7);
             entity.Property(x => x.ProductType).HasConversion<int>().IsRequired();
             entity.Property(x => x.AvailableStock).IsRequired();
             entity.Property(x => x.Status).HasConversion<int>().IsRequired();

@@ -57,6 +57,17 @@ export function ProductCard({
       ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
       : null;
   const isRail = variant === 'rail';
+  const metaLine = [
+    product.productCode,
+    product.spec1,
+    product.spec2,
+    product.ballWeight,
+    product.yarnLength,
+    product.crochetHookSize,
+  ]
+    .map((v) => v?.trim())
+    .filter(Boolean)
+    .join(' · ');
   const imageHeight = isRail ? imageHeightForWidth(RAIL_CARD_WIDTH, RAIL_IMAGE_ASPECT_RATIO) : null;
   const stock = product.availableStock ?? 0;
   const outOfStock = isOutOfStock(stock);
@@ -146,12 +157,9 @@ export function ProductCard({
       >
         {product.name}
       </Text>
-      {!isRail && (product.productCode?.trim() || product.spec1?.trim() || product.spec2?.trim()) ? (
+      {!isRail && metaLine ? (
         <Text style={styles.metaLine} numberOfLines={1}>
-          {[product.productCode, product.spec1, product.spec2]
-            .map((v) => v?.trim())
-            .filter(Boolean)
-            .join(' · ')}
+          {metaLine}
         </Text>
       ) : null}
       <View

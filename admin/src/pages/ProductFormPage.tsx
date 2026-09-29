@@ -48,6 +48,11 @@ const emptyForm: ProductFormState = {
   mrp: null,
   spec1: '',
   spec2: '',
+  ballWeight: '',
+  yarnLength: '',
+  crochetHookSize: '',
+  colourName: '',
+  colourHex: '',
   courseId: null,
   sortOrder: 0,
   productType: 'Handmade',
@@ -129,6 +134,11 @@ export function ProductFormPage() {
           mrp: product.mrp ?? null,
           spec1: product.spec1 ?? '',
           spec2: product.spec2 ?? '',
+          ballWeight: product.ballWeight ?? '',
+          yarnLength: product.yarnLength ?? '',
+          crochetHookSize: product.crochetHookSize ?? '',
+          colourName: product.colourName ?? '',
+          colourHex: product.colourHex ?? '',
           courseId: product.courseId ?? null,
           sortOrder: product.sortOrder,
           productType: product.productType ?? 'Handmade',
@@ -169,6 +179,11 @@ export function ProductFormPage() {
       productCode: form.productCode?.trim() || null,
       spec1: form.spec1?.trim() || null,
       spec2: form.spec2?.trim() || null,
+      ballWeight: form.productType === 'Resell' ? (form.ballWeight?.trim() || null) : null,
+      yarnLength: form.productType === 'Resell' ? (form.yarnLength?.trim() || null) : null,
+      crochetHookSize: form.productType === 'Resell' ? (form.crochetHookSize?.trim() || null) : null,
+      colourName: form.productType === 'Resell' ? (form.colourName?.trim() || null) : null,
+      colourHex: form.productType === 'Resell' ? (form.colourHex?.trim() || null) : null,
       mrp: form.mrp || null,
       courseId: form.productType === 'Handmade' ? (form.courseId || null) : null,
       recommendedEssentialIds:
@@ -459,6 +474,75 @@ export function ProductFormPage() {
               onChange={(e) => setForm((f) => ({ ...f, spec2: e.target.value }))}
             />
           </div>
+          {form.productType === 'Resell' && (
+            <>
+              <div className="form-field">
+                <label htmlFor="ballWeight">Ball weight</label>
+                <input
+                  id="ballWeight"
+                  maxLength={40}
+                  placeholder="e.g. 50 g"
+                  value={form.ballWeight ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, ballWeight: e.target.value }))}
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="yarnLength">Yarn length</label>
+                <input
+                  id="yarnLength"
+                  maxLength={40}
+                  placeholder="e.g. 120 m"
+                  value={form.yarnLength ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, yarnLength: e.target.value }))}
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="crochetHookSize">Crochet hook size</label>
+                <input
+                  id="crochetHookSize"
+                  maxLength={40}
+                  placeholder="e.g. 4 mm"
+                  value={form.crochetHookSize ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, crochetHookSize: e.target.value }))}
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="colourName" title="Products in the same slot with a colour appear together as colour options.">
+                  Colour name
+                </label>
+                <input
+                  id="colourName"
+                  maxLength={40}
+                  placeholder="e.g. Cream"
+                  value={form.colourName ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, colourName: e.target.value }))}
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="colourHex">Swatch colour</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    id="colourHex"
+                    type="color"
+                    aria-label="Swatch colour"
+                    value={/^#[0-9a-f]{6}$/i.test(form.colourHex ?? '') ? (form.colourHex as string) : '#cccccc'}
+                    onChange={(e) => setForm((f) => ({ ...f, colourHex: e.target.value.toUpperCase() }))}
+                    style={{ width: 48, padding: 2 }}
+                  />
+                  <span>{form.colourHex || 'Not set'}</span>
+                  {form.colourHex ? (
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => setForm((f) => ({ ...f, colourHex: '' }))}
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          )}
           <div className="form-field">
             <label htmlFor="sortOrder" title="Lower numbers appear first.">Sort order</label>
             <input

@@ -15,6 +15,16 @@ public sealed class Product
     public string? ImageUrl { get; set; }
     public string? Spec1 { get; set; }
     public string? Spec2 { get; set; }
+    /// <summary>Crochet Essentials specification, e.g. "50 g".</summary>
+    public string? BallWeight { get; set; }
+    /// <summary>Crochet Essentials specification, e.g. "120 m".</summary>
+    public string? YarnLength { get; set; }
+    /// <summary>Crochet Essentials specification, e.g. "4 mm".</summary>
+    public string? CrochetHookSize { get; set; }
+    /// <summary>Crochet Essentials colour option name (e.g. "Cream"); products in one slot act as colour options.</summary>
+    public string? ColourName { get; set; }
+    /// <summary>Swatch colour as #RRGGBB for the colour picker in the app.</summary>
+    public string? ColourHex { get; set; }
     public Guid? CourseId { get; set; }
     public int SortOrder { get; set; }
     /// <summary>Units currently available to sell. Deducted once on successful payment fulfillment.</summary>
