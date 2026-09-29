@@ -53,6 +53,44 @@ public sealed class ShopSlotTests : IClassFixture<ApiFactory>
         admin.PutAsJsonAsync($"/api/admin/shop/slots/{slotId}/products", new { productIds = ids });
 
     [Fact]
+    public async Task Essentials_specs_and_colour_are_saved_validated_and_ignored_for_handmade()
+    {
+        var admin = await AdminAsync();
+        var tag = Guid.NewGuid().ToString("N")[..6];
+
+        var essentials = await admin.PostAsJsonAsync("/api/products", new
+        {
+            name = "Spec Yarn " + tag, category = "Yarn", price = 80, availableStock = 5, productType = 1,
+            ballWeight = " 50 g ", yarnLength = "120 m", crochetHookSize = "4 mm",
+            colourName = "Cream", colourHex = "#f5e6a8"
+        });
+        essentials.EnsureSuccessStatusCode();
+        var saved = (await essentials.Content.ReadFromJsonAsync<ProductResponse>(Json))!;
+        Assert.Equal("50 g", saved.BallWeight);
+        Assert.Equal("120 m", saved.YarnLength);
+        Assert.Equal("4 mm", saved.CrochetHookSize);
+        Assert.Equal("Cream", saved.ColourName);
+        Assert.Equal("#F5E6A8", saved.ColourHex);
+
+        var badHex = await admin.PostAsJsonAsync("/api/products", new
+        {
+            name = "Bad hex " + tag, category = "Yarn", price = 1, productType = 1, colourHex = "cream"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, badHex.StatusCode);
+
+        var handmade = await admin.PostAsJsonAsync("/api/products", new
+        {
+            name = "Handmade " + tag, category = "Bags", price = 1, availableStock = 1, productType = 0,
+            ballWeight = "50 g", colourName = "Red", colourHex = "#FF0000"
+        });
+        handmade.EnsureSuccessStatusCode();
+        var h = (await handmade.Content.ReadFromJsonAsync<ProductResponse>(Json))!;
+        Assert.Null(h.BallWeight);
+        Assert.Null(h.ColourName);
+        Assert.Null(h.ColourHex);
+    }
+
+    [Fact]
     public async Task Product_code_is_saved_searchable_and_unique()
     {
         var admin = await AdminAsync();
