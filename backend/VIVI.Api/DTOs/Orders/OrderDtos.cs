@@ -143,6 +143,12 @@ public sealed class AdminOrderListItemResponse
     public string CustomerPhone { get; set; } = string.Empty;
     /// <summary>Display title from order item name snapshots (e.g. first item + "N more").</summary>
     public string TitleSummary { get; set; } = string.Empty;
+    /// <summary>Product codes of the physical items, comma separated (items without a code are skipped).</summary>
+    public string ProductCodes { get; set; } = string.Empty;
+    /// <summary>Total units across the physical (shop product) lines.</summary>
+    public int ProductQuantity { get; set; }
+    /// <summary>"Handmade", "Essentials" or "Combined" for shop orders; null when there are no physical items.</summary>
+    public string? ProductRoom { get; set; }
     public DateTime CreatedAt { get; set; }
     public bool HasPhysicalItems { get; set; }
     public bool HasCourseItems { get; set; }

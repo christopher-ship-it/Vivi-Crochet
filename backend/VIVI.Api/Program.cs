@@ -444,6 +444,16 @@ using (var scope = app.Services.CreateScope())
 
             try
             {
+                await ShopSlotSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
+                logger.LogInformation("Shop slot schema verified.");
+            }
+            catch (Exception slotEx)
+            {
+                logger.LogError(slotEx, "Shop slot schema bootstrap failed. Slots and ProductCode will error until the schema exists.");
+            }
+
+            try
+            {
                 await ProductEssentialSchemaBootstrapper.EnsureAsync(db, CancellationToken.None, logger);
                 logger.LogInformation("Product essential recommendation schema verified.");
             }

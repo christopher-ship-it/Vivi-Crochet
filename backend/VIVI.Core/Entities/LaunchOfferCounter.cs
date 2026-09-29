@@ -6,6 +6,12 @@ public sealed class LaunchOfferCounter
     public Guid CourseId { get; set; }
     public string OfferName { get; set; } = "VIVI Founding Membership";
     public bool IsActive { get; set; } = true;
+    /// <summary>Admin-editable caption for the launch price (e.g. "Founding price"). Defaults to "Launch price".</summary>
+    public string PriceLabel { get; set; } = "Launch price";
+    /// <summary>Optional app badge text while the offer is live (e.g. "LAUNCH OFFER · FIRST 100 USERS"). Null uses the app default.</summary>
+    public string? BadgeText { get; set; }
+    /// <summary>Optional app badge text once the offer has ended or sold out (e.g. "LAUNCH OFFER ENDED"). Null uses the app default.</summary>
+    public string? EndedBadgeText { get; set; }
     public int LaunchLimit { get; set; } = 100;
     public int LaunchPrice { get; set; }
     public int RegularPriceAfterLaunch { get; set; }

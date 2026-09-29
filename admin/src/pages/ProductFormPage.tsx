@@ -41,6 +41,7 @@ function parseNumberDraft(raw: string): NumberDraft {
 
 const emptyForm: ProductFormState = {
   name: '',
+  productCode: '',
   category: '',
   description: '',
   price: '',
@@ -121,6 +122,7 @@ export function ProductFormPage() {
         if (cancelled) return;
         setForm({
           name: product.name,
+          productCode: product.productCode ?? '',
           category: product.category,
           description: product.description ?? '',
           price: product.price,
@@ -164,6 +166,7 @@ export function ProductFormPage() {
       availableStock: Math.max(0, Math.floor(form.availableStock)),
       sortOrder: form.sortOrder === '' ? 0 : form.sortOrder,
       description: form.description?.trim() || null,
+      productCode: form.productCode?.trim() || null,
       spec1: form.spec1?.trim() || null,
       spec2: form.spec2?.trim() || null,
       mrp: form.mrp || null,
@@ -341,6 +344,16 @@ export function ProductFormPage() {
               placeholder="e.g. Sunflower tote bag"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="productCode">Product code (optional)</label>
+            <input
+              id="productCode"
+              maxLength={40}
+              placeholder="e.g. DIS039"
+              value={form.productCode ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, productCode: e.target.value }))}
             />
           </div>
           <div className="form-field span-2">

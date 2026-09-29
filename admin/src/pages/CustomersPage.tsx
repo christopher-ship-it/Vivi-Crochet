@@ -4,6 +4,7 @@ import { ApiClientError } from '../api/client';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { AdminCustomerListItem } from '../types';
 import { formatDate } from '../utils/format';
+import { downloadExcel, type ExcelColumn } from '../utils/exportExcel';
 import { confirmDialog } from '../components/AppDialog';
 
 export function CustomersPage() {
@@ -13,6 +14,7 @@ export function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +54,31 @@ export function CustomersPage() {
       setError(err instanceof ApiClientError ? err.message : 'Failed to delete customer.');
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const columns: ExcelColumn<AdminCustomerListItem>[] = [
+        { header: 'Name', width: 24, value: (x) => x.fullName },
+        { header: 'Track', width: 14, value: (x) => x.track },
+        { header: 'Age', width: 8, value: (x) => x.age },
+        { header: 'Country', width: 16, value: (x) => x.country },
+        { header: 'State', width: 18, value: (x) => x.state },
+        { header: 'City', width: 18, value: (x) => x.city },
+        { header: 'Phone', width: 16, value: (x) => x.phoneNumber },
+        { header: 'Email', width: 30, value: (x) => x.email },
+        { header: 'Orders', width: 9, value: (x) => x.orderCount },
+        { header: 'Signed up', width: 20, value: (x) => new Date(x.signedUpAt) },
+        { header: 'Last active', width: 20, value: (x) => new Date(x.lastActiveAt) },
+        { header: 'Status', width: 10, value: (x) => (x.isActive ? 'Active' : 'Inactive') },
+      ];
+      await downloadExcel('customers', 'Customers', columns, customers);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the Excel file.');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -99,6 +126,15 @@ export function CustomersPage() {
             Clear
           </button>
         ) : null}
+        <button
+          type="button"
+          className="btn btn--secondary"
+          style={{ marginLeft: 'auto' }}
+          disabled={exporting || customers.length === 0}
+          onClick={() => void handleExport()}
+        >
+          {exporting ? 'Preparing…' : 'Download Excel'}
+        </button>
       </form>
 
       {loading && (

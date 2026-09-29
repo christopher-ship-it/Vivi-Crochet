@@ -183,6 +183,7 @@ export interface ProductImage {
 
 export interface Product {
   id: string;
+  productCode?: string | null;
   name: string;
   category: string;
   description?: string | null;
@@ -205,6 +206,7 @@ export interface Product {
 
 export interface ProductRequest {
   name: string;
+  productCode?: string | null;
   category: string;
   description?: string | null;
   price: number;
@@ -216,6 +218,25 @@ export interface ProductRequest {
   productType: ProductType;
   availableStock: number;
   recommendedEssentialIds?: string[];
+}
+
+export interface ShopSlot {
+  slotId: string;
+  slotName: string;
+  productType: ProductType;
+  displayOrder: number;
+  isActive: boolean;
+  productCount: number;
+  createdAt: string;
+  updatedAt: string;
+  products: Product[];
+}
+
+export interface ShopSlotRequest {
+  name: string;
+  productType: ProductType;
+  displayOrder: number;
+  isActive: boolean;
 }
 
 export interface ProductImageUploadUrlRequest {
@@ -261,6 +282,12 @@ export interface AdminOrderListItem {
   customerPhone: string;
   /** Snapshot-based line title(s), e.g. "Pink Yarn + 2 more". */
   titleSummary?: string | null;
+  /** Product codes of the shop items, comma separated. */
+  productCodes?: string | null;
+  /** Total units across shop items. */
+  productQuantity?: number;
+  /** Handmade, Essentials or Combined; null without shop items. */
+  productRoom?: 'Handmade' | 'Essentials' | 'Combined' | null;
   createdAt: string;
   hasPhysicalItems: boolean;
   hasCourseItems?: boolean;
@@ -444,6 +471,9 @@ export interface AdminSpecialOfferCourse {
 export interface AdminSpecialOffer {
   courseId: string;
   offerName: string;
+  priceLabel: string;
+  badgeText?: string | null;
+  endedBadgeText?: string | null;
   isActive: boolean;
   launchPrice: number;
   launchLimit: number;
@@ -460,6 +490,9 @@ export interface AdminSpecialOffer {
 
 export interface AdminSpecialOfferRequest {
   offerName: string;
+  priceLabel?: string;
+  badgeText?: string | null;
+  endedBadgeText?: string | null;
   isActive: boolean;
   launchPrice: number;
   launchLimit: number;

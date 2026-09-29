@@ -120,6 +120,7 @@ export interface ProductImage {
 
 export interface Product {
   id: string;
+  productCode?: string | null;
   name: string;
   category: string;
   description?: string | null;
@@ -138,4 +139,13 @@ export interface Product {
   status: ProductStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Admin-curated shop slot: one named group holding many products of a room. */
+export interface ShopSlot {
+  slotId: string;
+  slotName: string;
+  productType: ProductType;
+  displayOrder: number;
+  products: Product[];
 }

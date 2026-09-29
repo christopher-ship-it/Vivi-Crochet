@@ -349,9 +349,9 @@ export default function OffersScreen() {
   const headTag = showAsOwned
     ? t('offers.ownedBadge')
     : launchActive
-      ? t('offers.launchTag')
+      ? offer?.badgeText?.trim() || t('offers.launchTag')
       : offerExhausted
-        ? t('offers.founding.offerEnded')
+        ? offer?.endedBadgeText?.trim() || t('offers.founding.offerEnded')
         : t('offers.eyebrow');
 
   if (loading && !course) {

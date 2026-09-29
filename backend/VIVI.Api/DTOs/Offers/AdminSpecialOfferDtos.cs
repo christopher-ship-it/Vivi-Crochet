@@ -4,6 +4,9 @@ public sealed class AdminSpecialOfferResponse
 {
     public Guid CourseId { get; set; }
     public string OfferName { get; set; } = string.Empty;
+    public string PriceLabel { get; set; } = "Launch price";
+    public string? BadgeText { get; set; }
+    public string? EndedBadgeText { get; set; }
     public bool IsActive { get; set; }
     public int LaunchPrice { get; set; }
     public int LaunchLimit { get; set; }
@@ -28,6 +31,12 @@ public sealed class AdminSpecialOfferCourseResponse
 public sealed class AdminSpecialOfferRequest
 {
     public string OfferName { get; set; } = string.Empty;
+    /// <summary>Caption for the launch price. Blank keeps the current label.</summary>
+    public string? PriceLabel { get; set; }
+    /// <summary>App badge while the offer is live. Blank resets to the app default.</summary>
+    public string? BadgeText { get; set; }
+    /// <summary>App badge after the offer ends. Blank resets to the app default.</summary>
+    public string? EndedBadgeText { get; set; }
     public bool IsActive { get; set; }
     public int LaunchPrice { get; set; }
     public int LaunchLimit { get; set; }

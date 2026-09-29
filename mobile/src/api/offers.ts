@@ -15,6 +15,9 @@ export interface FoundingMembershipViralProject {
 export interface FoundingMembershipOffer {
   courseId: string;
   offerName: string;
+  /** Admin-set badge text while live / after the offer ends. Null means use the app default. */
+  badgeText?: string | null;
+  endedBadgeText?: string | null;
   isActive: boolean;
   launchPrice: number;
   regularPriceAfterLaunch: number;

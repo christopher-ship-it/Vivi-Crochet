@@ -80,6 +80,7 @@ export function ProductCard({
   const imageBlock = (
     <ProductImageFrame
       uri={product.imageUrl}
+      fleece={product.productType === 'Resell'}
       style={[
         styles.imageWell,
         isRail
@@ -145,6 +146,14 @@ export function ProductCard({
       >
         {product.name}
       </Text>
+      {!isRail && (product.productCode?.trim() || product.spec1?.trim() || product.spec2?.trim()) ? (
+        <Text style={styles.metaLine} numberOfLines={1}>
+          {[product.productCode, product.spec1, product.spec2]
+            .map((v) => v?.trim())
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+      ) : null}
       <View
         style={[
           styles.priceRow,
@@ -341,6 +350,12 @@ function createStyles(fonts: UiFonts) {
       paddingTop: 6,
       paddingBottom: 8,
       paddingHorizontal: 8,
+    },
+    metaLine: {
+      fontFamily: fonts.regular,
+      fontSize: 11,
+      color: colors.muted,
+      marginTop: 2,
     },
     category: {
       fontFamily: fonts.semiBold,

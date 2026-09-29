@@ -63,7 +63,7 @@ public sealed class ProductsController : ControllerBase
         {
             var term = q.Trim();
             query = query.Where(p =>
-                p.Name.Contains(term) || p.Category.Contains(term) || (p.Description != null && p.Description.Contains(term)));
+                p.Name.Contains(term) || (p.ProductCode != null && p.ProductCode.Contains(term)) || p.Category.Contains(term) || (p.Description != null && p.Description.Contains(term)));
         }
 
         var items = await query
@@ -205,6 +205,7 @@ public sealed class ProductsController : ControllerBase
     public async Task<ActionResult<ProductResponse>> Create([FromBody] ProductRequest request, CancellationToken cancellationToken)
     {
         await EnsureCourse(request.CourseId, cancellationToken);
+        await EnsureProductCodeAvailable(null, request.ProductCode, cancellationToken);
         var now = DateTime.UtcNow;
         var product = Apply(new Product
         {
@@ -236,7 +237,11 @@ public sealed class ProductsController : ControllerBase
     {
         var product = await Load(id, cancellationToken);
         await EnsureCourse(request.CourseId, cancellationToken);
+        await EnsureProductCodeAvailable(id, request.ProductCode, cancellationToken);
+        var typeChanged = product.ProductType != request.ProductType;
         Apply(product, request, DateTime.UtcNow);
+        if (typeChanged)
+            await RemoveSlotLinksAsync(id, cancellationToken);
         await SyncEssentialLinks(product, request, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         await LoadEssentialNav(product, cancellationToken);
@@ -277,6 +282,8 @@ public sealed class ProductsController : ControllerBase
         {
             _logger.LogWarning(ex, "Could not clear essential links before deleting product {ProductId}.", id);
         }
+
+        await RemoveSlotLinksAsync(id, cancellationToken);
 
         _db.Products.Remove(product);
         await _db.SaveChangesAsync(cancellationToken);
@@ -619,6 +626,40 @@ public sealed class ProductsController : ControllerBase
         }
     }
 
+    private static string? NormalizeProductCode(string? code)
+    {
+        var trimmed = code?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
+    private async Task EnsureProductCodeAvailable(Guid? productId, string? code, CancellationToken cancellationToken)
+    {
+        var normalized = NormalizeProductCode(code);
+        if (normalized is null)
+            return;
+
+        var upper = normalized.ToUpperInvariant();
+        var taken = await _db.Products.AnyAsync(
+            p => p.Id != productId && p.ProductCode != null && p.ProductCode.ToUpper() == upper,
+            cancellationToken);
+        if (taken)
+            throw ViviException.Conflict("PRODUCT_CODE_TAKEN", $"Product code {normalized} is already used by another product.");
+    }
+
+    /// <summary>Removes shop slot memberships (e.g. product deleted or moved to another room).</summary>
+    private async Task RemoveSlotLinksAsync(Guid productId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var links = await _db.ShopSlotProducts.Where(l => l.ProductId == productId).ToListAsync(cancellationToken);
+            _db.ShopSlotProducts.RemoveRange(links);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not clear shop slot links for product {ProductId}.", productId);
+        }
+    }
+
     private async Task EnsureCourse(Guid? courseId, CancellationToken cancellationToken)
     {
         if (!courseId.HasValue)
@@ -632,6 +673,7 @@ public sealed class ProductsController : ControllerBase
     private static Product Apply(Product product, ProductRequest request, DateTime now)
     {
         product.Name = request.Name.Trim();
+        product.ProductCode = NormalizeProductCode(request.ProductCode);
         product.Category = request.Category.Trim();
         product.Description = request.Description?.Trim();
         product.Price = request.Price;

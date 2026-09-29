@@ -1,4 +1,5 @@
 import type { ImageContentFit, ImageProps } from 'expo-image';
+import { Image as RNImage } from 'react-native';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   StyleSheet,
@@ -27,8 +28,12 @@ type ProductImageFrameProps = {
   placeholderSize?: 'card' | 'hero';
   /** Inset so the product sits in a photography frame. */
   contentPadding?: number;
+  /** Grey fleece backdrop (Crochet Essentials). Small tiled bitmap, so list decode stays cheap. */
+  fleece?: boolean;
   children?: ReactNode;
 };
+
+const FLEECE_TEXTURE = require('../../assets/essentials-fleece-texture.jpg');
 
 /**
  * Product photography frame: solid warm ivory behind the product.
@@ -46,6 +51,7 @@ export function ProductImageFrame({
   placeholderMark = 'VIVI',
   placeholderSize = 'card',
   contentPadding = 10,
+  fleece = false,
   children,
 }: ProductImageFrameProps) {
   const source = uri?.trim() || null;
@@ -58,7 +64,10 @@ export function ProductImageFrame({
   const showImage = Boolean(source) && !failed;
 
   return (
-    <View style={[styles.frame, style]}>
+    <View style={[styles.frame, fleece && styles.frameFleece, style]}>
+      {fleece ? (
+        <RNImage source={FLEECE_TEXTURE} resizeMode="repeat" style={styles.fleece} accessible={false} />
+      ) : null}
       {showImage ? (
         <View style={[styles.imagePad, { padding: contentPadding }]}>
           <AppImage
@@ -98,6 +107,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cottonBase,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  frameFleece: {
+    backgroundColor: '#8d8d8d',
+  },
+  fleece: {
+    ...StyleSheet.absoluteFill,
+    width: '100%',
+    height: '100%',
   },
   imagePad: {
     ...StyleSheet.absoluteFill,

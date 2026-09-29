@@ -608,6 +608,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<int>("AccessDurationDays")
                         .HasColumnType("int");
 
+                    b.Property<string>("BadgeText")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<int>("CompletedPurchaseCount")
                         .HasColumnType("int");
 
@@ -616,6 +620,10 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("EndedBadgeText")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -633,6 +641,11 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PriceLabel")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
 
                     b.Property<int>("RegularPriceAfterLaunch")
                         .HasColumnType("int");
@@ -1227,6 +1240,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
 
+                    b.Property<string>("ProductCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<int>("Price")
                         .HasColumnType("int");
 
@@ -1258,11 +1275,78 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProductType");
 
+                    b.HasIndex("ProductCode")
+                        .IsUnique()
+                        .HasFilter("[ProductCode] IS NOT NULL");
+
                     b.HasIndex("SortOrder");
 
                     b.HasIndex("Status");
 
                     b.ToTable("Products", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.ShopSlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("ProductType")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductType", "DisplayOrder");
+
+                    b.ToTable("ShopSlots", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.ShopSlotProduct", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SlotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("SlotId", "DisplayOrder");
+
+                    b.HasIndex("SlotId", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("ShopSlotProducts", (string)null);
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.ProductEssentialLink", b =>
@@ -1754,6 +1838,25 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Navigation("Course");
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.ShopSlotProduct", b =>
+                {
+                    b.HasOne("VIVI.Core.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VIVI.Core.Entities.ShopSlot", "Slot")
+                        .WithMany("Products")
+                        .HasForeignKey("SlotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Slot");
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.ProductEssentialLink", b =>
                 {
                     b.HasOne("VIVI.Core.Entities.Product", "EssentialProduct")
@@ -1876,6 +1979,11 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Navigation("EssentialLinks");
 
                     b.Navigation("Images");
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.ShopSlot", b =>
+                {
+                    b.Navigation("Products");
                 });
 #pragma warning restore 612, 618
         }

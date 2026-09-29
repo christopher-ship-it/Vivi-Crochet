@@ -190,6 +190,7 @@ public static class DtoMapper
         return new ProductResponse
         {
             Id = product.Id,
+            ProductCode = product.ProductCode,
             Name = product.Name,
             Category = product.Category,
             Description = product.Description,

@@ -43,7 +43,7 @@ public sealed class AdminOrdersController : ControllerBase
     {
         var orders = await _db.Orders
             .AsNoTracking()
-            .Include(o => o.Items)
+            .Include(o => o.Items).ThenInclude(i => i.Product)
             .Include(o => o.Payments)
             .Include(o => o.Customer)
             .OrderByDescending(o => o.CreatedAt)

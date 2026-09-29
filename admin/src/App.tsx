@@ -18,6 +18,8 @@ import { OrderDetailPage } from './pages/OrderDetailPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { ProductFormPage } from './pages/ProductFormPage';
 import { ProductsPage } from './pages/ProductsPage';
+import { SlotsPage } from './pages/SlotsPage';
+import { SlotFormPage } from './pages/SlotFormPage';
 import { SpecialOffersPage } from './pages/SpecialOffersPage';
 import { ViralProjectsPage } from './pages/ViralProjectsPage';
 import { NotificationsPage } from './pages/NotificationsPage';
@@ -61,6 +63,9 @@ export default function App() {
               <Route path="products" element={<ProductsPage />} />
               <Route path="products/new" element={<ProductFormPage />} />
               <Route path="products/:id/edit" element={<ProductFormPage />} />
+              <Route path="slots" element={<SlotsPage />} />
+              <Route path="slots/new" element={<SlotFormPage />} />
+              <Route path="slots/:id/edit" element={<SlotFormPage />} />
               <Route path="account" element={<AccountPage />} />
               <Route path="team" element={<TeamUsersPage />} />
             </Route>

@@ -69,6 +69,12 @@ public sealed class AdminSpecialOffersController : ControllerBase
         }
 
         offer.OfferName = string.IsNullOrWhiteSpace(request.OfferName) ? offer.OfferName : request.OfferName.Trim();
+        offer.PriceLabel = string.IsNullOrWhiteSpace(request.PriceLabel) ? offer.PriceLabel : request.PriceLabel.Trim();
+        if ((request.BadgeText?.Trim().Length ?? 0) > 80 || (request.EndedBadgeText?.Trim().Length ?? 0) > 80)
+            throw new ViviException("BADGE_TEXT_TOO_LONG", "Badge text can be at most 80 characters.");
+
+        offer.BadgeText = string.IsNullOrWhiteSpace(request.BadgeText) ? null : request.BadgeText.Trim();
+        offer.EndedBadgeText = string.IsNullOrWhiteSpace(request.EndedBadgeText) ? null : request.EndedBadgeText.Trim();
         offer.IsActive = request.IsActive;
         offer.LaunchPrice = request.LaunchPrice;
         offer.LaunchLimit = request.LaunchLimit;

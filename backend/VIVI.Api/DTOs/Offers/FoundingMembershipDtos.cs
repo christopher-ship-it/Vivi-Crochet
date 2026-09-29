@@ -5,6 +5,9 @@ public sealed class FoundingMembershipOfferResponse
 {
     public Guid CourseId { get; set; }
     public string OfferName { get; set; } = string.Empty;
+    public string PriceLabel { get; set; } = "Launch price";
+    public string? BadgeText { get; set; }
+    public string? EndedBadgeText { get; set; }
     public bool IsActive { get; set; }
     public int LaunchPrice { get; set; }
     public int RegularPriceAfterLaunch { get; set; }

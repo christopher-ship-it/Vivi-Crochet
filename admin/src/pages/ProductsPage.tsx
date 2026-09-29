@@ -37,6 +37,13 @@ export function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  const term = search.trim().toLowerCase();
+  const visibleProducts = term
+    ? products.filter((p) =>
+        [p.name, p.productCode ?? '', p.category].some((v) => v.toLowerCase().includes(term)))
+    : products;
 
   const activeRoom = ROOM_OPTIONS.find((r) => r.id === room) ?? ROOM_OPTIONS[0];
   const newProductHref = `/products/new?type=${room}`;
@@ -114,6 +121,14 @@ export function ProductsPage() {
             </button>
           ))}
         </div>
+        <input
+          type="search"
+          className="page-toolbar__search"
+          placeholder="Search name, product code or category"
+          aria-label="Search products"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
       {loading && (
@@ -144,6 +159,7 @@ export function ProductsPage() {
             <thead>
               <tr>
                 <th>Product</th>
+                <th>Product code</th>
                 <th>Type</th>
                 <th>Category</th>
                 <th>Price</th>
@@ -154,7 +170,7 @@ export function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
+              {visibleProducts.map((product) => (
                 <tr key={product.id}>
                   <td>
                     <div className="cell-media">
@@ -183,6 +199,7 @@ export function ProductsPage() {
                       <span style={{ fontWeight: 600 }}>{product.name}</span>
                     </div>
                   </td>
+                  <td>{product.productCode ?? '—'}</td>
                   <td>{productTypeLabel(product.productType)}</td>
                   <td>{product.category}</td>
                   <td>{formatInr(product.price)}</td>

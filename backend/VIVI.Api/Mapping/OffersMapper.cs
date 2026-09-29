@@ -25,6 +25,9 @@ public static class OffersMapper
         {
             CourseId = offer.CourseId,
             OfferName = offer.OfferName,
+            PriceLabel = offer.PriceLabel,
+            BadgeText = offer.BadgeText,
+            EndedBadgeText = offer.EndedBadgeText,
             IsActive = offer.IsActive,
             LaunchPrice = offer.LaunchPrice,
             RegularPriceAfterLaunch = offer.RegularPriceAfterLaunch,
@@ -78,6 +81,9 @@ public static class OffersMapper
         {
             CourseId = offer.CourseId,
             OfferName = offer.OfferName,
+            PriceLabel = offer.PriceLabel,
+            BadgeText = offer.BadgeText,
+            EndedBadgeText = offer.EndedBadgeText,
             IsActive = offer.IsActive,
             LaunchPrice = offer.LaunchPrice,
             LaunchLimit = offer.LaunchLimit,

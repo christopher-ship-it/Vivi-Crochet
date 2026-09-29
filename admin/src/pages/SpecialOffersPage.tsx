@@ -9,6 +9,9 @@ type NumberDraft = number | '';
 
 type OfferFormState = {
   offerName: string;
+  priceLabel: string;
+  badgeText: string;
+  endedBadgeText: string;
   isActive: boolean;
   launchPrice: NumberDraft;
   launchLimit: NumberDraft;
@@ -27,6 +30,9 @@ function parseNumberDraft(raw: string): NumberDraft {
 function toForm(offer: AdminSpecialOffer): OfferFormState {
   return {
     offerName: offer.offerName,
+    priceLabel: offer.priceLabel ?? 'Launch price',
+    badgeText: offer.badgeText ?? '',
+    endedBadgeText: offer.endedBadgeText ?? '',
     isActive: offer.isActive,
     launchPrice: offer.launchPrice,
     launchLimit: offer.launchLimit,
@@ -126,6 +132,9 @@ export function SpecialOffersPage() {
     try {
       const payload: AdminSpecialOfferRequest = {
         offerName: form.offerName.trim() || offer.offerName,
+        priceLabel: form.priceLabel.trim() || 'Launch price',
+        badgeText: form.badgeText.trim() || null,
+        endedBadgeText: form.endedBadgeText.trim() || null,
         isActive: form.isActive,
         launchPrice: form.launchPrice === '' ? offer.launchPrice : form.launchPrice,
         launchLimit: form.launchLimit === '' ? offer.launchLimit : form.launchLimit,
@@ -231,8 +240,41 @@ export function SpecialOffersPage() {
             </label>
           </div>
 
+          <div className="form-field span-3">
+            <label htmlFor="badgeText">App badge while live</label>
+            <input
+              id="badgeText"
+              maxLength={80}
+              placeholder="LAUNCH OFFER · FIRST 100 USERS"
+              value={form.badgeText}
+              onChange={(e) => setForm({ ...form, badgeText: e.target.value })}
+            />
+          </div>
+
+          <div className="form-field span-3">
+            <label htmlFor="endedBadgeText">App badge when ended</label>
+            <input
+              id="endedBadgeText"
+              maxLength={80}
+              placeholder="LAUNCH OFFER ENDED"
+              value={form.endedBadgeText}
+              onChange={(e) => setForm({ ...form, endedBadgeText: e.target.value })}
+            />
+          </div>
+
           <div className="form-field span-2">
-            <label htmlFor="launchPrice">Launch price</label>
+            <label htmlFor="priceLabel">Price label</label>
+            <input
+              id="priceLabel"
+              maxLength={60}
+              placeholder="Launch price"
+              value={form.priceLabel}
+              onChange={(e) => setForm({ ...form, priceLabel: e.target.value })}
+            />
+          </div>
+
+          <div className="form-field span-2">
+            <label htmlFor="launchPrice">{form.priceLabel.trim() || 'Launch price'}</label>
             <div className="input-affix">
               <span className="input-affix__prefix">₹</span>
               <input

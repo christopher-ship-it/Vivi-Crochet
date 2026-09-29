@@ -21,6 +21,7 @@ import { canIncreaseQuantity, isOutOfStock } from '../../src/cart/stock';
 import { AppImage, prefetchImages } from '../../src/components/AppImage';
 import { ProductImageFrame } from '../../src/components/ProductImageFrame';
 import { InStockLabel } from '../../src/components/InStockLabel';
+import { SlotVariantPicker } from '../../src/components/SlotVariantPicker';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { BackButton } from '../../src/components/BackButton';
 import { LearnThisModal } from '../../src/components/LearnThisModal';
@@ -310,6 +311,7 @@ export default function ProductDetailScreen() {
                         {shouldLoad ? (
                           <ProductImageFrame
                             uri={url}
+                            fleece={isEssentials}
                             style={styles.heroFrame}
                             imageStyle={[styles.heroImage, outOfStock && styles.heroImageDimmed]}
                             contentFit="contain"
@@ -364,6 +366,7 @@ export default function ProductDetailScreen() {
               <ProductImageFrame
                 style={[styles.heroSlide, styles.heroFallback]}
                 uri={null}
+                fleece={isEssentials}
                 placeholderMark={product.name.charAt(0).toUpperCase() || 'V'}
                 placeholderSize="hero"
                 dimmed={outOfStock}
@@ -441,6 +444,11 @@ export default function ProductDetailScreen() {
 
             {isEssentials && !outOfStock ? <InStockLabel compact /> : null}
 
+            <SlotVariantPicker
+              product={product}
+              onSelect={(productId) => router.setParams({ id: productId })}
+            />
+
             {course ? (
               <Pressable style={styles.learnBanner} onPress={goToCourse}>
                 <View style={styles.learnIcon}>
@@ -476,6 +484,36 @@ export default function ProductDetailScreen() {
                       color={colors.pink}
                     />
                   </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            {product.productCode?.trim() || product.spec1?.trim() || product.spec2?.trim() || stock > 0 ? (
+              <View style={styles.detailsBlock}>
+                <Text style={[styles.sectionLabel, isEssentials && styles.sectionLabelCompact]}>
+                  {t('product.productDetails')}
+                </Text>
+                {product.productCode?.trim() ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailKey}>{t('product.codeLabel')}</Text>
+                    <Text style={styles.detailValue}>{product.productCode.trim()}</Text>
+                  </View>
+                ) : null}
+                {product.spec1?.trim() ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailValue}>{product.spec1.trim()}</Text>
+                  </View>
+                ) : null}
+                {product.spec2?.trim() ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailValue}>{product.spec2.trim()}</Text>
+                  </View>
+                ) : null}
+                {stock > 0 ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailKey}>{t('product.availableStock')}</Text>
+                    <Text style={styles.detailValue}>{stock}</Text>
+                  </View>
                 ) : null}
               </View>
             ) : null}
@@ -867,6 +905,28 @@ function createStyles(fonts: UiFonts) {
     fontFamily: fonts.semiBold,
     fontSize: 13,
     color: colors.pink,
+  },
+  detailsBlock: {
+    marginTop: 14,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  detailKey: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.muted,
+  },
+  detailValue: {
+    fontFamily: fonts.semiBold,
+    fontSize: 14,
+    color: colors.ink,
+    flexShrink: 1,
   },
   featureRow: {
     flexDirection: 'row',

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { deleteAdminOrder, listAdminOrders } from '../api/orders';
 import { ApiClientError } from '../api/client';
 import type { AdminOrderListItem } from '../types';
 import { formatInr } from '../utils/format';
+import { downloadExcel, type ExcelColumn } from '../utils/exportExcel';
 import { RowActionsMenu } from './RowActionsMenu';
 import { confirmDialog } from './AppDialog';
 
@@ -21,6 +22,95 @@ interface OrderListProps {
 function displayOrDash(value: string | null | undefined): string {
   const trimmed = (value ?? '').trim();
   return trimmed.length > 0 ? trimmed : '—';
+}
+
+const ROOM_LABEL: Record<string, string> = {
+  Handmade: 'Handmade',
+  Essentials: 'Crochet Essentials',
+  Combined: 'Combined',
+};
+
+type ColumnDef = {
+  id: string;
+  label: string;
+  width: number;
+  /** Shown only on the product-orders page (shop items). */
+  shopOnly?: boolean;
+  /** Cannot be hidden. */
+  locked?: boolean;
+  clip?: boolean;
+  render: (order: AdminOrderListItem) => ReactNode;
+  title?: (order: AdminOrderListItem) => string | undefined;
+};
+
+const COLUMNS: ColumnDef[] = [
+  {
+    id: 'order', label: 'Order', width: 168, locked: true, clip: true,
+    render: (o) => <span style={{ fontWeight: 600 }}>{o.orderNumber}</span>,
+    title: (o) => o.orderNumber,
+  },
+  { id: 'customer', label: 'Customer', width: 110, clip: true, render: (o) => displayOrDash(o.customerName), title: (o) => displayOrDash(o.customerName) },
+  { id: 'email', label: 'Email', width: 200, clip: true, render: (o) => displayOrDash(o.customerEmail), title: (o) => displayOrDash(o.customerEmail) },
+  { id: 'phone', label: 'Phone', width: 120, clip: true, render: (o) => displayOrDash(o.customerPhone), title: (o) => displayOrDash(o.customerPhone) },
+  { id: 'title', label: 'Title', width: 170, clip: true, render: (o) => displayOrDash(o.titleSummary), title: (o) => displayOrDash(o.titleSummary) },
+  { id: 'productId', label: 'Product ID', width: 130, shopOnly: true, clip: true, render: (o) => displayOrDash(o.productCodes), title: (o) => displayOrDash(o.productCodes) },
+  { id: 'quantity', label: 'Qty', width: 60, shopOnly: true, render: (o) => (o.hasPhysicalItems && o.productQuantity !== undefined ? o.productQuantity : '—') },
+  {
+    id: 'category', label: 'Category', width: 140, shopOnly: true, clip: true,
+    render: (o) => (o.productRoom ? ROOM_LABEL[o.productRoom] ?? o.productRoom : '—'),
+  },
+  { id: 'amount', label: 'Amount', width: 96, render: (o) => formatInr(o.totalAmount) },
+  { id: 'payment', label: 'Payment', width: 96, render: (o) => o.paymentStatus ?? '—' },
+  {
+    id: 'status', label: 'Status', width: 120,
+    render: (o) => (
+      <span className={`badge badge--${o.status.toLowerCase()}`}>
+        {o.status === 'Shipped' ? 'Dispatched' : o.status === 'InProduction' ? 'In production' : o.status}
+      </span>
+    ),
+  },
+  {
+    id: 'delivery', label: 'Delivery', width: 140, clip: true,
+    render: (o) =>
+      o.hasPhysicalItems
+        ? o.deliveryDateOverridden
+          ? `Overridden · ${o.deliveryLabel ?? ''}`
+          : (o.deliveryLabel ?? '—')
+        : 'Digital',
+  },
+];
+
+const ACTIONS_WIDTH = 60;
+
+/** Plain values written to Excel for each column id (numbers stay numeric). */
+const EXCEL_VALUE: Record<string, (o: AdminOrderListItem) => string | number | null> = {
+  order: (o) => o.orderNumber,
+  customer: (o) => o.customerName,
+  email: (o) => o.customerEmail ?? null,
+  phone: (o) => o.customerPhone,
+  title: (o) => o.titleSummary ?? null,
+  productId: (o) => o.productCodes ?? null,
+  quantity: (o) => (o.hasPhysicalItems ? (o.productQuantity ?? null) : null),
+  category: (o) => (o.productRoom ? ROOM_LABEL[o.productRoom] ?? o.productRoom : null),
+  amount: (o) => o.totalAmount,
+  payment: (o) => o.paymentStatus ?? null,
+  status: (o) => (o.status === 'Shipped' ? 'Dispatched' : o.status === 'InProduction' ? 'In production' : o.status),
+  delivery: (o) =>
+    o.hasPhysicalItems
+      ? o.deliveryDateOverridden
+        ? `Overridden · ${o.deliveryLabel ?? ''}`
+        : (o.deliveryLabel ?? null)
+      : 'Digital',
+};
+
+function readHidden(key: string): string[] {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -42,6 +132,48 @@ export function OrderList({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const storageKey = `vivi.admin.orderColumns.${showDelivery ? 'shop' : 'digital'}`;
+  const [hidden, setHidden] = useState<string[]>(() => readHidden(storageKey));
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  // Columns this page can offer (delivery + shop columns only apply to physical orders).
+  const available = useMemo(
+    () => COLUMNS.filter((c) => (showDelivery ? true : !c.shopOnly && c.id !== 'delivery')),
+    [showDelivery],
+  );
+  const columns = available.filter((c) => c.locked || !hidden.includes(c.id));
+  const tableWidth = columns.reduce((sum, c) => sum + c.width, ACTIONS_WIDTH);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(hidden));
+    } catch {
+      // Preference is a convenience only.
+    }
+  }, [hidden, storageKey]);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    function onDown(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setPickerOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [pickerOpen]);
+
+  function toggleColumn(id: string) {
+    setHidden((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +217,25 @@ export function OrderList({
 
   const visibleOrders = orders.filter(filter);
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const sheetColumns: ExcelColumn<AdminOrderListItem>[] = [
+        ...columns.map((c) => ({
+          header: c.label,
+          width: Math.max(10, Math.round(c.width / 7)),
+          value: EXCEL_VALUE[c.id],
+        })),
+        { header: 'Placed on', width: 20, value: (o: AdminOrderListItem) => new Date(o.createdAt) },
+      ];
+      await downloadExcel(showDelivery ? 'product-orders' : 'course-orders', 'Orders', sheetColumns, visibleOrders);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the Excel file.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <>
       <header className="page-header">
@@ -93,6 +244,50 @@ export function OrderList({
           <p className="page-header__subtitle">{subtitle}</p>
         </div>
       </header>
+
+      {!loading && visibleOrders.length > 0 && (
+        <div className="page-toolbar">
+          <div className="column-picker" ref={pickerRef}>
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-haspopup="true"
+              aria-expanded={pickerOpen}
+              onClick={() => setPickerOpen((v) => !v)}
+            >
+              Columns ({columns.length}/{available.length})
+            </button>
+            {pickerOpen && (
+              <div className="column-picker__panel" role="group" aria-label="Choose columns">
+                {available.map((c) => (
+                  <label key={c.id} className={`column-picker__item${c.locked ? ' column-picker__item--locked' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={c.locked || !hidden.includes(c.id)}
+                      disabled={c.locked}
+                      onChange={() => toggleColumn(c.id)}
+                    />
+                    <span>{c.label}</span>
+                  </label>
+                ))}
+                {hidden.length > 0 && (
+                  <button type="button" className="btn btn--ghost btn--sm column-picker__reset" onClick={() => setHidden([])}>
+                    Show all
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            disabled={exporting}
+            onClick={() => void handleExport()}
+          >
+            {exporting ? 'Preparing…' : 'Download Excel'}
+          </button>
+        </div>
+      )}
 
       {loading && (
         <div className="loading-state">
@@ -116,96 +311,56 @@ export function OrderList({
 
       {!loading && visibleOrders.length > 0 && (
         <div className="table-wrap">
-          <table className={`data-table data-table--orders${showDelivery ? ' data-table--orders-delivery' : ''}`}>
+          <table className="data-table data-table--orders" style={{ minWidth: tableWidth }}>
             <colgroup>
-              <col className="col-order" />
-              <col className="col-customer" />
-              <col className="col-email" />
-              <col className="col-phone" />
-              <col className="col-title" />
-              <col className="col-amount" />
-              <col className="col-payment" />
-              <col className="col-status" />
-              {showDelivery && <col className="col-delivery" />}
-              <col className="col-actions" />
+              {columns.map((c) => (
+                <col key={c.id} style={{ width: c.width }} />
+              ))}
+              <col style={{ width: ACTIONS_WIDTH }} />
             </colgroup>
             <thead>
               <tr>
-                <th className="col-order">Order</th>
-                <th className="col-customer">Customer</th>
-                <th className="col-email">Email</th>
-                <th className="col-phone">Phone</th>
-                <th className="col-title">Title</th>
-                <th className="col-amount">Amount</th>
-                <th className="col-payment">Payment</th>
-                <th className="col-status">Status</th>
-                {showDelivery && <th className="col-delivery">Delivery</th>}
+                {columns.map((c) => (
+                  <th key={c.id}>{c.label}</th>
+                ))}
                 <th className="col-actions" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {visibleOrders.map((order) => {
-                const titleText = displayOrDash(order.titleSummary);
-                const emailText = displayOrDash(order.customerEmail);
-                const phoneText = displayOrDash(order.customerPhone);
-                return (
-                  <tr key={order.id}>
-                    <td className="col-order col-clip" style={{ fontWeight: 600 }} title={order.orderNumber}>
-                      {order.orderNumber}
-                    </td>
-                    <td className="col-customer col-clip" title={displayOrDash(order.customerName)}>
-                      {displayOrDash(order.customerName)}
-                    </td>
-                    <td className="col-email col-clip" title={emailText === '—' ? undefined : emailText}>
-                      {emailText}
-                    </td>
-                    <td className="col-phone col-clip" title={phoneText === '—' ? undefined : phoneText}>
-                      {phoneText}
-                    </td>
-                    <td className="col-title col-clip" title={titleText === '—' ? undefined : titleText}>
-                      {titleText}
-                    </td>
-                    <td className="col-amount">{formatInr(order.totalAmount)}</td>
-                    <td className="col-payment">{order.paymentStatus ?? '—'}</td>
-                    <td className="col-status">
-                      <span className={`badge badge--${order.status.toLowerCase()}`}>
-                        {order.status === 'Shipped'
-                          ? 'Dispatched'
-                          : order.status === 'InProduction'
-                            ? 'In production'
-                            : order.status}
-                      </span>
-                    </td>
-                    {showDelivery && (
-                      <td className="col-delivery col-clip">
-                        {order.hasPhysicalItems
-                          ? order.deliveryDateOverridden
-                            ? `Overridden · ${order.deliveryLabel ?? ''}`
-                            : (order.deliveryLabel ?? '—')
-                          : 'Digital'}
+              {visibleOrders.map((order) => (
+                <tr key={order.id}>
+                  {columns.map((c) => {
+                    const tip = c.title?.(order);
+                    return (
+                      <td
+                        key={c.id}
+                        className={c.clip ? 'col-clip' : c.id === 'amount' || c.id === 'payment' ? 'col-nowrap' : undefined}
+                        title={tip === '—' ? undefined : tip}
+                      >
+                        {c.render(order)}
                       </td>
-                    )}
-                    <td className="col-actions">
-                      <div className="data-table__actions">
-                        <RowActionsMenu
-                          label={`Actions for order ${order.orderNumber}`}
-                          disabled={deletingId === order.id}
-                          items={[
-                            { id: 'view', label: 'View order', to: `/orders/${order.id}` },
-                            {
-                              id: 'delete',
-                              label: deletingId === order.id ? 'Deleting…' : 'Delete order',
-                              danger: true,
-                              disabled: deletingId === order.id,
-                              onClick: () => void handleDelete(order),
-                            },
-                          ]}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                    );
+                  })}
+                  <td className="col-actions">
+                    <div className="data-table__actions">
+                      <RowActionsMenu
+                        label={`Actions for order ${order.orderNumber}`}
+                        disabled={deletingId === order.id}
+                        items={[
+                          { id: 'view', label: 'View order', to: `/orders/${order.id}` },
+                          {
+                            id: 'delete',
+                            label: deletingId === order.id ? 'Deleting…' : 'Delete order',
+                            danger: true,
+                            disabled: deletingId === order.id,
+                            onClick: () => void handleDelete(order),
+                          },
+                        ]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

@@ -129,6 +129,7 @@ public static class CommerceMapper
             i.ItemType is OrderItemType.Course or OrderItemType.CourseBundle);
         var hasLive = order.Items.Any(i => i.ItemType == OrderItemType.LivePackage);
         var payment = order.Payments?.OrderByDescending(p => p.UpdatedAt).FirstOrDefault();
+        var productLines = order.Items.Where(i => i.ItemType == OrderItemType.Product).ToList();
         return new AdminOrderListItemResponse
         {
             Id = order.Id,
@@ -140,6 +141,12 @@ public static class CommerceMapper
             CustomerEmail = order.Customer?.Email ?? string.Empty,
             CustomerPhone = order.Customer?.PhoneNumber ?? order.ShipPhone ?? string.Empty,
             TitleSummary = BuildTitleSummary(order.Items),
+            ProductCodes = string.Join(", ", productLines
+                .Select(i => i.Product?.ProductCode?.Trim())
+                .Where(c => !string.IsNullOrEmpty(c))
+                .Distinct(StringComparer.OrdinalIgnoreCase)),
+            ProductQuantity = productLines.Sum(i => i.Quantity),
+            ProductRoom = BuildProductRoom(productLines),
             CreatedAt = order.CreatedAt,
             HasPhysicalItems = hasPhysical,
             HasCourseItems = hasCourse,
@@ -149,6 +156,18 @@ public static class CommerceMapper
                 ? delivery.CustomerDeliveryLabel(order)
                 : null
         };
+    }
+
+    private static string? BuildProductRoom(IReadOnlyCollection<OrderItem> productLines)
+    {
+        var types = productLines
+            .Where(i => i.Product is not null)
+            .Select(i => i.Product!.ProductType)
+            .Distinct()
+            .ToList();
+        if (types.Count == 0) return null;
+        if (types.Count > 1) return "Combined";
+        return types[0] == ProductType.Resell ? "Essentials" : "Handmade";
     }
 
     /// <summary>

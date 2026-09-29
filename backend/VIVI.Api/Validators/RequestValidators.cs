@@ -8,6 +8,7 @@ using VIVI.Api.DTOs.Customers;
 using VIVI.Api.DTOs.Orders;
 using VIVI.Api.DTOs.Payments;
 using VIVI.Api.DTOs.Products;
+using VIVI.Api.DTOs.Shop;
 using VIVI.Api.DTOs.Push;
 using VIVI.Api.DTOs.Support;
 using VIVI.Api.DTOs.Videos;
@@ -249,6 +250,7 @@ public sealed class ProductRequestValidator : AbstractValidator<ProductRequest>
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(160);
         RuleFor(x => x.Category).NotEmpty().MaximumLength(80);
+        RuleFor(x => x.ProductCode).MaximumLength(40);
         RuleFor(x => x.Price).GreaterThanOrEqualTo(0);
         RuleFor(x => x.Mrp).GreaterThanOrEqualTo(0).When(x => x.Mrp.HasValue);
         RuleFor(x => x.ProductType).IsInEnum();
@@ -259,7 +261,16 @@ public sealed class ProductRequestValidator : AbstractValidator<ProductRequest>
     }
 }
 
-public sealed class CreateOrderItemRequestValidator : AbstractValidator<CreateOrderItemRequest>
+public sealed class ShopSlotRequestValidator : AbstractValidator<ShopSlotRequest>
+{
+    public ShopSlotRequestValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(80);
+        RuleFor(x => x.ProductType).IsInEnum();
+    }
+}
+
+public sealed class CreateOrderItemRequestValidator: AbstractValidator<CreateOrderItemRequest>
 {
     public CreateOrderItemRequestValidator()
     {

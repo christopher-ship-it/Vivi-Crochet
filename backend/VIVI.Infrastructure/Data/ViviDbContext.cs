@@ -16,6 +16,8 @@ public sealed class ViviDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<ProductEssentialLink> ProductEssentialLinks => Set<ProductEssentialLink>();
+    public DbSet<ShopSlot> ShopSlots => Set<ShopSlot>();
+    public DbSet<ShopSlotProduct> ShopSlotProducts => Set<ShopSlotProduct>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
     public DbSet<PasswordResetChallenge> PasswordResetChallenges => Set<PasswordResetChallenge>();
     public DbSet<EmailVerificationChallenge> EmailVerificationChallenges => Set<EmailVerificationChallenge>();
@@ -125,6 +127,8 @@ public sealed class ViviDbContext : DbContext
             entity.ToTable("Products");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.ProductCode).HasMaxLength(40);
+            entity.HasIndex(x => x.ProductCode).IsUnique().HasFilter("[ProductCode] IS NOT NULL");
             entity.Property(x => x.Category).HasMaxLength(80).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(2000);
             entity.Property(x => x.ImageUrl).HasMaxLength(512);
@@ -174,6 +178,33 @@ public sealed class ViviDbContext : DbContext
             entity.HasOne(x => x.EssentialProduct)
                 .WithMany()
                 .HasForeignKey(x => x.EssentialProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ShopSlot>(entity =>
+        {
+            entity.ToTable("ShopSlots");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.ProductType).HasConversion<int>().IsRequired();
+            entity.HasIndex(x => new { x.ProductType, x.DisplayOrder });
+        });
+
+        modelBuilder.Entity<ShopSlotProduct>(entity =>
+        {
+            entity.ToTable("ShopSlotProducts");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.SlotId, x.ProductId }).IsUnique();
+            entity.HasIndex(x => new { x.SlotId, x.DisplayOrder });
+
+            entity.HasOne(x => x.Slot)
+                .WithMany(x => x.Products)
+                .HasForeignKey(x => x.SlotId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -478,6 +509,9 @@ public sealed class ViviDbContext : DbContext
             entity.ToTable("LaunchOfferCounters");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.OfferName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.PriceLabel).HasMaxLength(60).IsRequired();
+            entity.Property(x => x.BadgeText).HasMaxLength(80);
+            entity.Property(x => x.EndedBadgeText).HasMaxLength(80);
             entity.HasIndex(x => x.CourseId).IsUnique();
 
             entity.HasOne(x => x.Course)
