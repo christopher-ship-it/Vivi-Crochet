@@ -21,10 +21,10 @@ import { canIncreaseQuantity, isOutOfStock } from '../../src/cart/stock';
 import { AppImage, prefetchImages } from '../../src/components/AppImage';
 import { ProductImageFrame } from '../../src/components/ProductImageFrame';
 import { InStockLabel } from '../../src/components/InStockLabel';
-import { SlotVariantPicker } from '../../src/components/SlotVariantPicker';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { BackButton } from '../../src/components/BackButton';
 import { LearnThisModal } from '../../src/components/LearnThisModal';
+import { ProductVariantPicker } from '../../src/components/ProductVariantPicker';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Product } from '../../src/types';
 import { useI18n } from '../../src/i18n';
@@ -50,6 +50,7 @@ export default function ProductDetailScreen() {
   const insets = useSafeAreaInsets();
   const galleryRef = useRef<ScrollView>(null);
   const [product, setProduct] = useState<Product | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [learnModalVisible, setLearnModalVisible] = useState(false);
@@ -78,10 +79,21 @@ export default function ProductDetailScreen() {
     try {
       const data = await getProduct(id);
       setProduct(data);
+      const variants = data.variants ?? [];
+      let initialVariantId: string | null = null;
+      if (variants.length > 0) {
+        const match = variants.find((v) => v.id === data.id)
+          ?? variants.find((v) => (v.availableStock ?? 0) > 0)
+          ?? variants[0];
+        initialVariantId = match.id;
+      }
+      setSelectedVariantId(initialVariantId);
       setLearnDismissed(false);
       setLearnModalVisible(false);
       setDescExpanded(false);
-      const stock = data.availableStock ?? 0;
+      const stock = initialVariantId
+        ? (variants.find((v) => v.id === initialVariantId)?.availableStock ?? 0)
+        : (data.availableStock ?? 0);
       setQty(stock > 0 ? 1 : 0);
     } catch (err) {
       setError(t('product.failedLoadFriendly'));
@@ -111,8 +123,32 @@ export default function ProductDetailScreen() {
     }, [product?.linkedCourse, product?.id, learnDismissed, loading, clearLearnTimer]),
   );
 
+  const selectedVariant = useMemo(() => {
+    if (!product?.variants?.length || !selectedVariantId) return null;
+    return product.variants.find((v) => v.id === selectedVariantId) ?? product.variants[0];
+  }, [product, selectedVariantId]);
+
+  /** Sellable SKU for cart — variant when present, otherwise the product itself. */
+  const sellableProduct = useMemo(() => {
+    if (!product) return null;
+    if (!selectedVariant) return product;
+    return {
+      ...product,
+      id: selectedVariant.id,
+      price: selectedVariant.price,
+      mrp: selectedVariant.mrp,
+      availableStock: selectedVariant.availableStock,
+      productCode: selectedVariant.productCode,
+      colourName: selectedVariant.colourName,
+      colourHex: selectedVariant.colourHex,
+      imageUrl: selectedVariant.imageUrl ?? product.imageUrl,
+      parentProductId: product.parentProductId ?? product.id,
+    } satisfies Product;
+  }, [product, selectedVariant]);
+
   const galleryUrls = useMemo(() => {
     if (!product) return [];
+    if (selectedVariant?.imageUrl) return [selectedVariant.imageUrl];
     const fromImages = (product.images ?? [])
       .slice()
       .sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.sortOrder - b.sortOrder)
@@ -120,7 +156,16 @@ export default function ProductDetailScreen() {
       .filter(Boolean);
     if (fromImages.length > 0) return fromImages;
     return product.imageUrl ? [product.imageUrl] : [];
-  }, [product]);
+  }, [product, selectedVariant]);
+
+  function selectVariant(variantId: string) {
+    setSelectedVariantId(variantId);
+    const variant = product?.variants?.find((v) => v.id === variantId);
+    const stock = variant?.availableStock ?? 0;
+    setQty(stock > 0 ? 1 : 0);
+    setActiveImage(0);
+    galleryRef.current?.scrollTo({ x: 0, animated: false });
+  }
 
   useEffect(() => {
     setActiveImage(0);
@@ -147,17 +192,19 @@ export default function ProductDetailScreen() {
     return <ErrorView message={error ?? t('product.notFound')} onRetry={load} />;
   }
 
+  const display = sellableProduct ?? product;
   const discount =
-    product.mrp && product.mrp > product.price
-      ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
+    display.mrp && display.mrp > display.price
+      ? Math.round(((display.mrp - display.price) / display.mrp) * 100)
       : null;
   const isEssentials = (product.productType ?? 'Handmade') === 'Resell';
   const course = product.linkedCourse;
-  const stock = product.availableStock ?? 0;
+  const stock = display.availableStock ?? 0;
   const outOfStock = isOutOfStock(stock);
   const atMaxQty = !canIncreaseQuantity(qty, stock);
   const lowStock = stock > 0 && stock <= 5;
-  const wishlisted = isWishlisted(product.id);
+  const wishlistId = product.parentProductId ?? product.id;
+  const wishlisted = isWishlisted(wishlistId);
   const description = product.description?.trim() ?? '';
   const descNeedsMore = description.length > DESC_PREVIEW_CHARS;
   const descShown =
@@ -196,7 +243,7 @@ export default function ProductDetailScreen() {
 
   async function handleWishlist() {
     if (!product) return;
-    const added = await toggleWishlist(product.id);
+    const added = await toggleWishlist(wishlistId);
     if (added && outOfStock) {
       Alert.alert(
         t('product.savedWishlist'),
@@ -212,10 +259,11 @@ export default function ProductDetailScreen() {
   }
 
   async function handleShare() {
-    if (!product) return;
+    if (!product || !display) return;
     try {
+      const colourBit = display.colourName ? ` · ${display.colourName}` : '';
       await Share.share({
-        message: `${product.name} — ${formatInr(product.price)} · VIVI Crochet`,
+        message: `${product.name}${colourBit} — ${formatInr(display.price)} · VIVI Crochet`,
       });
     } catch {
       // User cancelled or share unavailable.
@@ -223,12 +271,16 @@ export default function ProductDetailScreen() {
   }
 
   async function handleAddToCart() {
-    if (!product || outOfStock) return;
+    if (!sellableProduct || outOfStock) return;
+    if ((product.variants?.length ?? 0) > 0 && !selectedVariant) {
+      setCartError('Choose a colour before adding to cart.');
+      return;
+    }
     setAdding(true);
     setCartError(null);
     setCartMessage(null);
     try {
-      await addProduct(product, qty);
+      await addProduct(sellableProduct, qty);
       setCartMessage(`Added ${qty} to your cart.`);
     } catch (err) {
       setCartError(err instanceof Error ? err.message : 'Could not add to cart.');
@@ -238,12 +290,16 @@ export default function ProductDetailScreen() {
   }
 
   async function handleBuyNow() {
-    if (!product || outOfStock) return;
+    if (!sellableProduct || outOfStock) return;
+    if ((product.variants?.length ?? 0) > 0 && !selectedVariant) {
+      setCartError('Choose a colour before buying.');
+      return;
+    }
     setAdding(true);
     setCartError(null);
     setCartMessage(null);
     try {
-      await setCartToProduct(product, qty);
+      await setCartToProduct(sellableProduct, qty);
       router.push('/cart');
     } catch (err) {
       setCartError(err instanceof Error ? err.message : 'Could not update cart.');
@@ -292,13 +348,23 @@ export default function ProductDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.gallery}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={{
+            // Leave room so specs/description aren't hidden under the sticky cart bar.
+            paddingBottom: outOfStock ? 28 : 200,
+          }}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
+          <View style={styles.gallery}>
             {galleryUrls.length > 0 ? (
               <>
                 <ScrollView
                   ref={galleryRef}
                   horizontal
                   pagingEnabled
+                  nestedScrollEnabled
                   showsHorizontalScrollIndicator={false}
                   onMomentumScrollEnd={onGalleryScroll}
                 >
@@ -379,17 +445,13 @@ export default function ProductDetailScreen() {
                 ) : null}
               </ProductImageFrame>
             )}
-        </View>
+          </View>
 
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={{ paddingBottom: 16 }}
-          showsVerticalScrollIndicator={false}
-        >
           {galleryUrls.length > 1 && (
             <View style={styles.thumbsWrap}>
               <ScrollView
                 horizontal
+                nestedScrollEnabled
                 showsHorizontalScrollIndicator={false}
                 style={styles.thumbsScroll}
                 contentContainerStyle={styles.thumbs}
@@ -426,10 +488,10 @@ export default function ProductDetailScreen() {
 
             <View style={[styles.priceRow, isEssentials && styles.priceRowCompact]}>
               <Text style={[styles.price, isEssentials && styles.priceCompact]}>
-                {formatInr(product.price)}
+                {formatInr(display.price)}
               </Text>
-              {product.mrp && product.mrp > product.price ? (
-                <Text style={styles.mrp}>{formatInr(product.mrp)}</Text>
+              {display.mrp && display.mrp > display.price ? (
+                <Text style={styles.mrp}>{formatInr(display.mrp)}</Text>
               ) : null}
               {discount !== null ? (
                 <Text style={styles.offTextInline}>{discount}% OFF</Text>
@@ -444,10 +506,13 @@ export default function ProductDetailScreen() {
 
             {isEssentials && !outOfStock ? <InStockLabel compact /> : null}
 
-            <SlotVariantPicker
-              product={product}
-              onSelect={(productId) => router.setParams({ id: productId })}
-            />
+            {(product.variants?.length ?? 0) > 0 && selectedVariantId ? (
+              <ProductVariantPicker
+                product={product}
+                selectedId={selectedVariantId}
+                onSelect={selectVariant}
+              />
+            ) : null}
 
             {course ? (
               <Pressable style={styles.learnBanner} onPress={goToCourse}>
@@ -488,17 +553,16 @@ export default function ProductDetailScreen() {
               </View>
             ) : null}
 
-            {product.productCode?.trim() || product.spec1?.trim() || product.spec2?.trim() ||
-            product.ballWeight?.trim() || product.yarnLength?.trim() || product.crochetHookSize?.trim() ||
-            stock > 0 ? (
+            {display.productCode?.trim() || product.spec1?.trim() || product.spec2?.trim() ||
+            product.ballWeight?.trim() || product.yarnLength?.trim() || product.crochetHookSize?.trim() ? (
               <View style={styles.detailsBlock}>
                 <Text style={[styles.sectionLabel, isEssentials && styles.sectionLabelCompact]}>
                   {t('product.productDetails')}
                 </Text>
-                {product.productCode?.trim() ? (
+                {display.productCode?.trim() ? (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailKey}>{t('product.codeLabel')}</Text>
-                    <Text style={styles.detailValue}>{product.productCode.trim()}</Text>
+                    <Text style={styles.detailValue}>{display.productCode.trim()}</Text>
                   </View>
                 ) : null}
                 {product.spec1?.trim() ? (
@@ -527,12 +591,6 @@ export default function ProductDetailScreen() {
                   <View style={styles.detailRow}>
                     <Text style={styles.detailKey}>{t('product.hookSizeLabel')}</Text>
                     <Text style={styles.detailValue}>{product.crochetHookSize.trim()}</Text>
-                  </View>
-                ) : null}
-                {stock > 0 ? (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailKey}>{t('product.availableStock')}</Text>
-                    <Text style={styles.detailValue}>{stock}</Text>
                   </View>
                 ) : null}
               </View>

@@ -19,12 +19,31 @@ public sealed class ProductRequest
     public string? CrochetHookSize { get; set; }
     public string? ColourName { get; set; }
     public string? ColourHex { get; set; }
+    /// <summary>When set, creates/updates this product as a variant of the parent listing.</summary>
+    public Guid? ParentProductId { get; set; }
+    /// <summary>Option label on a parent listing (e.g. "Colour"). Ignored on variants.</summary>
+    public string? VariantOptionName { get; set; }
     public Guid? CourseId { get; set; }
     public int SortOrder { get; set; }
     public ProductType ProductType { get; set; } = ProductType.Handmade;
     public int AvailableStock { get; set; }
     /// <summary>Configured Crochet Essentials product ids (Handmade only). Max 3.</summary>
     public IReadOnlyList<Guid>? RecommendedEssentialIds { get; set; }
+}
+
+/// <summary>Compact variant SKU shown under a parent listing.</summary>
+public sealed class ProductVariantSummary
+{
+    public Guid Id { get; set; }
+    public string? ProductCode { get; set; }
+    public string? ColourName { get; set; }
+    public string? ColourHex { get; set; }
+    public int Price { get; set; }
+    public int? Mrp { get; set; }
+    public string? ImageUrl { get; set; }
+    public int AvailableStock { get; set; }
+    public ProductStatus Status { get; set; }
+    public int SortOrder { get; set; }
 }
 
 public sealed class ProductImageUploadUrlRequest
@@ -99,12 +118,18 @@ public sealed class ProductResponse
     public string? CrochetHookSize { get; set; }
     public string? ColourName { get; set; }
     public string? ColourHex { get; set; }
+    public Guid? ParentProductId { get; set; }
+    public string? VariantOptionName { get; set; }
+    /// <summary>Number of variant SKUs (list views). Detail responses also populate <see cref="Variants"/>.</summary>
+    public int VariantCount { get; set; }
+    /// <summary>Ordered variant SKUs when this is a parent (or siblings when this is a variant).</summary>
+    public IReadOnlyList<ProductVariantSummary> Variants { get; set; } = Array.Empty<ProductVariantSummary>();
     public Guid? CourseId { get; set; }
     public LinkedCourseSummary? LinkedCourse { get; set; }
     public int SortOrder { get; set; }
     public ProductType ProductType { get; set; }
     public int AvailableStock { get; set; }
-    /// <summary>Alias of <see cref="AvailableStock"/> used by the shop slot API.</summary>
+    /// <summary>Alias of <see cref="AvailableStock"/>.</summary>
     public int Stock => AvailableStock;
     public ProductStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }

@@ -57,8 +57,11 @@ export function ProductCard({
       ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
       : null;
   const isRail = variant === 'rail';
+  const variantCount = product.variantCount ?? product.variants?.length ?? 0;
   const metaLine = [
-    product.productCode,
+    variantCount > 0
+      ? `${variantCount} ${(product.variantOptionName || 'colour').toLowerCase()}${variantCount === 1 ? '' : 's'}`
+      : product.productCode,
     product.spec1,
     product.spec2,
     product.ballWeight,

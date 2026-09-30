@@ -21,10 +21,17 @@ public sealed class Product
     public string? YarnLength { get; set; }
     /// <summary>Crochet Essentials specification, e.g. "4 mm".</summary>
     public string? CrochetHookSize { get; set; }
-    /// <summary>Crochet Essentials colour option name (e.g. "Cream"); products in one slot act as colour options.</summary>
+    /// <summary>Variant option value (e.g. colour name "Cream").</summary>
     public string? ColourName { get; set; }
     /// <summary>Swatch colour as #RRGGBB for the colour picker in the app.</summary>
     public string? ColourHex { get; set; }
+    /// <summary>
+    /// When set, this product is a variant SKU of the parent listing.
+    /// Parents appear in the shop; variants are selected on the product page.
+    /// </summary>
+    public Guid? ParentProductId { get; set; }
+    /// <summary>Label for the variant dimension on a parent (e.g. "Colour"). Null on variants.</summary>
+    public string? VariantOptionName { get; set; }
     public Guid? CourseId { get; set; }
     public int SortOrder { get; set; }
     /// <summary>Units currently available to sell. Deducted once on successful payment fulfillment.</summary>
@@ -35,6 +42,8 @@ public sealed class Product
     public DateTime UpdatedAt { get; set; }
 
     public Course? Course { get; set; }
+    public Product? Parent { get; set; }
+    public ICollection<Product> Variants { get; set; } = new List<Product>();
     public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
     public ICollection<ProductEssentialLink> EssentialLinks { get; set; } = new List<ProductEssentialLink>();
 }

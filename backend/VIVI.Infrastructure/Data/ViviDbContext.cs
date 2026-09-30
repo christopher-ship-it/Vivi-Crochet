@@ -16,8 +16,6 @@ public sealed class ViviDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<ProductEssentialLink> ProductEssentialLinks => Set<ProductEssentialLink>();
-    public DbSet<ShopSlot> ShopSlots => Set<ShopSlot>();
-    public DbSet<ShopSlotProduct> ShopSlotProducts => Set<ShopSlotProduct>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
     public DbSet<PasswordResetChallenge> PasswordResetChallenges => Set<PasswordResetChallenge>();
     public DbSet<EmailVerificationChallenge> EmailVerificationChallenges => Set<EmailVerificationChallenge>();
@@ -139,6 +137,7 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.CrochetHookSize).HasMaxLength(40);
             entity.Property(x => x.ColourName).HasMaxLength(40);
             entity.Property(x => x.ColourHex).HasMaxLength(7);
+            entity.Property(x => x.VariantOptionName).HasMaxLength(40);
             entity.Property(x => x.ProductType).HasConversion<int>().IsRequired();
             entity.Property(x => x.AvailableStock).IsRequired();
             entity.Property(x => x.Status).HasConversion<int>().IsRequired();
@@ -146,11 +145,17 @@ public sealed class ViviDbContext : DbContext
             entity.HasIndex(x => x.Category);
             entity.HasIndex(x => x.ProductType);
             entity.HasIndex(x => x.SortOrder);
+            entity.HasIndex(x => x.ParentProductId);
 
             entity.HasOne(x => x.Course)
                 .WithMany()
                 .HasForeignKey(x => x.CourseId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(x => x.Parent)
+                .WithMany(x => x.Variants)
+                .HasForeignKey(x => x.ParentProductId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<ProductImage>(entity =>
@@ -183,33 +188,6 @@ public sealed class ViviDbContext : DbContext
             entity.HasOne(x => x.EssentialProduct)
                 .WithMany()
                 .HasForeignKey(x => x.EssentialProductId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        modelBuilder.Entity<ShopSlot>(entity =>
-        {
-            entity.ToTable("ShopSlots");
-            entity.HasKey(x => x.Id);
-            entity.Property(x => x.Name).HasMaxLength(80).IsRequired();
-            entity.Property(x => x.ProductType).HasConversion<int>().IsRequired();
-            entity.HasIndex(x => new { x.ProductType, x.DisplayOrder });
-        });
-
-        modelBuilder.Entity<ShopSlotProduct>(entity =>
-        {
-            entity.ToTable("ShopSlotProducts");
-            entity.HasKey(x => x.Id);
-            entity.HasIndex(x => new { x.SlotId, x.ProductId }).IsUnique();
-            entity.HasIndex(x => new { x.SlotId, x.DisplayOrder });
-
-            entity.HasOne(x => x.Slot)
-                .WithMany(x => x.Products)
-                .HasForeignKey(x => x.SlotId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(x => x.Product)
-                .WithMany()
-                .HasForeignKey(x => x.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

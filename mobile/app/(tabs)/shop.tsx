@@ -21,7 +21,6 @@ import {
   listProducts,
   productTypeForRoom,
 } from '../../src/api/products';
-import { listShopSlots } from '../../src/api/shopSlots';
 import { listMyOrders, type OrderResponse } from '../../src/api/orders';
 import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
@@ -31,10 +30,9 @@ import { MyOrderCard } from '../../src/components/MyOrderCard';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
 import { ProductCard } from '../../src/components/ProductCard';
-import { ShopSlotSection } from '../../src/components/ShopSlotSection';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
-import type { Product, ShopSlot } from '../../src/types';
+import type { Product } from '../../src/types';
 import { useI18n } from '../../src/i18n';
 import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, radii, spacing } from '../../src/theme';
@@ -142,7 +140,6 @@ export default function ShopScreen() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
-  const [slots, setSlots] = useState<ShopSlot[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -208,7 +205,7 @@ export default function ShopScreen() {
       else setRefreshing(true);
       setError(null);
       try {
-        const [cats, data, slotData] = await Promise.all([
+        const [cats, data] = await Promise.all([
           listProductCategories(productType),
           listProducts(
             activeCategory === 'All' || activeCategory === WISHLIST_FILTER
@@ -217,13 +214,11 @@ export default function ShopScreen() {
             debouncedQuery || undefined,
             productType,
           ),
-          listShopSlots(productType),
         ]);
         if (id !== requestId.current) return;
         setCategories(cats);
         setProducts(data);
-        setSlots(slotData);
-        prefetchImages([...data, ...slotData.flatMap((s) => s.products)].map((p) => p.imageUrl));
+        prefetchImages(data.map((p) => p.imageUrl));
         hasLoadedOnce.current = true;
       } catch (err) {
         if (id !== requestId.current) return;
@@ -284,18 +279,6 @@ export default function ShopScreen() {
     displayedProducts = [...displayedProducts].sort((a, b) => a.price - b.price);
   }
 
-  // Curated slots lead the default "All" view; any filter, search or category falls back to the flat grid.
-  const showSlots =
-    slots.length > 0 &&
-    activeCategory === 'All' &&
-    !debouncedQuery &&
-    availability === 'all' &&
-    !priceLowToHigh;
-  if (showSlots) {
-    const slotted = new Set(slots.flatMap((s) => s.products.map((p) => p.id)));
-    displayedProducts = displayedProducts.filter((p) => !slotted.has(p.id));
-  }
-
   const roomHero =
     room === 'essentials'
       ? { title: t('shop.essentialsHeroTitle'), subtitle: t('shop.essentialsHeroSubtitle') }
@@ -316,7 +299,6 @@ export default function ShopScreen() {
     setQuery('');
     setDebouncedQuery('');
     setProducts([]);
-    setSlots([]);
     setCategories([]);
     setError(null);
     setRoom(next);
@@ -332,7 +314,6 @@ export default function ShopScreen() {
     setQuery('');
     setDebouncedQuery('');
     setProducts([]);
-    setSlots([]);
     setCategories([]);
     setError(null);
     setFilterOpen(false);
@@ -616,26 +597,7 @@ export default function ShopScreen() {
                 tintColor={colors.pink}
               />
             }
-            ListHeaderComponent={
-              showSlots ? (
-                <View>
-                  {slots.map((slot) => (
-                    <ShopSlotSection
-                      key={slot.slotId}
-                      slot={slot}
-                      showStock={room === 'essentials'}
-                      compact={room === 'essentials'}
-                      onPressProduct={(product) => router.push(`/product/${product.id}`)}
-                    />
-                  ))}
-                  {displayedProducts.length > 0 ? (
-                    <Text style={styles.moreProductsTitle}>{t('shop.moreProducts')}</Text>
-                  ) : null}
-                </View>
-              ) : null
-            }
             ListEmptyComponent={
-              showSlots ? null : (
               <EmptyView
                 title={
                   emptyIsWishlist
@@ -652,7 +614,6 @@ export default function ShopScreen() {
                       : t('shop.emptyRoomMessage')
                 }
               />
-              )
             }
             renderItem={({ item, index }) => (
               <ProductCard
@@ -1108,13 +1069,6 @@ function createStyles(fonts: UiFonts, compact = false) {
     list: {
       paddingHorizontal: spacing.sm,
       paddingTop: spacing.md,
-    },
-    moreProductsTitle: {
-      fontFamily: fonts.heading,
-      fontSize: 18,
-      color: colors.ink,
-      marginBottom: spacing.sm,
-      paddingHorizontal: 2,
     },
     row: {
       justifyContent: 'space-between',

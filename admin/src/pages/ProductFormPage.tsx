@@ -3,18 +3,21 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   completeProductImageUpload,
   createProduct,
+  deleteProduct,
   deleteProductImage,
   getProduct,
   listProductCategories,
   listProducts,
+  publishProduct,
   requestProductImageUploadUrl,
   setProductMainImage,
+  unpublishProduct,
   updateProduct,
 } from '../api/products';
 import { listCourses } from '../api/courses';
 import { ApiClientError } from '../api/client';
-import type { Course, Product, ProductImage, ProductRequest, ProductType } from '../types';
-import { formatFileSize, validateImageFile } from '../utils/format';
+import type { Course, Product, ProductImage, ProductRequest, ProductType, ProductVariantSummary } from '../types';
+import { formatFileSize, formatInr, validateImageFile } from '../utils/format';
 import {
   prepareProductImage,
   PRODUCT_IMAGE_EDGE_PX,
@@ -53,6 +56,8 @@ const emptyForm: ProductFormState = {
   crochetHookSize: '',
   colourName: '',
   colourHex: '',
+  parentProductId: null,
+  variantOptionName: 'Colour',
   courseId: null,
   sortOrder: 0,
   productType: 'Handmade',
@@ -88,22 +93,34 @@ export function ProductFormPage() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const parentFromQuery = searchParams.get('parent');
 
   const [form, setForm] = useState<ProductFormState>(() => ({
     ...emptyForm,
     productType: initialProductType(searchParams),
+    parentProductId: parentFromQuery,
+    variantOptionName: parentFromQuery ? null : 'Colour',
   }));
   const [categories, setCategories] = useState<string[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [essentialsCatalog, setEssentialsCatalog] = useState<Product[]>([]);
   const [images, setImages] = useState<ProductImage[]>([]);
-  const [loading, setLoading] = useState(isEdit);
+  const [variants, setVariants] = useState<ProductVariantSummary[]>([]);
+  const [parentListing, setParentListing] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(isEdit || Boolean(parentFromQuery));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [busyImageId, setBusyImageId] = useState<string | null>(null);
+  const [variantActionId, setVariantActionId] = useState<string | null>(null);
+
+  const isVariant = Boolean(form.parentProductId);
+  const isEssentialsParent = form.productType === 'Resell' && !isVariant;
+  const hasVariants = variants.length > 0;
+  /** Parent with colour SKUs: SKU fields live on variants. */
+  const skuOnVariants = isEssentialsParent && hasVariants;
 
   useEffect(() => {
     listProductCategories()
@@ -118,6 +135,45 @@ export function ProductFormPage() {
   }, []);
 
   useEffect(() => {
+    if (!parentFromQuery || id) return;
+    let cancelled = false;
+    async function loadParent() {
+      setLoading(true);
+      try {
+        const parent = await getProduct(parentFromQuery!);
+        if (cancelled) return;
+        setParentListing(parent);
+        setForm((f) => ({
+          ...f,
+          name: parent.name,
+          category: parent.category,
+          description: parent.description ?? '',
+          ballWeight: parent.ballWeight ?? '',
+          yarnLength: parent.yarnLength ?? '',
+          crochetHookSize: parent.crochetHookSize ?? '',
+          productType: parent.productType ?? 'Resell',
+          parentProductId: parent.id,
+          variantOptionName: null,
+          price: '',
+          availableStock: '',
+          productCode: '',
+          colourName: '',
+          colourHex: '',
+          sortOrder: parent.variants?.length ?? 0,
+        }));
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof ApiClientError ? err.message : 'Failed to load parent product.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadParent();
+    return () => { cancelled = true; };
+  }, [parentFromQuery, id]);
+
+  useEffect(() => {
     if (!id) return;
     let cancelled = false;
     async function load() {
@@ -130,7 +186,7 @@ export function ProductFormPage() {
           productCode: product.productCode ?? '',
           category: product.category,
           description: product.description ?? '',
-          price: product.price,
+          price: product.parentProductId ? product.price : (product.variants?.length ? 0 : product.price),
           mrp: product.mrp ?? null,
           spec1: product.spec1 ?? '',
           spec2: product.spec2 ?? '',
@@ -139,13 +195,25 @@ export function ProductFormPage() {
           crochetHookSize: product.crochetHookSize ?? '',
           colourName: product.colourName ?? '',
           colourHex: product.colourHex ?? '',
+          parentProductId: product.parentProductId ?? null,
+          variantOptionName: product.variantOptionName ?? (product.parentProductId ? null : 'Colour'),
           courseId: product.courseId ?? null,
           sortOrder: product.sortOrder,
           productType: product.productType ?? 'Handmade',
-          availableStock: product.availableStock ?? 0,
+          availableStock: product.parentProductId
+            ? (product.availableStock ?? 0)
+            : (product.variants?.length ? 0 : (product.availableStock ?? 0)),
           recommendedEssentialIds: (product.recommendedEssentials ?? []).map((e) => e.id),
         });
+        setVariants(product.variants ?? []);
         setImages(imagesFromProduct(product));
+        if (product.parentProductId) {
+          getProduct(product.parentProductId)
+            .then((p) => { if (!cancelled) setParentListing(p); })
+            .catch(() => { if (!cancelled) setParentListing(null); });
+        } else {
+          setParentListing(null);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ApiClientError ? err.message : 'Failed to load product.');
@@ -160,28 +228,38 @@ export function ProductFormPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (form.price === '' || form.price < 0) {
+    const priceValue = skuOnVariants ? 0 : form.price;
+    const stockValue = skuOnVariants ? 0 : form.availableStock;
+    if (priceValue === '' || priceValue < 0) {
       setError('Enter a valid price (₹).');
       return;
     }
-    if (form.availableStock === '' || form.availableStock < 0) {
+    if (stockValue === '' || stockValue < 0) {
       setError('Enter available stock (0 or more).');
+      return;
+    }
+    if (isVariant && !form.colourName?.trim()) {
+      setError('Enter a colour / option name for this variant.');
       return;
     }
     setSaving(true);
     setError(null);
     const payload: ProductRequest = {
       ...form,
-      price: form.price,
-      availableStock: Math.max(0, Math.floor(form.availableStock)),
+      price: priceValue,
+      availableStock: Math.max(0, Math.floor(stockValue)),
       sortOrder: form.sortOrder === '' ? 0 : form.sortOrder,
       description: form.description?.trim() || null,
-      productCode: form.productCode?.trim() || null,
+      productCode: skuOnVariants ? null : (form.productCode?.trim() || null),
+      parentProductId: form.parentProductId || null,
+      variantOptionName: isEssentialsParent
+        ? (form.variantOptionName?.trim() || 'Colour')
+        : null,
       spec1: form.spec1?.trim() || null,
       spec2: form.spec2?.trim() || null,
-      ballWeight: form.productType === 'Resell' ? (form.ballWeight?.trim() || null) : null,
-      yarnLength: form.productType === 'Resell' ? (form.yarnLength?.trim() || null) : null,
-      crochetHookSize: form.productType === 'Resell' ? (form.crochetHookSize?.trim() || null) : null,
+      ballWeight: form.productType === 'Resell' && !isVariant ? (form.ballWeight?.trim() || null) : null,
+      yarnLength: form.productType === 'Resell' && !isVariant ? (form.yarnLength?.trim() || null) : null,
+      crochetHookSize: form.productType === 'Resell' && !isVariant ? (form.crochetHookSize?.trim() || null) : null,
       colourName: form.productType === 'Resell' ? (form.colourName?.trim() || null) : null,
       colourHex: form.productType === 'Resell' ? (form.colourHex?.trim() || null) : null,
       mrp: form.mrp || null,
@@ -194,7 +272,9 @@ export function ProductFormPage() {
     try {
       if (isEdit && id) {
         await updateProduct(id, payload);
-        navigate('/products');
+        navigate(isVariant && form.parentProductId
+          ? `/products/${form.parentProductId}/edit`
+          : '/products');
       } else {
         const created = await createProduct(payload);
         navigate(`/products/${created.id}/edit`);
@@ -203,6 +283,38 @@ export function ProductFormPage() {
       setError(err instanceof ApiClientError ? err.message : 'Save failed.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function reloadVariants() {
+    if (!id || isVariant) return;
+    const product = await getProduct(id);
+    setVariants(product.variants ?? []);
+  }
+
+  async function handleVariantPublishToggle(variant: ProductVariantSummary) {
+    setVariantActionId(variant.id);
+    try {
+      if (variant.status === 'Published') await unpublishProduct(variant.id);
+      else await publishProduct(variant.id);
+      await reloadVariants();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not update variant status.');
+    } finally {
+      setVariantActionId(null);
+    }
+  }
+
+  async function handleVariantDelete(variant: ProductVariantSummary) {
+    if (!await confirmDialog(`Delete variant "${variant.colourName ?? variant.productCode ?? variant.id}"?`)) return;
+    setVariantActionId(variant.id);
+    try {
+      await deleteProduct(variant.id);
+      await reloadVariants();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not delete variant.');
+    } finally {
+      setVariantActionId(null);
     }
   }
 
@@ -327,22 +439,31 @@ export function ProductFormPage() {
   }
 
   const canAddMore = images.length < MAX_PHOTOS;
+  const backHref = isVariant && form.parentProductId
+    ? `/products/${form.parentProductId}/edit`
+    : '/products';
 
   return (
     <>
       <header className="page-header page-header--compact">
         <div>
           <h1 className="page-header__title">
-            {isEdit ? 'Edit product' : 'New product'}
+            {isVariant
+              ? (isEdit ? 'Edit variant' : 'New variant')
+              : (isEdit ? 'Edit product' : 'New product')}
             {' · '}
             {form.productType === 'Resell' ? 'Crochet Essentials' : 'Handmade Collection'}
           </h1>
           <p className="page-header__subtitle">
-            {isEdit ? 'Update shop listing details and photos' : 'Products are created as Draft until you publish'}
+            {isVariant
+              ? `SKU under ${parentListing?.name ?? 'parent listing'} — customers pick this colour on the product page`
+              : isEdit
+                ? 'Update shop listing details and photos'
+                : 'Products are created as Draft until you publish'}
           </p>
         </div>
         <div className="page-header__actions">
-          <Link to="/products" className="btn btn--ghost">Cancel</Link>
+          <Link to={backHref} className="btn btn--ghost">Cancel</Link>
         </div>
       </header>
 
@@ -356,22 +477,25 @@ export function ProductFormPage() {
               id="name"
               required
               maxLength={160}
-              placeholder="e.g. Sunflower tote bag"
+              placeholder="e.g. Yarn – Geire"
               value={form.name}
+              disabled={isVariant}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
           </div>
-          <div className="form-field">
-            <label htmlFor="productCode">Product code (optional)</label>
-            <input
-              id="productCode"
-              maxLength={40}
-              placeholder="e.g. DIS039"
-              value={form.productCode ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, productCode: e.target.value }))}
-            />
-          </div>
-          <div className="form-field span-2">
+          {!skuOnVariants ? (
+            <div className="form-field">
+              <label htmlFor="productCode">Product code {isVariant ? '' : '(optional)'}</label>
+              <input
+                id="productCode"
+                maxLength={40}
+                placeholder="e.g. DIS039"
+                value={form.productCode ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, productCode: e.target.value }))}
+              />
+            </div>
+          ) : null}
+          <div className={`form-field ${skuOnVariants ? 'span-2' : 'span-2'}`}>
             <label htmlFor="category">Category</label>
             <input
               id="category"
@@ -379,6 +503,7 @@ export function ProductFormPage() {
               list="product-categories"
               placeholder="Pick or type a category"
               value={form.category}
+              disabled={isVariant}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
             />
             <datalist id="product-categories">
@@ -387,6 +512,18 @@ export function ProductFormPage() {
               ))}
             </datalist>
           </div>
+          {isEssentialsParent ? (
+            <div className="form-field span-2">
+              <label htmlFor="variantOptionName">Variant option label</label>
+              <input
+                id="variantOptionName"
+                maxLength={40}
+                placeholder="e.g. Colour"
+                value={form.variantOptionName ?? 'Colour'}
+                onChange={(e) => setForm((f) => ({ ...f, variantOptionName: e.target.value }))}
+              />
+            </div>
+          ) : null}
 
           {form.productType === 'Handmade' ? (
             <div className="form-field span-6">
@@ -407,55 +544,65 @@ export function ProductFormPage() {
             </div>
           ) : null}
 
-          <div className="form-field">
-            <label htmlFor="price">Price</label>
-            <div className="input-affix">
-              <span className="input-affix__prefix">₹</span>
-              <input
-                id="price"
-                type="number"
-                required
-                min={0}
-                value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: parseNumberDraft(e.target.value) }))}
-              />
+          {!skuOnVariants ? (
+            <>
+              <div className="form-field">
+                <label htmlFor="price">Price</label>
+                <div className="input-affix">
+                  <span className="input-affix__prefix">₹</span>
+                  <input
+                    id="price"
+                    type="number"
+                    required
+                    min={0}
+                    value={form.price}
+                    onChange={(e) => setForm((f) => ({ ...f, price: parseNumberDraft(e.target.value) }))}
+                  />
+                </div>
+              </div>
+              <div className="form-field">
+                <label htmlFor="mrp">MRP</label>
+                <div className="input-affix">
+                  <span className="input-affix__prefix">₹</span>
+                  <input
+                    id="mrp"
+                    type="number"
+                    min={0}
+                    placeholder="Strike-through"
+                    value={form.mrp ?? ''}
+                    onChange={(e) => setForm((f) => ({
+                      ...f,
+                      mrp: e.target.value === '' ? null : Number(e.target.value),
+                    }))}
+                  />
+                </div>
+              </div>
+              <div className="form-field">
+                <label htmlFor="availableStock" title="Maximum quantity customers can purchase.">
+                  Stock
+                </label>
+                <input
+                  id="availableStock"
+                  type="number"
+                  required
+                  min={0}
+                  step={1}
+                  title="Maximum quantity customers can purchase."
+                  value={form.availableStock}
+                  onChange={(e) => setForm((f) => ({
+                    ...f,
+                    availableStock: parseNumberDraft(e.target.value),
+                  }))}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="form-field span-6">
+              <div className="alert alert--info">
+                Price, stock, product code and colour are managed on each variant below.
+              </div>
             </div>
-          </div>
-          <div className="form-field">
-            <label htmlFor="mrp">MRP</label>
-            <div className="input-affix">
-              <span className="input-affix__prefix">₹</span>
-              <input
-                id="mrp"
-                type="number"
-                min={0}
-                placeholder="Strike-through"
-                value={form.mrp ?? ''}
-                onChange={(e) => setForm((f) => ({
-                  ...f,
-                  mrp: e.target.value === '' ? null : Number(e.target.value),
-                }))}
-              />
-            </div>
-          </div>
-          <div className="form-field">
-            <label htmlFor="availableStock" title="Maximum quantity customers can purchase.">
-              Stock
-            </label>
-            <input
-              id="availableStock"
-              type="number"
-              required
-              min={0}
-              step={1}
-              title="Maximum quantity customers can purchase."
-              value={form.availableStock}
-              onChange={(e) => setForm((f) => ({
-                ...f,
-                availableStock: parseNumberDraft(e.target.value),
-              }))}
-            />
-          </div>
+          )}
           <div className="form-field">
             <label htmlFor="spec1">Spec 1</label>
             <input
@@ -474,7 +621,7 @@ export function ProductFormPage() {
               onChange={(e) => setForm((f) => ({ ...f, spec2: e.target.value }))}
             />
           </div>
-          {form.productType === 'Resell' && (
+          {form.productType === 'Resell' && !isVariant ? (
             <>
               <div className="form-field">
                 <label htmlFor="ballWeight">Ball weight</label>
@@ -506,12 +653,17 @@ export function ProductFormPage() {
                   onChange={(e) => setForm((f) => ({ ...f, crochetHookSize: e.target.value }))}
                 />
               </div>
+            </>
+          ) : null}
+          {form.productType === 'Resell' && (isVariant || !skuOnVariants) ? (
+            <>
               <div className="form-field">
-                <label htmlFor="colourName" title="Products in the same slot with a colour appear together as colour options.">
-                  Colour name
+                <label htmlFor="colourName">
+                  {form.variantOptionName || parentListing?.variantOptionName || 'Colour'} name
                 </label>
                 <input
                   id="colourName"
+                  required={isVariant}
                   maxLength={40}
                   placeholder="e.g. Cream"
                   value={form.colourName ?? ''}
@@ -542,7 +694,7 @@ export function ProductFormPage() {
                 </div>
               </div>
             </>
-          )}
+          ) : null}
           <div className="form-field">
             <label htmlFor="sortOrder" title="Lower numbers appear first.">Sort order</label>
             <input
@@ -616,9 +768,9 @@ export function ProductFormPage() {
 
         <div className="form-actions form-actions--sticky">
           <button type="submit" className="btn btn--primary" disabled={saving}>
-            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create product'}
+            {saving ? 'Saving…' : isEdit ? 'Save changes' : isVariant ? 'Create variant' : 'Create product'}
           </button>
-          <Link to="/products" className="btn btn--ghost">Cancel</Link>
+          <Link to={backHref} className="btn btn--ghost">Cancel</Link>
           {!isEdit ? (
             <span className="form-hint form-actions__note">
               Save first, then add photos on the edit screen.
@@ -626,6 +778,99 @@ export function ProductFormPage() {
           ) : null}
         </div>
       </form>
+
+      {isEdit && id && isEssentialsParent ? (
+        <section className="card">
+          <div className="card__header">
+            <div>
+              <h2 className="card__title">
+                {form.variantOptionName || 'Colour'} variants
+              </h2>
+              <p className="card__subtitle">
+                Each row is a sellable SKU (own code, price, stock, photo). Shoppers pick one on the product page.
+              </p>
+            </div>
+            <Link to={`/products/new?type=Resell&parent=${id}`} className="btn btn--primary btn--sm">
+              + Add variant
+            </Link>
+          </div>
+          {variants.length === 0 ? (
+            <p className="form-hint">No variants yet. Add colours such as Red (DIS039), Black (DIS014).</p>
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Option</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                    <th>Status</th>
+                    <th aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {variants.map((variant) => (
+                    <tr key={variant.id}>
+                      <td>{variant.productCode ?? '—'}</td>
+                      <td>
+                        <div className="cell-media">
+                          {variant.imageUrl
+                            ? <img src={variant.imageUrl} alt="" className="thumb-sm" />
+                            : variant.colourHex
+                              ? <span className="thumb-sm" style={{ background: variant.colourHex, display: 'inline-block' }} />
+                              : (
+                                <span
+                                  className="thumb-sm"
+                                  style={{
+                                    display: 'inline-grid',
+                                    placeItems: 'center',
+                                    background: 'var(--vivi-canvas)',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {(variant.colourName ?? '?').charAt(0)}
+                                </span>
+                              )}
+                          <span>{variant.colourName ?? '—'}</span>
+                        </div>
+                      </td>
+                      <td>{formatInr(variant.price)}</td>
+                      <td>{variant.availableStock <= 0 ? 'OUT OF STOCK' : variant.availableStock}</td>
+                      <td>
+                        <span className={`badge badge--${variant.status.toLowerCase()}`}>
+                          {variant.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="data-table__actions">
+                          <Link to={`/products/${variant.id}/edit`} className="btn btn--ghost btn--sm">Edit</Link>
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--sm"
+                            disabled={variantActionId === variant.id}
+                            onClick={() => void handleVariantPublishToggle(variant)}
+                          >
+                            {variant.status === 'Published' ? 'Unpublish' : 'Publish'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--danger btn--sm"
+                            disabled={variantActionId === variant.id}
+                            onClick={() => void handleVariantDelete(variant)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {isEdit && id && (
         <section className="card">

@@ -118,6 +118,19 @@ export interface ProductImage {
   isMain: boolean;
 }
 
+export interface ProductVariantSummary {
+  id: string;
+  productCode?: string | null;
+  colourName?: string | null;
+  colourHex?: string | null;
+  price: number;
+  mrp?: number | null;
+  imageUrl?: string | null;
+  availableStock: number;
+  status: ProductStatus;
+  sortOrder: number;
+}
+
 export interface Product {
   id: string;
   productCode?: string | null;
@@ -135,6 +148,10 @@ export interface Product {
   crochetHookSize?: string | null;
   colourName?: string | null;
   colourHex?: string | null;
+  parentProductId?: string | null;
+  variantOptionName?: string | null;
+  variantCount?: number;
+  variants?: ProductVariantSummary[];
   courseId?: string | null;
   linkedCourse?: LinkedCourseSummary | null;
   recommendedEssentials?: RecommendedEssentialSummary[];
@@ -144,13 +161,4 @@ export interface Product {
   status: ProductStatus;
   createdAt: string;
   updatedAt: string;
-}
-
-/** Admin-curated shop slot: one named group holding many products of a room. */
-export interface ShopSlot {
-  slotId: string;
-  slotName: string;
-  productType: ProductType;
-  displayOrder: number;
-  products: Product[];
 }

@@ -1256,6 +1256,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
 
+                    b.Property<Guid?>("ParentProductId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("ProductCode")
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
@@ -1283,6 +1286,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("VariantOptionName")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("YarnLength")
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
@@ -1292,6 +1299,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasIndex("Category");
 
                     b.HasIndex("CourseId");
+
+                    b.HasIndex("ParentProductId");
 
                     b.HasIndex("ProductType");
 
@@ -1304,69 +1313,6 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("Products", (string)null);
-                });
-
-            modelBuilder.Entity("VIVI.Core.Entities.ShopSlot", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<int>("ProductType")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductType", "DisplayOrder");
-
-                    b.ToTable("ShopSlots", (string)null);
-                });
-
-            modelBuilder.Entity("VIVI.Core.Entities.ShopSlotProduct", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("SlotId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("SlotId", "DisplayOrder");
-
-                    b.HasIndex("SlotId", "ProductId")
-                        .IsUnique();
-
-                    b.ToTable("ShopSlotProducts", (string)null);
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.ProductEssentialLink", b =>
@@ -1855,26 +1801,14 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("VIVI.Core.Entities.Product", "Parent")
+                        .WithMany("Variants")
+                        .HasForeignKey("ParentProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Course");
-                });
 
-            modelBuilder.Entity("VIVI.Core.Entities.ShopSlotProduct", b =>
-                {
-                    b.HasOne("VIVI.Core.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("VIVI.Core.Entities.ShopSlot", "Slot")
-                        .WithMany("Products")
-                        .HasForeignKey("SlotId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Product");
-
-                    b.Navigation("Slot");
+                    b.Navigation("Parent");
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.ProductEssentialLink", b =>
@@ -1999,11 +1933,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Navigation("EssentialLinks");
 
                     b.Navigation("Images");
-                });
 
-            modelBuilder.Entity("VIVI.Core.Entities.ShopSlot", b =>
-                {
-                    b.Navigation("Products");
+                    b.Navigation("Variants");
                 });
 #pragma warning restore 612, 618
         }

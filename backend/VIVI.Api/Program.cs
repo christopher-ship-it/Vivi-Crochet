@@ -445,11 +445,11 @@ using (var scope = app.Services.CreateScope())
             try
             {
                 await ShopSlotSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
-                logger.LogInformation("Shop slot schema verified.");
+                logger.LogInformation("Product catalog schema verified (ProductCode / essentials specs).");
             }
             catch (Exception slotEx)
             {
-                logger.LogError(slotEx, "Shop slot schema bootstrap failed. Slots and ProductCode will error until the schema exists.");
+                logger.LogError(slotEx, "Product catalog schema bootstrap failed. ProductCode and yarn/colour columns may be missing.");
             }
 
             try

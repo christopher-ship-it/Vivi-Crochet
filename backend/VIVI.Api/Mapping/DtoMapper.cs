@@ -187,6 +187,21 @@ public static class DtoMapper
             });
         }
 
+        var variants = MapVariants(product, adminView);
+        var displayPrice = product.Price;
+        var displayMrp = product.Mrp;
+        var displayStock = product.AvailableStock;
+        var displayImage = product.ImageUrl;
+        if (variants.Count > 0 && product.ParentProductId is null)
+        {
+            var first = variants[0];
+            displayPrice = first.Price;
+            displayMrp = first.Mrp;
+            displayStock = variants.Sum(v => v.AvailableStock);
+            if (string.IsNullOrWhiteSpace(displayImage))
+                displayImage = first.ImageUrl;
+        }
+
         return new ProductResponse
         {
             Id = product.Id,
@@ -194,9 +209,9 @@ public static class DtoMapper
             Name = product.Name,
             Category = product.Category,
             Description = product.Description,
-            Price = product.Price,
-            Mrp = product.Mrp,
-            ImageUrl = product.ImageUrl,
+            Price = displayPrice,
+            Mrp = displayMrp,
+            ImageUrl = displayImage,
             Images = images,
             Spec1 = product.Spec1,
             Spec2 = product.Spec2,
@@ -205,16 +220,61 @@ public static class DtoMapper
             CrochetHookSize = product.CrochetHookSize,
             ColourName = product.ColourName,
             ColourHex = product.ColourHex,
+            ParentProductId = product.ParentProductId,
+            VariantOptionName = product.ParentProductId is null
+                ? (product.VariantOptionName ?? (variants.Count > 0 ? "Colour" : null))
+                : (product.Parent?.VariantOptionName ?? (variants.Count > 0 ? "Colour" : null)),
+            VariantCount = variants.Count,
+            Variants = variants,
             CourseId = product.CourseId,
             LinkedCourse = linked,
             SortOrder = product.SortOrder,
             ProductType = product.ProductType,
-            AvailableStock = product.AvailableStock,
+            AvailableStock = displayStock,
             Status = product.Status,
             CreatedAt = product.CreatedAt,
             UpdatedAt = product.UpdatedAt,
             RecommendedEssentials = MapRecommendedEssentials(product, adminView)
         };
+    }
+
+    private static IReadOnlyList<ProductVariantSummary> MapVariants(Product product, bool adminView)
+    {
+        IEnumerable<Product> source;
+        // Prefer sibling list from the parent when this row is itself a variant.
+        if (product.ParentProductId is not null && product.Parent?.Variants is { Count: > 0 })
+            source = product.Parent.Variants;
+        else if (product.Variants is { Count: > 0 })
+            source = product.Variants;
+        else
+            return Array.Empty<ProductVariantSummary>();
+
+        return source
+            .Where(v => v.ParentProductId == (product.ParentProductId ?? product.Id))
+            .Where(v => adminView || v.Status == ProductStatus.Published)
+            .GroupBy(v => v.Id)
+            .Select(g => g.First())
+            .OrderBy(v => v.SortOrder)
+            .ThenBy(v => v.ColourName ?? v.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(v =>
+            {
+                var image = v.ImageUrl
+                    ?? v.Images?.OrderByDescending(i => i.IsMain).ThenBy(i => i.SortOrder).Select(i => i.BlobPath).FirstOrDefault();
+                return new ProductVariantSummary
+                {
+                    Id = v.Id,
+                    ProductCode = v.ProductCode,
+                    ColourName = v.ColourName,
+                    ColourHex = v.ColourHex,
+                    Price = v.Price,
+                    Mrp = v.Mrp,
+                    ImageUrl = image,
+                    AvailableStock = v.AvailableStock,
+                    Status = v.Status,
+                    SortOrder = v.SortOrder
+                };
+            })
+            .ToList();
     }
 
     private static IReadOnlyList<RecommendedEssentialSummary> MapRecommendedEssentials(

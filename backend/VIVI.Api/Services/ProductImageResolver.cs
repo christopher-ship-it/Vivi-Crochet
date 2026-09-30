@@ -44,26 +44,35 @@ public static class ProductImageResolver
     {
         dto.ImageUrl = await ResolveAsync(dto.ImageUrl, blob, cancellationToken, verifyExists);
 
-        if (dto.Images.Count == 0)
-            return;
-
-        var resolved = await Task.WhenAll(dto.Images.Select(async image =>
+        if (dto.Images.Count > 0)
         {
-            var url = await ResolveAsync(image.BlobPath, blob, cancellationToken, verifyExists);
-            return new ProductImageResponse
+            var resolved = await Task.WhenAll(dto.Images.Select(async image =>
             {
-                Id = image.Id,
-                // Keep the gallery entry even if SAS resolution fails so admin count stays correct.
-                Url = string.IsNullOrWhiteSpace(url) ? image.BlobPath : url,
-                BlobPath = image.BlobPath,
-                SortOrder = image.SortOrder,
-                IsMain = image.IsMain
-            };
-        }));
+                var url = await ResolveAsync(image.BlobPath, blob, cancellationToken, verifyExists);
+                return new ProductImageResponse
+                {
+                    Id = image.Id,
+                    // Keep the gallery entry even if SAS resolution fails so admin count stays correct.
+                    Url = string.IsNullOrWhiteSpace(url) ? image.BlobPath : url,
+                    BlobPath = image.BlobPath,
+                    SortOrder = image.SortOrder,
+                    IsMain = image.IsMain
+                };
+            }));
 
-        dto.Images = resolved;
-        if (string.IsNullOrWhiteSpace(dto.ImageUrl))
-            dto.ImageUrl = resolved.FirstOrDefault(i => i.IsMain)?.Url ?? resolved.FirstOrDefault()?.Url;
+            dto.Images = resolved;
+            if (string.IsNullOrWhiteSpace(dto.ImageUrl))
+                dto.ImageUrl = resolved.FirstOrDefault(i => i.IsMain)?.Url ?? resolved.FirstOrDefault()?.Url;
+        }
+
+        if (dto.Variants.Count > 0)
+        {
+            await Task.WhenAll(dto.Variants.Select(async variant =>
+            {
+                variant.ImageUrl = await ResolveAsync(variant.ImageUrl, blob, cancellationToken, verifyExists: false)
+                    ?? variant.ImageUrl;
+            }));
+        }
 
         if (dto.RecommendedEssentials.Count == 0)
             return;

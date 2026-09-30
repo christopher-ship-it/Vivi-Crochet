@@ -196,10 +196,22 @@ export function ProductsPage() {
                           {product.name.charAt(0)}
                         </div>
                       )}
-                      <span style={{ fontWeight: 600 }}>{product.name}</span>
+                      <span style={{ fontWeight: 600 }}>
+                        {product.name}
+                        {(product.variantCount ?? 0) > 0 ? (
+                          <span className="badge badge--draft" style={{ marginLeft: 8 }}>
+                            {product.variantCount} {(product.variantOptionName || 'colour').toLowerCase()}
+                            {(product.variantCount ?? 0) === 1 ? '' : 's'}
+                          </span>
+                        ) : null}
+                      </span>
                     </div>
                   </td>
-                  <td>{product.productCode ?? '—'}</td>
+                  <td>
+                    {(product.variantCount ?? 0) > 0
+                      ? `${product.variantCount} SKUs`
+                      : (product.productCode ?? '—')}
+                  </td>
                   <td>{productTypeLabel(product.productType)}</td>
                   <td>{product.category}</td>
                   <td>{formatInr(product.price)}</td>

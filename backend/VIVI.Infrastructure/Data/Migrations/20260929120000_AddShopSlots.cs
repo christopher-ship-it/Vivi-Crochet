@@ -7,14 +7,14 @@ using VIVI.Infrastructure.Data;
 
 namespace VIVI.Infrastructure.Data.Migrations;
 
-/// <summary>Adds Products.ProductCode (unique when set), ShopSlots and ShopSlotProducts. Idempotent.</summary>
+/// <summary>Adds Products.ProductCode and yarn/colour spec columns. Idempotent. (Shop slots were later removed.)</summary>
 [DbContext(typeof(ViviDbContext))]
 [Migration("20260929120000_AddShopSlots")]
 public sealed class AddShopSlots : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.Sql(ShopSlotSchemaBootstrapper.SchemaSql);
+        migrationBuilder.Sql(ShopSlotSchemaBootstrapper.ProductColumnsSql);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)

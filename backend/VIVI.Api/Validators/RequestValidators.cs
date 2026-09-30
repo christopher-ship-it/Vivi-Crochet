@@ -8,7 +8,6 @@ using VIVI.Api.DTOs.Customers;
 using VIVI.Api.DTOs.Orders;
 using VIVI.Api.DTOs.Payments;
 using VIVI.Api.DTOs.Products;
-using VIVI.Api.DTOs.Shop;
 using VIVI.Api.DTOs.Push;
 using VIVI.Api.DTOs.Support;
 using VIVI.Api.DTOs.Videos;
@@ -255,6 +254,7 @@ public sealed class ProductRequestValidator : AbstractValidator<ProductRequest>
         RuleFor(x => x.YarnLength).MaximumLength(40);
         RuleFor(x => x.CrochetHookSize).MaximumLength(40);
         RuleFor(x => x.ColourName).MaximumLength(40);
+        RuleFor(x => x.VariantOptionName).MaximumLength(40);
         RuleFor(x => x.ColourHex)
             .Matches("^#[0-9A-Fa-f]{6}$")
             .When(x => !string.IsNullOrWhiteSpace(x.ColourHex))
@@ -266,15 +266,6 @@ public sealed class ProductRequestValidator : AbstractValidator<ProductRequest>
         RuleFor(x => x.RecommendedEssentialIds)
             .Must(ids => ids is null || ids.Count <= 3)
             .WithMessage("At most 3 recommended essentials are allowed.");
-    }
-}
-
-public sealed class ShopSlotRequestValidator : AbstractValidator<ShopSlotRequest>
-{
-    public ShopSlotRequestValidator()
-    {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(80);
-        RuleFor(x => x.ProductType).IsInEnum();
     }
 }
 

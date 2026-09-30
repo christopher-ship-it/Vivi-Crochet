@@ -51,7 +51,6 @@ function NavIcon({ name }: { name: IconName }) {
 const NAV_ITEMS: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
   { to: '/products', label: 'Shop products', icon: 'shop' },
-  { to: '/slots', label: 'Shop slots', icon: 'shop' },
   { to: '/customers', label: 'Customers', icon: 'customers' },
   { to: '/notifications', label: 'Notifications', icon: 'bell' },
   { to: '/support', label: 'Support', icon: 'support' },
@@ -112,7 +111,7 @@ export function AdminLayout() {
   const courseDashActive = isCourseDashboardPath(location.pathname);
   // Focused create screens skip the global search bar to keep the form on one screen.
   const hideSearchHeader =
-    ['/courses/new', '/products/new', '/slots/new', '/live'].includes(location.pathname) ||
+    ['/courses/new', '/products/new', '/live'].includes(location.pathname) ||
     /^\/orders\/[^/]+$/.test(location.pathname);
   const [ordersOpen, setOrdersOpen] = useState(ordersActive);
   const [bookingsOpen, setBookingsOpen] = useState(bookingsActive);

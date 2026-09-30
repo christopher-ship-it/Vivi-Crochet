@@ -4,13 +4,14 @@ using VIVI.Infrastructure.Data;
 namespace VIVI.Infrastructure.Commerce;
 
 /// <summary>
-/// Ensures Products.ProductCode, ShopSlots and ShopSlotProducts exist when AutoMigrate is false
-/// or the migration has not been applied. Safe to call repeatedly (idempotent).
-/// The same SQL backs the AddShopSlots migration.
+/// Ensures product catalog columns (ProductCode, yarn/colour specs) exist when AutoMigrate is false
+/// or the migration has not been applied. Also drops legacy ShopSlots tables if present.
+/// Safe to call repeatedly (idempotent).
 /// </summary>
 public static class ShopSlotSchemaBootstrapper
 {
-    public const string SchemaSql = """
+    /// <summary>Product columns only — used by the historical AddShopSlots migration.</summary>
+    public const string ProductColumnsSql = """
         IF COL_LENGTH('Products', 'ProductCode') IS NULL
             ALTER TABLE [Products] ADD [ProductCode] nvarchar(40) NULL;
 
@@ -32,40 +33,27 @@ public static class ShopSlotSchemaBootstrapper
         IF COL_LENGTH('Products', 'ColourHex') IS NULL
             ALTER TABLE [Products] ADD [ColourHex] nvarchar(7) NULL;
 
-        IF OBJECT_ID(N'[ShopSlots]', N'U') IS NULL
-        BEGIN
-            CREATE TABLE [ShopSlots] (
-                [Id] uniqueidentifier NOT NULL,
-                [Name] nvarchar(80) NOT NULL,
-                [ProductType] int NOT NULL,
-                [DisplayOrder] int NOT NULL,
-                [IsActive] bit NOT NULL,
-                [CreatedAt] datetime2 NOT NULL,
-                [UpdatedAt] datetime2 NOT NULL,
-                CONSTRAINT [PK_ShopSlots] PRIMARY KEY ([Id])
-            );
-            CREATE INDEX [IX_ShopSlots_ProductType_DisplayOrder] ON [ShopSlots] ([ProductType], [DisplayOrder]);
-        END
+        IF COL_LENGTH('Products', 'ParentProductId') IS NULL
+            ALTER TABLE [Products] ADD [ParentProductId] uniqueidentifier NULL;
 
-        IF OBJECT_ID(N'[ShopSlotProducts]', N'U') IS NULL
-        BEGIN
-            CREATE TABLE [ShopSlotProducts] (
-                [Id] uniqueidentifier NOT NULL,
-                [SlotId] uniqueidentifier NOT NULL,
-                [ProductId] uniqueidentifier NOT NULL,
-                [DisplayOrder] int NOT NULL,
-                [IsActive] bit NOT NULL,
-                CONSTRAINT [PK_ShopSlotProducts] PRIMARY KEY ([Id]),
-                CONSTRAINT [FK_ShopSlotProducts_ShopSlots_SlotId]
-                    FOREIGN KEY ([SlotId]) REFERENCES [ShopSlots] ([Id]) ON DELETE CASCADE,
-                CONSTRAINT [FK_ShopSlotProducts_Products_ProductId]
-                    FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id]) ON DELETE NO ACTION
-            );
-            CREATE UNIQUE INDEX [IX_ShopSlotProducts_SlotId_ProductId] ON [ShopSlotProducts] ([SlotId], [ProductId]);
-            CREATE INDEX [IX_ShopSlotProducts_SlotId_DisplayOrder] ON [ShopSlotProducts] ([SlotId], [DisplayOrder]);
-            CREATE INDEX [IX_ShopSlotProducts_ProductId] ON [ShopSlotProducts] ([ProductId]);
-        END
+        IF COL_LENGTH('Products', 'VariantOptionName') IS NULL
+            ALTER TABLE [Products] ADD [VariantOptionName] nvarchar(40) NULL;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Products_ParentProductId' AND object_id = OBJECT_ID(N'[Products]'))
+            EXEC(N'CREATE INDEX [IX_Products_ParentProductId] ON [Products] ([ParentProductId])');
+
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Products_Products_ParentProductId')
+            EXEC(N'ALTER TABLE [Products] ADD CONSTRAINT [FK_Products_Products_ParentProductId]
+                FOREIGN KEY ([ParentProductId]) REFERENCES [Products] ([Id])');
         """;
+
+    public const string DropLegacySlotsSql = """
+        IF OBJECT_ID(N'[ShopSlotProducts]', N'U') IS NOT NULL DROP TABLE [ShopSlotProducts];
+        IF OBJECT_ID(N'[ShopSlots]', N'U') IS NOT NULL DROP TABLE [ShopSlots];
+        """;
+
+    /// <summary>Full bootstrap: product columns + drop legacy slot tables.</summary>
+    public const string SchemaSql = ProductColumnsSql + "\n" + DropLegacySlotsSql;
 
     public static async Task EnsureAsync(ViviDbContext db, CancellationToken cancellationToken)
     {

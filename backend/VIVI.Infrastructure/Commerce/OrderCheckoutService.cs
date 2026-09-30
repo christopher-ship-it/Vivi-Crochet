@@ -325,8 +325,19 @@ public sealed class OrderCheckoutService
 
         var product = await _db.Products
             .AsNoTracking()
+            .Include(p => p.Parent)
             .SingleOrDefaultAsync(p => p.Id == line.ProductId && p.Status == ProductStatus.Published, cancellationToken)
             ?? throw ViviException.NotFound("PRODUCT_NOT_FOUND", "Product was not found or is not published.");
+
+        var hasVariants = await _db.Products.AnyAsync(
+            p => p.ParentProductId == product.Id && p.Status == ProductStatus.Published,
+            cancellationToken);
+        if (hasVariants)
+        {
+            throw ViviException.Conflict(
+                "SELECT_VARIANT",
+                "Choose a colour/variant before adding this product to the order.");
+        }
 
         _inventory.EnsureAvailableOrThrow(product, line.Quantity);
 
@@ -344,9 +355,23 @@ public sealed class OrderCheckoutService
             UnitPrice = unitPrice,
             DiscountAmount = discount,
             TotalAmount = unitPrice * line.Quantity,
-            ItemNameSnapshot = product.Name
+            ItemNameSnapshot = FormatProductSnapshotName(product)
         };
         return (item, product.ProductType);
+    }
+
+    private static string FormatProductSnapshotName(Product product)
+    {
+        var baseName = product.Parent?.Name ?? product.Name;
+        var option = product.ColourName?.Trim();
+        var code = product.ProductCode?.Trim();
+        if (!string.IsNullOrEmpty(option) && !string.IsNullOrEmpty(code))
+            return $"{baseName} · {option} ({code})";
+        if (!string.IsNullOrEmpty(option))
+            return $"{baseName} · {option}";
+        if (!string.IsNullOrEmpty(code) && product.ParentProductId is not null)
+            return $"{baseName} ({code})";
+        return product.Name;
     }
 
     private async Task<OrderItem> BuildCourseItemAsync(

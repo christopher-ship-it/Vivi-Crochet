@@ -44,10 +44,13 @@ public sealed class ProductsController : ControllerBase
         var admin = User.IsAdmin();
         // Do not Include EssentialLinks here — shop/home list must stay up even if
         // ProductEssentialLinks is missing or bootstrap failed. Cart loads essentials via Get.
+        // Shop/admin catalogs show parent listings + standalone SKUs — never variant children.
         var query = _db.Products
             .AsNoTracking()
             .Include(p => p.Images)
             .Include(p => p.Course!)
+            .Include(p => p.Variants)
+            .Where(p => p.ParentProductId == null)
             .AsQueryable();
 
         if (!admin)
@@ -63,7 +66,14 @@ public sealed class ProductsController : ControllerBase
         {
             var term = q.Trim();
             query = query.Where(p =>
-                p.Name.Contains(term) || (p.ProductCode != null && p.ProductCode.Contains(term)) || p.Category.Contains(term) || (p.Description != null && p.Description.Contains(term)));
+                p.Name.Contains(term)
+                || (p.ProductCode != null && p.ProductCode.Contains(term))
+                || p.Category.Contains(term)
+                || (p.Description != null && p.Description.Contains(term))
+                || p.Variants.Any(v =>
+                    (v.ProductCode != null && v.ProductCode.Contains(term))
+                    || (v.ColourName != null && v.ColourName.Contains(term))
+                    || v.Name.Contains(term)));
         }
 
         var items = await query
@@ -128,7 +138,7 @@ public sealed class ProductsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var admin = User.IsAdmin();
-        var query = _db.Products.AsNoTracking().AsQueryable();
+        var query = _db.Products.AsNoTracking().Where(p => p.ParentProductId == null);
         if (!admin)
             query = query.Where(p => p.Status == ProductStatus.Published);
 
@@ -161,6 +171,8 @@ public sealed class ProductsController : ControllerBase
 
         if (product is null || (!admin && product.Status != ProductStatus.Published))
             throw ViviException.NotFound("PRODUCT_NOT_FOUND", "Product was not found.");
+
+        await LoadVariantGraphAsync(product, cancellationToken);
 
         var dto = product.ToDto(adminView: admin);
         await ProductImageResolver.ResolveProductAsync(dto, _blob, cancellationToken);
@@ -206,6 +218,7 @@ public sealed class ProductsController : ControllerBase
     {
         await EnsureCourse(request.CourseId, cancellationToken);
         await EnsureProductCodeAvailable(null, request.ProductCode, cancellationToken);
+        await EnsureParentAssignmentAsync(null, request, cancellationToken);
         var now = DateTime.UtcNow;
         var product = Apply(new Product
         {
@@ -220,6 +233,7 @@ public sealed class ProductsController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
         await LoadCourseNav(product, cancellationToken);
         await LoadEssentialNav(product, cancellationToken);
+        await LoadVariantGraphAsync(product, cancellationToken);
 
         var dto = product.ToDto(adminView: true);
         await ProductImageResolver.ResolveProductAsync(dto, _blob, cancellationToken);
@@ -238,13 +252,12 @@ public sealed class ProductsController : ControllerBase
         var product = await Load(id, cancellationToken);
         await EnsureCourse(request.CourseId, cancellationToken);
         await EnsureProductCodeAvailable(id, request.ProductCode, cancellationToken);
-        var typeChanged = product.ProductType != request.ProductType;
+        await EnsureParentAssignmentAsync(id, request, cancellationToken);
         Apply(product, request, DateTime.UtcNow);
-        if (typeChanged)
-            await RemoveSlotLinksAsync(id, cancellationToken);
         await SyncEssentialLinks(product, request, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         await LoadEssentialNav(product, cancellationToken);
+        await LoadVariantGraphAsync(product, cancellationToken);
 
         var dto = product.ToDto(adminView: true);
         await ProductImageResolver.ResolveProductAsync(dto, _blob, cancellationToken);
@@ -258,6 +271,14 @@ public sealed class ProductsController : ControllerBase
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var product = await Load(id, cancellationToken);
+        var hasVariants = await _db.Products.AnyAsync(p => p.ParentProductId == id, cancellationToken);
+        if (hasVariants)
+        {
+            throw ViviException.Conflict(
+                "PRODUCT_HAS_VARIANTS",
+                "Remove all colour/variant SKUs before deleting this product.");
+        }
+
         var blobPaths = product.Images
             .Select(i => i.BlobPath)
             .Concat(string.IsNullOrWhiteSpace(product.ImageUrl) ? [] : [product.ImageUrl!])
@@ -282,8 +303,6 @@ public sealed class ProductsController : ControllerBase
         {
             _logger.LogWarning(ex, "Could not clear essential links before deleting product {ProductId}.", id);
         }
-
-        await RemoveSlotLinksAsync(id, cancellationToken);
 
         _db.Products.Remove(product);
         await _db.SaveChangesAsync(cancellationToken);
@@ -609,7 +628,7 @@ public sealed class ProductsController : ControllerBase
             return;
 
         var validIds = await _db.Products
-            .Where(p => ids.Contains(p.Id) && p.ProductType == ProductType.Resell)
+            .Where(p => ids.Contains(p.Id) && p.ProductType == ProductType.Resell && p.ParentProductId == null)
             .Select(p => p.Id)
             .ToListAsync(cancellationToken);
 
@@ -646,20 +665,6 @@ public sealed class ProductsController : ControllerBase
             throw ViviException.Conflict("PRODUCT_CODE_TAKEN", $"Product code {normalized} is already used by another product.");
     }
 
-    /// <summary>Removes shop slot memberships (e.g. product deleted or moved to another room).</summary>
-    private async Task RemoveSlotLinksAsync(Guid productId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var links = await _db.ShopSlotProducts.Where(l => l.ProductId == productId).ToListAsync(cancellationToken);
-            _db.ShopSlotProducts.RemoveRange(links);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not clear shop slot links for product {ProductId}.", productId);
-        }
-    }
-
     private async Task EnsureCourse(Guid? courseId, CancellationToken cancellationToken)
     {
         if (!courseId.HasValue)
@@ -672,6 +677,65 @@ public sealed class ProductsController : ControllerBase
 
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private async Task LoadVariantGraphAsync(Product product, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (product.ParentProductId is Guid parentId)
+            {
+                await _db.Entry(product).Reference(p => p.Parent).LoadAsync(cancellationToken);
+                if (product.Parent is not null)
+                {
+                    await _db.Entry(product.Parent).Collection(p => p.Variants).LoadAsync(cancellationToken);
+                    foreach (var sibling in product.Parent.Variants)
+                        await _db.Entry(sibling).Collection(v => v.Images).LoadAsync(cancellationToken);
+                }
+            }
+            else
+            {
+                await _db.Entry(product).Collection(p => p.Variants).LoadAsync(cancellationToken);
+                foreach (var variant in product.Variants)
+                    await _db.Entry(variant).Collection(v => v.Images).LoadAsync(cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Older DBs without ParentProductId must not break product reads.
+            _logger.LogWarning(ex, "Could not load variants for product {ProductId}.", product.Id);
+            product.Variants = new List<Product>();
+        }
+    }
+
+    private async Task EnsureParentAssignmentAsync(
+        Guid? productId,
+        ProductRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!request.ParentProductId.HasValue)
+            return;
+
+        if (productId.HasValue && request.ParentProductId == productId)
+            throw new ViviException("INVALID_PARENT", "A product cannot be its own parent.");
+
+        var parent = await _db.Products.AsNoTracking()
+            .Select(p => new { p.Id, p.ParentProductId, p.ProductType })
+            .SingleOrDefaultAsync(p => p.Id == request.ParentProductId, cancellationToken)
+            ?? throw ViviException.NotFound("PARENT_NOT_FOUND", "Parent product was not found.");
+
+        if (parent.ParentProductId is not null)
+            throw new ViviException("NESTED_VARIANT", "Variants cannot have their own variants.");
+
+        if (parent.ProductType != request.ProductType)
+            throw new ViviException("PRODUCT_TYPE_MISMATCH", "Variant must be in the same shop room as its parent.");
+
+        if (productId.HasValue)
+        {
+            var hasChildren = await _db.Products.AnyAsync(p => p.ParentProductId == productId, cancellationToken);
+            if (hasChildren)
+                throw ViviException.Conflict("PRODUCT_HAS_VARIANTS", "Move or remove child variants before nesting this product.");
+        }
+    }
 
     private static Product Apply(Product product, ProductRequest request, DateTime now)
     {
@@ -690,6 +754,11 @@ public sealed class ProductsController : ControllerBase
         product.CrochetHookSize = essentials ? NullIfBlank(request.CrochetHookSize) : null;
         product.ColourName = essentials ? NullIfBlank(request.ColourName) : null;
         product.ColourHex = essentials ? NullIfBlank(request.ColourHex)?.ToUpperInvariant() : null;
+        product.ParentProductId = request.ParentProductId;
+        // Option label lives on the parent listing only.
+        product.VariantOptionName = request.ParentProductId is null
+            ? NullIfBlank(request.VariantOptionName)
+            : null;
         product.CourseId = request.ProductType == ProductType.Handmade ? request.CourseId : null;
         product.SortOrder = request.SortOrder;
         product.ProductType = request.ProductType;
