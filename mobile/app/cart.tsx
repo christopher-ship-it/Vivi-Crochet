@@ -10,9 +10,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourse } from '../src/api/courses';
 import { listMyEnrollments, type Enrollment } from '../src/api/enrollments';
-import { getProduct } from '../src/api/products';
+import { getProduct, listProducts } from '../src/api/products';
 import { ApiClientError } from '../src/api/client';
 import { useShoppingSession } from '../src/auth/SessionContext';
+import { findBeginnerKit, kitToSuggestion } from '../src/cart/beginnerKit';
 import { useCart } from '../src/cart/CartContext';
 import { cartSubtotal } from '../src/cart/calculations';
 import {
@@ -171,7 +172,7 @@ function createStyles(fonts: UiFonts) {
 }
 
 export default function CartScreen() {
-  const { formatPrice } = usePreferences();
+  const { formatPrice, market } = usePreferences();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t, language } = useI18n();
@@ -197,6 +198,7 @@ export default function CartScreen() {
   const [productById, setProductById] = useState<Record<string, Product>>({});
   const [enrollments, setEnrollments] = useState<Enrollment[] | null>(null);
   const [foundationCourse, setFoundationCourse] = useState<Course | null>(null);
+  const [beginnerKit, setBeginnerKit] = useState<Product | null>(null);
   const recoRequestId = useRef(0);
 
   const refreshPrices = useCallback(async () => {
@@ -365,6 +367,33 @@ export default function CartScreen() {
     });
   }, [productById, enrollments, foundationCourse, items, isAuthenticated]);
 
+  // Anyone booking a course is offered the beginner kit by default. Shop products can only be
+  // ordered in India, so it is not looked up elsewhere. A failed lookup just means no suggestion.
+  const hasCourseLine = items.some(isCourseLine);
+  useEffect(() => {
+    if (!hasCourseLine || !market.canOrderProducts || beginnerKit) return;
+    let cancelled = false;
+    listProducts(undefined, undefined, 'Resell')
+      .then((products) => {
+        if (!cancelled) setBeginnerKit(findBeginnerKit(products));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [hasCourseLine, market.canOrderProducts, beginnerKit]);
+
+  const lastCourseIndex = items.reduce((last, item, index) => (isCourseLine(item) ? index : last), -1);
+  const kitRecommendation = useMemo<CartItemRecommendation | null>(() => {
+    if (!hasCourseLine || !market.canOrderProducts || !beginnerKit) return null;
+    return {
+      productId: beginnerKit.id,
+      essentials: [kitToSuggestion(beginnerKit)],
+      course: null,
+      priority: 'essentials',
+    };
+  }, [hasCourseLine, market.canOrderProducts, beginnerKit]);
+
   const handleAddEssential = useCallback(
     async (essential: RecommendedEssentialSummary) => {
       // Prefer live stock from API so cart qty cannot exceed availability.
@@ -450,7 +479,12 @@ export default function CartScreen() {
         {items.map((item, index) => {
           const key = cartLineKey(item);
           const productId = isProductLine(item) ? item.productId : undefined;
-          const reco = productId ? recommendations[productId] : undefined;
+          const isKitSlot = index === lastCourseIndex && kitRecommendation !== null;
+          const reco = isKitSlot
+            ? kitRecommendation!
+            : productId
+              ? recommendations[productId]
+              : undefined;
           const showReco = Boolean(reco && (reco.course || reco.essentials.length > 0));
           const digital = isCourseLine(item);
           return (
@@ -492,6 +526,8 @@ export default function CartScreen() {
                   onAddEssential={handleAddEssential}
                   onRemoveEssential={handleRemoveEssential}
                   onOpenCourse={(courseId) => router.push(`/course/${courseId}`)}
+                  essentialsTitle={isKitSlot ? t('cart.beginnerKit') : undefined}
+                  essentialsHint={isKitSlot ? t('cart.beginnerKitHint') : undefined}
                   isInCart={(pid) =>
                     items.some((line) => isProductLine(line) && line.productId === pid)
                   }

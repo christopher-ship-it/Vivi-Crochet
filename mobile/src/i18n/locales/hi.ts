@@ -334,6 +334,8 @@ export const hi: EnTranslations = {
     outOfStockNamed: '{{name}}: यह प्रोडक्ट स्टॉक में नहीं है।',
     youMayNeed: 'आपको चाहिए हो सकता है',
     youMayNeedHint: 'इस क्रोशे प्रोजेक्ट के लिए',
+    beginnerKit: 'बिगिनर किट',
+    beginnerKitHint: 'आपके कोर्स के साथ अभ्यास के लिए शुरुआती सेट',
     addPlus: 'जोड़ें +',
     addedCheck: 'जोड़ा ✓',
     maxStockReached: 'अधिकतम स्टॉक पहुँच गया',

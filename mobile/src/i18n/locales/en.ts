@@ -331,6 +331,8 @@ export const en = {
     outOfStockNamed: '{{name}}: This product is out of stock.',
     youMayNeed: 'You May Need',
     youMayNeedHint: 'For this crochet project',
+    beginnerKit: 'Beginner Kit',
+    beginnerKitHint: 'A starter set to practise along with your course',
     addPlus: 'Add +',
     addedCheck: 'Added ✓',
     maxStockReached: 'Max stock reached',

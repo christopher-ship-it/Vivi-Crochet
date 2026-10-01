@@ -334,6 +334,8 @@ export const ta: EnTranslations = {
     outOfStockNamed: '{{name}}: இந்த தயாரிப்பு கையிருப்பில் இல்லை.',
     youMayNeed: 'உங்களுக்கு தேவைப்படலாம்',
     youMayNeedHint: 'இந்த குரோசே திட்டத்திற்கு',
+    beginnerKit: 'தொடக்கநிலை கிட்',
+    beginnerKitHint: 'உங்கள் பாடநெறியுடன் பயிற்சி செய்ய ஒரு தொடக்கத் தொகுப்பு',
     addPlus: 'சேர் +',
     addedCheck: 'சேர்க்கப்பட்டது ✓',
     maxStockReached: 'அதிகபட்ச இருப்பு எட்டப்பட்டது',

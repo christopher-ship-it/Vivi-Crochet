@@ -166,6 +166,9 @@ interface CartRecommendBlockProps {
   onOpenCourse: (courseId: string) => void;
   isInCart: (productId: string) => boolean;
   cartQuantity: (productId: string) => number;
+  /** Replaces the "You may need" heading and hint, e.g. for the beginner-kit suggestion. */
+  essentialsTitle?: string;
+  essentialsHint?: string;
 }
 
 export function CartRecommendBlock({
@@ -175,6 +178,8 @@ export function CartRecommendBlock({
   onOpenCourse,
   isInCart,
   cartQuantity,
+  essentialsTitle,
+  essentialsHint,
 }: CartRecommendBlockProps) {
   const { t, language } = useI18n();
   const fonts = uiFonts(language);
@@ -257,8 +262,8 @@ export function CartRecommendBlock({
   const essentialsBlock =
     essentials.length > 0 ? (
       <View>
-        <Text style={styles.sectionLabel}>{t('cart.youMayNeed')}</Text>
-        <Text style={styles.sectionHint}>{t('cart.youMayNeedHint')}</Text>
+        <Text style={styles.sectionLabel}>{essentialsTitle ?? t('cart.youMayNeed')}</Text>
+        <Text style={styles.sectionHint}>{essentialsHint ?? t('cart.youMayNeedHint')}</Text>
         {essentials.map((essential, index) => {
           const inCart = isInCart(essential.id);
           const qty = cartQuantity(essential.id);
