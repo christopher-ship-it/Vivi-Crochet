@@ -3,6 +3,7 @@ using VIVI.Api.DTOs.Categories;
 using VIVI.Api.DTOs.Courses;
 using VIVI.Api.DTOs.Products;
 using VIVI.Api.DTOs.Videos;
+using VIVI.Core;
 using VIVI.Core.Enums;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
@@ -43,7 +44,7 @@ public static class DtoMapper
         UpdatedAt = category.UpdatedAt
     };
 
-    public static CourseResponse ToDto(this Course course, bool includeLessons, bool adminView)
+    public static CourseResponse ToDto(this Course course, bool includeLessons, bool adminView, Market? market = null)
     {
         var ownVideos = course.Videos ?? [];
         var included = (course.BundleItems ?? Array.Empty<CourseBundleItem>())
@@ -64,7 +65,7 @@ public static class DtoMapper
             ? lessonSource
             : lessonSource.Where(v => v.Status == VideoStatus.Published);
 
-        return new CourseResponse
+        var dto = new CourseResponse
         {
             Id = course.Id,
             CategoryId = course.CategoryId,
@@ -118,7 +119,37 @@ public static class DtoMapper
                 }
                 : null
         };
+
+        if (adminView)
+        {
+            // Admins always see the base (India) price plus the saved per-country prices to edit.
+            dto.MarketPrices = (course.MarketPrices ?? [])
+                .OrderBy(p => p.CountryCode)
+                .Select(p => p.ToDto())
+                .ToList();
+        }
+        else if (market is { UsesBasePrices: false })
+        {
+            // Customers see the price in their own country, or "not available" if none is set.
+            var row = (course.MarketPrices ?? []).SingleOrDefault(p => p.CountryCode == market.CountryCode);
+            dto.Currency = market.Currency;
+            dto.AvailableInMarket = row is not null;
+            dto.Price = row?.Price ?? 0;
+            dto.Mrp = row?.Mrp;
+        }
+
+        return dto;
     }
+
+    public static CoursePriceDto ToDto(this CoursePrice price) => new()
+    {
+        CountryCode = price.CountryCode,
+        Currency = price.Currency,
+        Price = price.Price,
+        Mrp = price.Mrp,
+        LaunchPrice = price.LaunchPrice,
+        RegularPriceAfterLaunch = price.RegularPriceAfterLaunch
+    };
 
     public static VideoResponse ToDto(this Video video) => new()
     {
@@ -218,6 +249,9 @@ public static class DtoMapper
             BallWeight = product.BallWeight,
             YarnLength = product.YarnLength,
             CrochetHookSize = product.CrochetHookSize,
+            FibreBlend = product.FibreBlend,
+            YarnWeight = product.YarnWeight,
+            NeedleSize = product.NeedleSize,
             ColourName = product.ColourName,
             ColourHex = product.ColourHex,
             ParentProductId = product.ParentProductId,

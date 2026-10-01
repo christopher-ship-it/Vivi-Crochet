@@ -106,7 +106,8 @@ public sealed class EmailTests : IClassFixture<ApiFactory>
             new PricingService(db),
             new DeliveryEstimateService(),
             new InventoryService(db),
-            scope.ServiceProvider.GetRequiredService<LiveBookingService>());
+            scope.ServiceProvider.GetRequiredService<LiveBookingService>(),
+            new DeliverySequenceService(db, new DeliveryEstimateService()));
 
         var (customer, courseId) = await OrderTestsHelper.CustomerWithPublishedCourse(_factory, "9333333333");
         var orderResponse = await OrderTestsHelper.CreateCourseOrderAsync(customer, courseId);

@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandWordmark } from '../src/components/BrandWordmark';
 import { useI18n, type AppLanguage } from '../src/i18n';
 import { loadStoredLanguage } from '../src/i18n/storage';
+import { canContinue, routeAfterLanguage } from '../src/preferences/onboardingFlow';
+import { loadStoredCountry } from '../src/preferences/storage';
 import { uiFonts } from '../src/i18n/uiFonts';
 import { colors, radii, spacing } from '../src/theme';
 import { applyStatusBar } from '../src/utils/statusBar';
@@ -23,22 +25,20 @@ export default function LanguageOnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { t, language, setLanguage } = useI18n();
   const fonts = uiFonts(language);
-  const [selected, setSelected] = useState<AppLanguage>('en');
+  // Nothing is preselected for a new user; a saved choice is shown again (e.g. after Back from Country).
+  const [selected, setSelected] = useState<AppLanguage | null>(null);
   const [continuing, setContinuing] = useState(false);
 
   useEffect(() => {
     applyStatusBar('dark');
     let cancelled = false;
-    (async () => {
-      const stored = await loadStoredLanguage();
-      if (!cancelled && stored) {
-        router.replace('/(tabs)');
-      }
-    })();
+    void loadStoredLanguage().then((stored) => {
+      if (!cancelled && stored) setSelected((current) => current ?? stored);
+    });
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, []);
 
   const onSelect = useCallback(
     (code: AppLanguage) => {
@@ -48,12 +48,18 @@ export default function LanguageOnboardingScreen() {
     [setLanguage],
   );
 
-  const onContinue = useCallback(() => {
-    if (continuing) return;
+  const onContinue = useCallback(async () => {
+    if (!selected || continuing) return;
     setContinuing(true);
     setLanguage(selected);
-    router.replace('/(tabs)');
+    // Country is asked next unless it is already saved.
+    const next = routeAfterLanguage(await loadStoredCountry());
+    if (next === '/(tabs)') router.replace(next);
+    else router.push(next);
+    setContinuing(false);
   }, [continuing, router, selected, setLanguage]);
+
+  const enabled = canContinue(selected) && !continuing;
 
   return (
     <View
@@ -112,12 +118,13 @@ export default function LanguageOnboardingScreen() {
       <Pressable
         style={({ pressed }) => [
           styles.cta,
-          continuing && styles.ctaDisabled,
-          pressed && !continuing && styles.rowPressed,
+          !enabled && styles.ctaDisabled,
+          pressed && enabled && styles.rowPressed,
         ]}
-        onPress={onContinue}
-        disabled={continuing}
+        onPress={() => void onContinue()}
+        disabled={!enabled}
         accessibilityRole="button"
+        accessibilityState={{ disabled: !enabled }}
         accessibilityLabel={t('language.continue')}
       >
         <Text style={[styles.ctaText, { fontFamily: fonts.extraBold }]}>
@@ -211,7 +218,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaDisabled: {
-    opacity: 0.7,
+    opacity: 0.4,
   },
   ctaText: {
     color: colors.white,

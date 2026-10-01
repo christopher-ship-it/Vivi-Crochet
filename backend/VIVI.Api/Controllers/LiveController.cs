@@ -194,10 +194,17 @@ public sealed class LiveController : ControllerBase
             StartDate = week.StartDate,
             EndDate = week.EndDate,
             IsBookable = week.IsBookable,
-            PackagePrice = _calendar.PackagePrice,
+            PackagePrice = _calendar.PriceFor(week),
+            Language = _calendar.LanguageFor(week),
+            Level = _calendar.LevelFor(week),
             TutorName = tutorName,
             TutorPhotoUrl = tutorPhotoUrl,
-            Slots = week.Slots.OrderBy(s => s.SlotType).Select(MapSlot).ToList()
+            // Switched-off additional sessions are hidden from customers.
+            Slots = week.Slots
+                .Where(s => _calendar.IsSlotEnabled(s.SlotType))
+                .OrderBy(s => s.SlotType)
+                .Select(MapSlot)
+                .ToList()
         };
     }
 
@@ -216,6 +223,8 @@ public sealed class LiveController : ControllerBase
             EndDate = summary.EndDate,
             IsBookable = summary.IsBookable,
             PackagePrice = summary.PackagePrice,
+            Language = summary.Language,
+            Level = summary.Level,
             TutorName = summary.TutorName,
             TutorPhotoUrl = summary.TutorPhotoUrl,
             Slots = summary.Slots,
@@ -243,7 +252,7 @@ public sealed class LiveController : ControllerBase
         {
             SlotType = slot.SlotType.ToString(),
             Name = _calendar.SlotName(slot.SlotType),
-            Hours = _calendar.SlotHours(slot.SlotType),
+            Hours = _calendar.SlotHoursFor(slot),
             SeatCapacity = slot.SeatCapacity,
             SeatsBooked = slot.SeatsBooked,
             SeatsRemaining = slot.IsBlocked ? 0 : remaining,
@@ -263,11 +272,14 @@ public sealed class LiveController : ControllerBase
             Status = booking.Status.ToString(),
             SlotType = booking.SlotType.ToString(),
             SlotName = _calendar.SlotName(booking.SlotType),
-            SlotHours = _calendar.SlotHours(booking.SlotType),
+            SlotHours = booking.Week?.Slots.FirstOrDefault(s => s.SlotType == booking.SlotType) is { } bookedSlot
+                ? _calendar.SlotHoursFor(bookedSlot)
+                : _calendar.SlotHours(booking.SlotType),
             WeekNumber = week.WeekNumber,
             StartDate = week.StartDate,
             EndDate = week.EndDate,
-            PackagePrice = _calendar.PackagePrice,
+            // What the customer actually paid; falls back to the week price for older rows.
+            PackagePrice = booking.Order?.TotalAmount ?? _calendar.PriceFor(week),
             WeeklyLiveHours = _calendar.WeeklyLiveHours,
             Days = _calendar.BuildDayPlan(week).Select(d => new LiveDayResponse
             {

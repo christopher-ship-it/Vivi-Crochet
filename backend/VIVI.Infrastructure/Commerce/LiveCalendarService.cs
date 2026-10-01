@@ -10,10 +10,26 @@ namespace VIVI.Infrastructure.Commerce;
 
 public sealed record LiveDayPlan(DateOnly Date, DayOfWeek Weekday, LiveDayKind Kind, string Label);
 
+public sealed record LiveSessionInfo(LiveSlotType SlotType, string Name, string Hours, bool IsEnabled);
+
+public sealed record LiveSessionUpdate(LiveSlotType SlotType, string Name, string Hours, bool IsEnabled);
+
+/// <summary>Studio-wide Live settings: admin-edited values from the database, config defaults otherwise.</summary>
+public sealed record LiveSettingsSnapshot(
+    decimal PackagePrice,
+    int HoursPerClassDay,
+    string Language,
+    string Level,
+    IReadOnlyDictionary<LiveSlotType, LiveSessionInfo> Sessions);
+
 public sealed class LiveCalendarService
 {
+    public const string DefaultLanguage = "Tamil";
+    public const string DefaultLevel = "Basic";
+
     private readonly ViviDbContext _db;
     private readonly LiveStudioOptions _options;
+    private LiveSettingsSnapshot? _settings;
 
     public LiveCalendarService(ViviDbContext db, IOptions<LiveStudioOptions> options)
     {
@@ -21,13 +37,84 @@ public sealed class LiveCalendarService
         _options = options.Value;
     }
 
-    public decimal PackagePrice => _options.PackagePrice;
+    /// <summary>Studio-wide settings, loaded once per request (this service is scoped).</summary>
+    private LiveSettingsSnapshot Settings => _settings ??= LoadSettingsSync();
+
+    public async Task<LiveSettingsSnapshot> GetSettingsAsync(CancellationToken cancellationToken)
+    {
+        if (_settings is not null)
+            return _settings;
+
+        var row = await _db.LiveSettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
+        var sessions = await _db.LiveSessionDefinitions.AsNoTracking().ToListAsync(cancellationToken);
+        return _settings = BuildSettings(row, sessions);
+    }
+
+    private LiveSettingsSnapshot LoadSettingsSync()
+    {
+        var row = _db.LiveSettings.AsNoTracking().FirstOrDefault();
+        var sessions = _db.LiveSessionDefinitions.AsNoTracking().ToList();
+        return BuildSettings(row, sessions);
+    }
+
+    private LiveSettingsSnapshot BuildSettings(LiveSettings? row, IReadOnlyList<LiveSessionDefinition> sessions)
+    {
+        var map = new Dictionary<LiveSlotType, LiveSessionInfo>();
+        foreach (var slotType in Enum.GetValues<LiveSlotType>())
+        {
+            var (name, hours, enabled) = DefaultSession(slotType);
+            var saved = sessions.FirstOrDefault(s => s.SlotType == slotType);
+            map[slotType] = saved is null
+                ? new LiveSessionInfo(slotType, name, hours, enabled)
+                : new LiveSessionInfo(
+                    slotType,
+                    saved.Name,
+                    saved.Hours,
+                    IsCoreSession(slotType) || saved.IsEnabled);
+        }
+
+        return new LiveSettingsSnapshot(
+            row?.PackagePrice ?? _options.PackagePrice,
+            row?.HoursPerClassDay ?? _options.HoursPerClassDay,
+            row?.Language ?? DefaultLanguage,
+            row?.Level ?? DefaultLevel,
+            map);
+    }
+
+    private (string Name, string Hours, bool Enabled) DefaultSession(LiveSlotType slotType) => slotType switch
+    {
+        LiveSlotType.Morning => (_options.MorningSlotName, _options.MorningSlotHours, true),
+        LiveSlotType.Evening => (_options.EveningSlotName, _options.EveningSlotHours, true),
+        LiveSlotType.Extra1 => ("Additional session 1", "12:00 PM – 2:00 PM", false),
+        LiveSlotType.Extra2 => ("Additional session 2", "2:00 PM – 4:00 PM", false),
+        _ => ("Additional session 3", "4:00 PM – 6:00 PM", false)
+    };
+
+    public static bool IsCoreSession(LiveSlotType slotType) =>
+        slotType is LiveSlotType.Morning or LiveSlotType.Evening;
+
+    /// <summary>Studio-wide default package price. Use <see cref="PriceFor"/> for a specific week.</summary>
+    public decimal PackagePrice => Settings.PackagePrice;
+
+    public decimal PriceFor(LiveWeek week) => week.PriceOverride ?? Settings.PackagePrice;
+
+    public string LanguageFor(LiveWeek week) =>
+        string.IsNullOrWhiteSpace(week.LanguageOverride) ? Settings.Language : week.LanguageOverride.Trim();
+
+    public string LevelFor(LiveWeek week) =>
+        string.IsNullOrWhiteSpace(week.LevelOverride) ? Settings.Level : week.LevelOverride.Trim();
+
+    public bool IsSlotEnabled(LiveSlotType slotType) =>
+        Settings.Sessions.TryGetValue(slotType, out var info) && info.IsEnabled;
+
+    public string SlotHoursFor(LiveWeekSlot slot) =>
+        string.IsNullOrWhiteSpace(slot.HoursOverride) ? SlotHours(slot.SlotType) : slot.HoursOverride.Trim();
 
     public int MaxSeatCapacity => _options.DefaultSeatCapacity;
 
-    public int WeeklyLiveHours => _options.WeeklyLiveHours;
+    public int WeeklyLiveHours => Settings.HoursPerClassDay * _options.ClassDaysPerWeek;
 
-    public int HoursPerClassDay => _options.HoursPerClassDay;
+    public int HoursPerClassDay => Settings.HoursPerClassDay;
 
     /// <summary>Calendar year of <c>LiveStudio:SeasonStartMonday</c> (primary season key).</summary>
     public int PrimarySeasonYear => ParseSeasonStart().Year;
@@ -64,7 +151,7 @@ public sealed class LiveCalendarService
     /// </summary>
     public TimeOnly GetMorningCircleStartTime()
     {
-        var raw = _options.MorningSlotHours ?? string.Empty;
+        var raw = SlotHours(LiveSlotType.Morning);
         var match = System.Text.RegularExpressions.Regex.Match(
             raw,
             @"(\d{1,2}):(\d{2})\s*(AM|PM)?",
@@ -147,11 +234,10 @@ public sealed class LiveCalendarService
         return starts.Contains(week.StartDate);
     }
 
-    public string SlotName(LiveSlotType slotType) =>
-        slotType == LiveSlotType.Morning ? _options.MorningSlotName : _options.EveningSlotName;
+    public string SlotName(LiveSlotType slotType) => Settings.Sessions[slotType].Name;
 
-    public string SlotHours(LiveSlotType slotType) =>
-        slotType == LiveSlotType.Morning ? _options.MorningSlotHours : _options.EveningSlotHours;
+    /// <summary>Default hours for a session. Use <see cref="SlotHoursFor"/> for a specific week's slot.</summary>
+    public string SlotHours(LiveSlotType slotType) => Settings.Sessions[slotType].Hours;
 
     /// <summary>Length of one Live season in weeks.</summary>
     public const int WeeksPerSeason = 52;
@@ -174,6 +260,200 @@ public sealed class LiveCalendarService
         }
 
         await NormalizeSeatCapacitiesAsync(cancellationToken);
+        await EnsureExtraSlotsAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds a slot row for every enabled additional session to each current/future week that
+    /// does not have one yet (Morning and Evening rows are created with the week).
+    /// </summary>
+    public async Task EnsureExtraSlotsAsync(CancellationToken cancellationToken)
+    {
+        var settings = await GetSettingsAsync(cancellationToken);
+        var extras = settings.Sessions.Values
+            .Where(s => s.IsEnabled && !IsCoreSession(s.SlotType))
+            .Select(s => s.SlotType)
+            .ToList();
+        if (extras.Count == 0)
+            return;
+
+        var today = GetIndiaToday();
+        var weekIds = await _db.LiveWeeks
+            .Where(w => w.EndDate >= today)
+            .Select(w => w.Id)
+            .ToListAsync(cancellationToken);
+        var existing = (await _db.LiveWeekSlots
+                .Where(s => extras.Contains(s.SlotType))
+                .Select(s => new { s.LiveWeekId, s.SlotType })
+                .ToListAsync(cancellationToken))
+            .Select(s => (s.LiveWeekId, s.SlotType))
+            .ToHashSet();
+
+        var now = DateTime.UtcNow;
+        var added = false;
+        foreach (var weekId in weekIds)
+        {
+            foreach (var slotType in extras)
+            {
+                if (existing.Contains((weekId, slotType)))
+                    continue;
+                _db.LiveWeekSlots.Add(new LiveWeekSlot
+                {
+                    Id = Guid.NewGuid(),
+                    LiveWeekId = weekId,
+                    SlotType = slotType,
+                    SeatCapacity = _options.DefaultSeatCapacity,
+                    SeatsBooked = 0,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+                added = true;
+            }
+        }
+
+        if (added)
+            await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Saves studio-wide Live settings and the session list, validating every field.</summary>
+    public async Task<LiveSettingsSnapshot> UpdateSettingsAsync(
+        decimal packagePrice,
+        int hoursPerClassDay,
+        string language,
+        string level,
+        IReadOnlyList<LiveSessionUpdate> sessions,
+        CancellationToken cancellationToken)
+    {
+        ValidatePrice(packagePrice);
+        if (hoursPerClassDay is < 1 or > 8)
+            throw new ViviException("INVALID_HOURS", "Hours per class day must be between 1 and 8.");
+        language = RequireText(language, 40, "INVALID_LANGUAGE", "Language");
+        level = RequireText(level, 40, "INVALID_LEVEL", "Level");
+
+        foreach (var update in sessions)
+        {
+            RequireText(update.Name, 100, "INVALID_SESSION_NAME", "Session name");
+            RequireText(update.Hours, 60, "INVALID_SESSION_HOURS", "Session timing");
+            if (IsCoreSession(update.SlotType) && !update.IsEnabled)
+                throw ViviException.Conflict(
+                    "CORE_SESSION_REQUIRED",
+                    "Morning and Evening sessions cannot be switched off.");
+        }
+
+        var now = DateTime.UtcNow;
+        var row = await _db.LiveSettings.SingleOrDefaultAsync(
+            x => x.Id == LiveSettings.SingletonId, cancellationToken);
+        if (row is null)
+        {
+            row = new LiveSettings { Id = LiveSettings.SingletonId };
+            _db.LiveSettings.Add(row);
+        }
+
+        row.PackagePrice = packagePrice;
+        row.HoursPerClassDay = hoursPerClassDay;
+        row.Language = language;
+        row.Level = level;
+        row.UpdatedAt = now;
+
+        var existing = await _db.LiveSessionDefinitions.ToListAsync(cancellationToken);
+        var today = GetIndiaToday();
+        foreach (var update in sessions)
+        {
+            var def = existing.FirstOrDefault(d => d.SlotType == update.SlotType);
+            if (def is null)
+            {
+                def = new LiveSessionDefinition { Id = Guid.NewGuid(), SlotType = update.SlotType };
+                _db.LiveSessionDefinitions.Add(def);
+                existing.Add(def);
+            }
+            else if (def.IsEnabled && !update.IsEnabled)
+            {
+                var hasBookings = await _db.LiveBookings.AnyAsync(
+                    b => b.SlotType == update.SlotType
+                         && b.Week != null
+                         && b.Week.EndDate >= today
+                         && (b.Status == LiveBookingStatus.Confirmed
+                             || b.Status == LiveBookingStatus.PendingPayment),
+                    cancellationToken);
+                if (hasBookings)
+                    throw ViviException.Conflict(
+                        "SESSION_HAS_BOOKINGS",
+                        "This session has upcoming bookings, so it cannot be switched off yet.");
+            }
+
+            def.Name = update.Name.Trim();
+            def.Hours = update.Hours.Trim();
+            def.IsEnabled = IsCoreSession(update.SlotType) || update.IsEnabled;
+            def.UpdatedAt = now;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        _settings = null;
+        await EnsureExtraSlotsAsync(cancellationToken);
+        return await GetSettingsAsync(cancellationToken);
+    }
+
+    /// <summary>Sets or clears (null) this week's price, language and level overrides.</summary>
+    public async Task SetWeekOverridesAsync(
+        Guid weekId,
+        decimal? priceOverride,
+        string? languageOverride,
+        string? levelOverride,
+        CancellationToken cancellationToken)
+    {
+        if (priceOverride.HasValue)
+            ValidatePrice(priceOverride.Value);
+        var language = string.IsNullOrWhiteSpace(languageOverride)
+            ? null
+            : RequireText(languageOverride, 40, "INVALID_LANGUAGE", "Language");
+        var level = string.IsNullOrWhiteSpace(levelOverride)
+            ? null
+            : RequireText(levelOverride, 40, "INVALID_LEVEL", "Level");
+
+        var week = await _db.LiveWeeks.SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
+
+        week.PriceOverride = priceOverride;
+        week.LanguageOverride = language;
+        week.LevelOverride = level;
+        week.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Sets or clears (null) the timing of one session for one week.</summary>
+    public async Task SetSlotHoursOverrideAsync(
+        Guid weekId,
+        LiveSlotType slotType,
+        string? hours,
+        CancellationToken cancellationToken)
+    {
+        var value = string.IsNullOrWhiteSpace(hours)
+            ? null
+            : RequireText(hours, 60, "INVALID_SESSION_HOURS", "Session timing");
+
+        var slot = await _db.LiveWeekSlots
+            .SingleOrDefaultAsync(s => s.LiveWeekId == weekId && s.SlotType == slotType, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_SLOT_NOT_FOUND", "Live slot was not found.");
+
+        slot.HoursOverride = value;
+        slot.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static void ValidatePrice(decimal price)
+    {
+        if (price < 1m || price > 100000m)
+            throw new ViviException("INVALID_PRICE", "Price must be between ₹1 and ₹1,00,000.");
+    }
+
+    private static string RequireText(string? value, int maxLength, string code, string label)
+    {
+        var trimmed = (value ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+            throw new ViviException(code, $"{label} is required.");
+        if (trimmed.Length > maxLength)
+            throw new ViviException(code, $"{label} must be {maxLength} characters or fewer.");
+        return trimmed;
     }
 
     /// <summary>

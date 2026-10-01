@@ -17,6 +17,9 @@ public sealed class ProductRequest
     public string? BallWeight { get; set; }
     public string? YarnLength { get; set; }
     public string? CrochetHookSize { get; set; }
+    public string? FibreBlend { get; set; }
+    public string? YarnWeight { get; set; }
+    public string? NeedleSize { get; set; }
     public string? ColourName { get; set; }
     public string? ColourHex { get; set; }
     /// <summary>When set, creates/updates this product as a variant of the parent listing.</summary>
@@ -116,6 +119,9 @@ public sealed class ProductResponse
     public string? BallWeight { get; set; }
     public string? YarnLength { get; set; }
     public string? CrochetHookSize { get; set; }
+    public string? FibreBlend { get; set; }
+    public string? YarnWeight { get; set; }
+    public string? NeedleSize { get; set; }
     public string? ColourName { get; set; }
     public string? ColourHex { get; set; }
     public Guid? ParentProductId { get; set; }

@@ -752,6 +752,9 @@ public sealed class ProductsController : ControllerBase
         product.BallWeight = essentials ? NullIfBlank(request.BallWeight) : null;
         product.YarnLength = essentials ? NullIfBlank(request.YarnLength) : null;
         product.CrochetHookSize = essentials ? NullIfBlank(request.CrochetHookSize) : null;
+        product.FibreBlend = essentials ? NullIfBlank(request.FibreBlend) : null;
+        product.YarnWeight = essentials ? NullIfBlank(request.YarnWeight) : null;
+        product.NeedleSize = essentials ? NullIfBlank(request.NeedleSize) : null;
         product.ColourName = essentials ? NullIfBlank(request.ColourName) : null;
         product.ColourHex = essentials ? NullIfBlank(request.ColourHex)?.ToUpperInvariant() : null;
         product.ParentProductId = request.ParentProductId;

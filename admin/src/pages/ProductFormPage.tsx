@@ -18,14 +18,14 @@ import { listCourses } from '../api/courses';
 import { ApiClientError } from '../api/client';
 import type { Course, Product, ProductImage, ProductRequest, ProductType, ProductVariantSummary } from '../types';
 import { formatFileSize, formatInr, validateImageFile } from '../utils/format';
-import {
-  prepareProductImage,
-  PRODUCT_IMAGE_EDGE_PX,
-} from '../utils/productImagePrepare';
+import { convertHeicToJpeg, isHeicImage, PRODUCT_IMAGE_EDGE_PX } from '../utils/productImagePrepare';
 import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
 import { confirmDialog } from '../components/AppDialog';
+import { ProductImageCropModal } from '../components/ProductImageCropModal';
 
 const MAX_PHOTOS = 5;
+/** Original photos can be big (phone cameras); the saved 1200×1200 result is still checked against 5 MB. */
+const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
 
 /** Lets admins clear a number field while typing (`Number('')` is 0 and traps the cursor). */
 type NumberDraft = number | '';
@@ -54,6 +54,9 @@ const emptyForm: ProductFormState = {
   ballWeight: '',
   yarnLength: '',
   crochetHookSize: '',
+  fibreBlend: '',
+  yarnWeight: '',
+  needleSize: '',
   colourName: '',
   colourHex: '',
   parentProductId: null,
@@ -93,6 +96,10 @@ export function ProductFormPage() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [cropRequest, setCropRequest] = useState<{
+    file: File;
+    resolve: (prepared: File | null) => void;
+  } | null>(null);
   const parentFromQuery = searchParams.get('parent');
 
   const [form, setForm] = useState<ProductFormState>(() => ({
@@ -151,6 +158,9 @@ export function ProductFormPage() {
           ballWeight: parent.ballWeight ?? '',
           yarnLength: parent.yarnLength ?? '',
           crochetHookSize: parent.crochetHookSize ?? '',
+          fibreBlend: parent.fibreBlend ?? '',
+          yarnWeight: parent.yarnWeight ?? '',
+          needleSize: parent.needleSize ?? '',
           productType: parent.productType ?? 'Resell',
           parentProductId: parent.id,
           variantOptionName: null,
@@ -193,6 +203,9 @@ export function ProductFormPage() {
           ballWeight: product.ballWeight ?? '',
           yarnLength: product.yarnLength ?? '',
           crochetHookSize: product.crochetHookSize ?? '',
+          fibreBlend: product.fibreBlend ?? '',
+          yarnWeight: product.yarnWeight ?? '',
+          needleSize: product.needleSize ?? '',
           colourName: product.colourName ?? '',
           colourHex: product.colourHex ?? '',
           parentProductId: product.parentProductId ?? null,
@@ -260,6 +273,9 @@ export function ProductFormPage() {
       ballWeight: form.productType === 'Resell' && !isVariant ? (form.ballWeight?.trim() || null) : null,
       yarnLength: form.productType === 'Resell' && !isVariant ? (form.yarnLength?.trim() || null) : null,
       crochetHookSize: form.productType === 'Resell' && !isVariant ? (form.crochetHookSize?.trim() || null) : null,
+      fibreBlend: form.productType === 'Resell' && !isVariant ? (form.fibreBlend?.trim() || null) : null,
+      yarnWeight: form.productType === 'Resell' && !isVariant ? (form.yarnWeight?.trim() || null) : null,
+      needleSize: form.productType === 'Resell' && !isVariant ? (form.needleSize?.trim() || null) : null,
       colourName: form.productType === 'Resell' ? (form.colourName?.trim() || null) : null,
       colourHex: form.productType === 'Resell' ? (form.colourHex?.trim() || null) : null,
       mrp: form.mrp || null,
@@ -318,14 +334,26 @@ export function ProductFormPage() {
     }
   }
 
-  async function uploadOneImage(file: File, currentCount: number): Promise<ProductImage[]> {
-    const validation = validateImageFile(file);
+  /** Shows the zoom/drag dialog; resolves with the framed photo, or null if cancelled. */
+  function askForCrop(file: File): Promise<File | null> {
+    return new Promise((resolve) => setCropRequest({ file, resolve }));
+  }
+
+  async function uploadOneImage(original: File, currentCount: number): Promise<ProductImage[] | null> {
+    // iPhone HEIC/HEIF photos are converted to JPEG first.
+    const file = isHeicImage(original) ? await convertHeicToJpeg(original) : original;
+    const validation = validateImageFile(file, MAX_SOURCE_IMAGE_BYTES);
     if (!validation.valid) {
       throw new Error(validation.error ?? 'Invalid image');
     }
 
-    // Always store a fixed 1200×1200 JPEG for Handmade + Essentials shop photos.
-    const prepared = await prepareProductImage(file);
+    // Let the admin zoom/position the photo; stored as a fixed 1200×1200 square.
+    const prepared = await askForCrop(file);
+    if (!prepared) return null;
+    return uploadPrepared(prepared, currentCount === 0);
+  }
+
+  async function uploadPrepared(prepared: File, setAsMain: boolean): Promise<ProductImage[]> {
     const preparedValidation = validateImageFile(prepared);
     if (!preparedValidation.valid) {
       throw new Error(preparedValidation.error ?? 'Prepared image is invalid');
@@ -354,10 +382,49 @@ export function ProductFormPage() {
       blobPath: ticket.blobPath,
       fileSizeBytes: prepared.size,
       contentType: preparedValidation.contentType!,
-      setAsMain: currentCount === 0,
+      setAsMain,
     });
 
     return imagesFromProduct(product);
+  }
+
+  /** Re-frame an existing photo: crop it again, upload the result, then drop the old one. */
+  async function handleEditImage(image: ProductImage) {
+    if (!id || image.id === 'legacy-main') return;
+    setBusyImageId(image.id);
+    setUploadError(null);
+    try {
+      let source: File;
+      try {
+        const res = await fetch(image.url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const name = decodeURIComponent(new URL(image.url).pathname.split('/').pop() || 'photo');
+        source = new File([blob], name, { type: blob.type || 'image/jpeg' });
+      } catch {
+        throw new Error('Could not load this photo for editing. Try removing it and uploading it again.');
+      }
+
+      const prepared = await askForCrop(source);
+      if (!prepared) return;
+
+      setUploading(true);
+      const atLimit = images.length >= MAX_PHOTOS;
+      if (atLimit) {
+        // No room for a second copy, so the old one has to go first.
+        await deleteProductImage(id, image.id);
+      }
+      const updated = await uploadPrepared(prepared, image.isMain);
+      const finalProduct = atLimit ? updated : imagesFromProduct(await deleteProductImage(id, image.id));
+      setImages(finalProduct);
+      setUploadProgress(null);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Could not update this photo.');
+      setUploadProgress(null);
+    } finally {
+      setUploading(false);
+      setBusyImageId(null);
+    }
   }
 
   async function handleImageSelect(fileList: FileList | null) {
@@ -380,7 +447,9 @@ export function ProductFormPage() {
     let nextImages = images;
     try {
       for (let i = 0; i < files.length; i++) {
-        nextImages = await uploadOneImage(files[i], nextImages.length);
+        const uploaded = await uploadOneImage(files[i], nextImages.length);
+        if (!uploaded) continue;
+        nextImages = uploaded;
         setImages(nextImages);
       }
       setUploadProgress(null);
@@ -470,6 +539,11 @@ export function ProductFormPage() {
       <form className="card form-dense" onSubmit={handleSubmit}>
         {error && <div className="form-error">{error}</div>}
 
+        <div className="form-section">
+          <div className="form-section__head">
+            <h2 className="form-section__title">Product details</h2>
+            <p className="form-section__desc">Name, category, pricing and stock.</p>
+          </div>
         <div className="form-grid-6">
           <div className="form-field span-4">
             <label htmlFor="name">Name</label>
@@ -603,58 +677,6 @@ export function ProductFormPage() {
               </div>
             </div>
           )}
-          <div className="form-field">
-            <label htmlFor="spec1">Spec 1</label>
-            <input
-              id="spec1"
-              placeholder="e.g. 30 × 40 cm"
-              value={form.spec1 ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, spec1: e.target.value }))}
-            />
-          </div>
-          <div className="form-field">
-            <label htmlFor="spec2">Spec 2</label>
-            <input
-              id="spec2"
-              placeholder="e.g. 100% cotton"
-              value={form.spec2 ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, spec2: e.target.value }))}
-            />
-          </div>
-          {form.productType === 'Resell' && !isVariant ? (
-            <>
-              <div className="form-field">
-                <label htmlFor="ballWeight">Ball weight</label>
-                <input
-                  id="ballWeight"
-                  maxLength={40}
-                  placeholder="e.g. 50 g"
-                  value={form.ballWeight ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, ballWeight: e.target.value }))}
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="yarnLength">Yarn length</label>
-                <input
-                  id="yarnLength"
-                  maxLength={40}
-                  placeholder="e.g. 120 m"
-                  value={form.yarnLength ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, yarnLength: e.target.value }))}
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="crochetHookSize">Crochet hook size</label>
-                <input
-                  id="crochetHookSize"
-                  maxLength={40}
-                  placeholder="e.g. 4 mm"
-                  value={form.crochetHookSize ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, crochetHookSize: e.target.value }))}
-                />
-              </div>
-            </>
-          ) : null}
           {form.productType === 'Resell' && (isVariant || !skuOnVariants) ? (
             <>
               <div className="form-field">
@@ -706,21 +728,6 @@ export function ProductFormPage() {
             />
           </div>
 
-          <div className="form-field span-6">
-            <div className="form-label-row">
-              <label htmlFor="description">Description</label>
-              <span className="form-hint">{(form.description ?? '').length}/2000</span>
-            </div>
-            <textarea
-              id="description"
-              rows={2}
-              maxLength={2000}
-              placeholder="Materials, size, care instructions…"
-              value={form.description ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            />
-          </div>
-
           {form.productType === 'Handmade' ? (
             <div className="form-field span-6">
               <div className="form-label-row">
@@ -764,6 +771,123 @@ export function ProductFormPage() {
               )}
             </div>
           ) : null}
+        </div>
+        </div>
+
+        <div className="form-section">
+          <div className="form-section__head">
+            <h2 className="form-section__title">Specification</h2>
+            <p className="form-section__desc">
+              Size, material and yarn facts shown under the Specifications tab.
+            </p>
+          </div>
+          <div className="form-grid-6">
+            <div className="form-field">
+              <label htmlFor="spec1">Spec 1</label>
+              <input
+                id="spec1"
+                placeholder="e.g. 30 × 40 cm"
+                value={form.spec1 ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, spec1: e.target.value }))}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="spec2">Spec 2</label>
+              <input
+                id="spec2"
+                placeholder="e.g. 100% cotton"
+                value={form.spec2 ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, spec2: e.target.value }))}
+              />
+            </div>
+            {form.productType === 'Resell' && !isVariant ? (
+              <>
+                <div className="form-field">
+                  <label htmlFor="ballWeight">Ball weight</label>
+                  <input
+                    id="ballWeight"
+                    maxLength={40}
+                    placeholder="e.g. 50 g"
+                    value={form.ballWeight ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, ballWeight: e.target.value }))}
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="yarnLength">Yarn length</label>
+                  <input
+                    id="yarnLength"
+                    maxLength={40}
+                    placeholder="e.g. 120 m"
+                    value={form.yarnLength ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, yarnLength: e.target.value }))}
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="crochetHookSize">Crochet hook size</label>
+                  <input
+                    id="crochetHookSize"
+                    maxLength={40}
+                    placeholder="e.g. 4 mm"
+                    value={form.crochetHookSize ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, crochetHookSize: e.target.value }))}
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="fibreBlend">Fibre / blend</label>
+                  <input
+                    id="fibreBlend"
+                    maxLength={80}
+                    placeholder="e.g. 100% Acrylic"
+                    value={form.fibreBlend ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, fibreBlend: e.target.value }))}
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="yarnWeight">Yarn weight</label>
+                  <input
+                    id="yarnWeight"
+                    maxLength={40}
+                    placeholder="e.g. 4 Medium"
+                    value={form.yarnWeight ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, yarnWeight: e.target.value }))}
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="needleSize">Needle size</label>
+                  <input
+                    id="needleSize"
+                    maxLength={40}
+                    placeholder="e.g. UK 5 (5.5 mm)"
+                    value={form.needleSize ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, needleSize: e.target.value }))}
+                  />
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="form-section">
+          <div className="form-section__head">
+            <h2 className="form-section__title">Description</h2>
+            <p className="form-section__desc">Shown under the Description tab on the product page.</p>
+          </div>
+          <div className="form-grid-6">
+            <div className="form-field span-6">
+              <div className="form-label-row">
+                <label htmlFor="description">Description</label>
+                <span className="form-hint">{(form.description ?? '').length}/2000</span>
+              </div>
+              <textarea
+                id="description"
+                rows={4}
+                maxLength={2000}
+                placeholder="Materials, size, care instructions…"
+                value={form.description ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="form-actions form-actions--sticky">
@@ -878,7 +1002,7 @@ export function ProductFormPage() {
             <div>
               <h2 className="card__title">Product photos</h2>
               <p className="card__subtitle">
-                JPG, PNG, or WebP up to 5 MB each. Upload up to {MAX_PHOTOS} photos and choose which one is
+                JPG, PNG, WebP, or iPhone HEIC photos. Upload up to {MAX_PHOTOS} photos and choose which one is
                 the main image in the shop.
               </p>
             </div>
@@ -887,8 +1011,9 @@ export function ProductFormPage() {
           <div className="alert alert--info alert--spaced">
             <span>
               <strong>Recommended size: {PRODUCT_IMAGE_EDGE_PX}×{PRODUCT_IMAGE_EDGE_PX} px</strong>
-              {' '}(square). Any photo you upload is auto-cropped and saved at this size for Handmade and
-              Essentials.
+              {' '}(square). Photos are framed in a square and saved at this size for Handmade and
+              Essentials. You can zoom and move each photo before it uploads, or use the pencil on a photo
+              to adjust it later.
             </span>
           </div>
 
@@ -902,6 +1027,21 @@ export function ProductFormPage() {
                   <div className="photo-card__media">
                     <img src={image.url} alt={form.name || 'Product'} />
                     {image.isMain && <span className="photo-card__tag">Main</span>}
+                    {image.id !== 'legacy-main' ? (
+                      <button
+                        type="button"
+                        className="photo-card__edit"
+                        title="Edit photo (zoom / move)"
+                        aria-label="Edit photo"
+                        disabled={busyImageId === image.id || uploading}
+                        onClick={() => void handleEditImage(image)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                      </button>
+                    ) : null}
                   </div>
                   <div className="photo-card__actions">
                     {!image.isMain && (
@@ -931,7 +1071,7 @@ export function ProductFormPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+            accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif"
             multiple
             hidden
             onChange={(e) => void handleImageSelect(e.target.files)}
@@ -966,6 +1106,19 @@ export function ProductFormPage() {
         </section>
       )}
 
+      {cropRequest ? (
+        <ProductImageCropModal
+          file={cropRequest.file}
+          onConfirm={(prepared) => {
+            cropRequest.resolve(prepared);
+            setCropRequest(null);
+          }}
+          onCancel={() => {
+            cropRequest.resolve(null);
+            setCropRequest(null);
+          }}
+        />
+      ) : null}
     </>
   );
 }

@@ -32,6 +32,8 @@ import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
 import { ProductCard } from '../../src/components/ProductCard';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
+import { MarketNotice } from '../../src/components/MarketNotice';
+import { usePreferences } from '../../src/preferences/PreferencesContext';
 import type { Product } from '../../src/types';
 import { useI18n } from '../../src/i18n';
 import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
@@ -59,6 +61,12 @@ function categoryChipIcon(cat: string): keyof typeof Ionicons.glyphMap {
   if (key.includes('toy') || key.includes('doll')) return 'happy-outline';
   if (key.includes('home') || key.includes('decor')) return 'home-outline';
   return 'pricetag-outline';
+}
+
+/** The API sends UTC timestamps without a "Z"; treat them as UTC. */
+function parseUtc(value: string): number {
+  const hasZone = /(Z|[+-]\d{2}:?\d{2})$/i.test(value);
+  return new Date(hasZone ? value : `${value}Z`).getTime();
 }
 
 /** Designed Crochet Essentials category collage (1536×1024). */
@@ -122,14 +130,23 @@ export default function ShopScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t, language } = useI18n();
+  const { market } = usePreferences();
   const fonts = uiFonts(language);
   const styles = useMemo(() => createStyles(fonts, language !== 'en'), [language]);
-  const { shopTab: shopTabParam, shopRoom: shopRoomParam } = useLocalSearchParams<{
+  const {
+    shopTab: shopTabParam,
+    shopRoom: shopRoomParam,
+    at: navStamp,
+  } = useLocalSearchParams<{
     shopTab?: string | string[];
     shopRoom?: string | string[];
+    /** Changes on every deep link so the same shopTab value still re-applies. */
+    at?: string | string[];
   }>();
   const shopTab = Array.isArray(shopTabParam) ? shopTabParam[0] : shopTabParam;
-  const { itemCount } = useCart();
+  const { itemCount, justAdded, dismissJustAdded, peekItems, replaceItems } = useCart();
+  const [failedOrder, setFailedOrder] = useState<OrderResponse | null>(null);
+  const [dismissedFailedId, setDismissedFailedId] = useState<string | null>(null);
   const { productIds: wishlistIds } = useWishlist();
   const { isAuthenticated } = useShoppingSession();
   const dockClearance = useTabDockClearance();
@@ -182,7 +199,7 @@ export default function ShopScreen() {
     if (shopTab === 'orders' || shopTab === 'products') {
       setTab(shopTab);
     }
-  }, [shopTab]);
+  }, [shopTab, navStamp]);
 
   useEffect(() => {
     const next = parseShopRoom(shopRoomParam);
@@ -245,7 +262,13 @@ export default function ShopScreen() {
       else setOrdersLoading(true);
       setOrdersError(null);
       try {
-        setOrders(await listMyOrders());
+        // Unpaid attempts aren't real orders for the customer; admin keeps them under Payments.
+        const list = await listMyOrders();
+        setOrders(list.filter((o) => o.status !== 'PaymentFailed' && o.status !== 'PendingPayment'));
+        // Offer a retry only when the customer's newest attempt failed in the last 24h.
+        const newest = [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+        const fresh = newest && Date.now() - parseUtc(newest.createdAt) < 24 * 3600_000;
+        setFailedOrder(newest && newest.status === 'PaymentFailed' && fresh ? newest : null);
       } catch {
         setOrdersError(t('shop.loadFailedFriendly'));
       } finally {
@@ -319,7 +342,42 @@ export default function ShopScreen() {
     setFilterOpen(false);
   }
 
+  const showRetry = failedOrder !== null && failedOrder.id !== dismissedFailedId;
+
+  async function retryFailedOrder() {
+    if (!failedOrder) return;
+    const current = peekItems();
+    const merged = [...current];
+    for (const item of failedOrder.items) {
+      const isCourse = item.itemType === 'Course' || item.itemType === 'CourseBundle';
+      const key = isCourse ? item.courseId : item.productId;
+      if (!key) continue;
+      const exists = merged.some((l) =>
+        isCourse ? l.courseId === key : l.productId === key,
+      );
+      if (exists) continue;
+      merged.push({
+        itemType: item.itemType,
+        productId: isCourse ? undefined : (item.productId ?? undefined),
+        courseId: isCourse ? (item.courseId ?? undefined) : undefined,
+        quantity: isCourse ? 1 : item.quantity,
+        name: item.itemNameSnapshot,
+        price: item.unitPrice,
+      });
+    }
+    try {
+      await replaceItems(merged);
+    } catch {
+      // Cart screen surfaces storage errors; still take the customer there.
+    }
+    setDismissedFailedId(failedOrder.id);
+    router.push('/cart');
+  }
+
+  const showAddedBar = justAdded && itemCount > 0 && tab === 'products' && room !== null;
   const showingChooser = tab === 'products' && !room;
+  // Inside a room the title/subtitle scroll away with the list, so products get the screen.
+  const introInList = tab === 'products' && room !== null;
   const emptyIsWishlist = activeCategory === WISHLIST_FILTER;
   const emptyIsSearch =
     Boolean(debouncedQuery) || activeCategory !== 'All' || availability !== 'all';
@@ -366,22 +424,21 @@ export default function ShopScreen() {
           </View>
         </View>
 
-        <View style={styles.pageIntro}>
-          {!showingChooser ? (
-            <>
-              <Text style={styles.title}>{roomHero.title}</Text>
-              <Text style={styles.subtitle}>{roomHero.subtitle}</Text>
-              {room === 'essentials' && tab === 'products' ? (
-                <Text style={styles.deliveryNote}>{t('shop.roomEssentialsDelivery')}</Text>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <Text style={styles.chooserEyebrow}>{t('shop.heroSubtitle').toUpperCase()}</Text>
-              <Text style={styles.chooserTitle}>{t('shop.chooseRoomTitle')}</Text>
-            </>
-          )}
-        </View>
+        {!introInList ? (
+          <View style={styles.pageIntro}>
+            {!showingChooser ? (
+              <>
+                <Text style={styles.title}>{roomHero.title}</Text>
+                <Text style={styles.subtitle}>{roomHero.subtitle}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.chooserEyebrow}>{t('shop.heroSubtitle').toUpperCase()}</Text>
+                <Text style={styles.chooserTitle}>{t('shop.chooseRoomTitle')}</Text>
+              </>
+            )}
+          </View>
+        ) : null}
 
         {!showingChooser ? (
           <View style={styles.mainTabs}>
@@ -486,6 +543,10 @@ export default function ShopScreen() {
         ) : null}
       </View>
 
+      {!market.canOrderProducts && tab === 'products' ? (
+        <MarketNotice text={t('market.productsIndiaOnly')} />
+      ) : null}
+
       {showingChooser ? (
         <ScrollView
           contentContainerStyle={[styles.chooser, { paddingBottom: dockClearance + 28 }]}
@@ -589,7 +650,19 @@ export default function ShopScreen() {
             keyExtractor={(item) => item.id}
             numColumns={2}
             columnWrapperStyle={styles.row}
-            contentContainerStyle={[styles.list, { paddingBottom: dockClearance + 16 }]}
+            contentContainerStyle={[
+              styles.list,
+              { paddingBottom: dockClearance + 16 + (showAddedBar ? 64 : 0) },
+            ]}
+            ListHeaderComponent={
+              <View style={styles.listIntro}>
+                <Text style={styles.title}>{roomHero.title}</Text>
+                <Text style={styles.subtitle}>{roomHero.subtitle}</Text>
+                {room === 'essentials' ? (
+                  <Text style={styles.deliveryNote}>{t('shop.roomEssentialsDelivery')}</Text>
+                ) : null}
+              </View>
+            }
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -652,6 +725,34 @@ export default function ShopScreen() {
         <FlatList
           key="shop-orders-list"
           data={orders}
+          ListHeaderComponent={
+            showRetry ? (
+              <View style={styles.retryStrip}>
+                <Ionicons name="alert-circle-outline" size={20} color="#c0392b" />
+                <View style={styles.addedBarCopy}>
+                  <Text style={styles.retryTitle}>{t('shop.paymentNotCompleted')}</Text>
+                  <Text style={styles.retrySub} numberOfLines={2}>
+                    {t('shop.paymentNotCompletedHint')}
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.retryCta}
+                  onPress={() => void retryFailedOrder()}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.retryCtaText}>{t('shop.tryAgain')}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setDismissedFailedId(failedOrder!.id)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.close')}
+                >
+                  <Ionicons name="close" size={18} color={colors.muted} />
+                </Pressable>
+              </View>
+            ) : null
+          }
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.ordersList, { paddingBottom: dockClearance + 16 }]}
           refreshControl={
@@ -669,6 +770,38 @@ export default function ShopScreen() {
           renderItem={({ item }) => <MyOrderCard order={item} />}
         />
       )}
+
+      {showAddedBar ? (
+        <View style={[styles.addedBar, { bottom: dockClearance + 4 }]} accessibilityLiveRegion="polite">
+          <Ionicons name="checkmark-circle" size={22} color={colors.white} />
+          <View style={styles.addedBarCopy}>
+            <Text style={styles.addedBarTitle} numberOfLines={1}>
+              {t('shop.addedToCart')}
+            </Text>
+            <Text style={styles.addedBarSub} numberOfLines={1}>
+              {t('shop.addedToCartCount', { count: itemCount })}
+            </Text>
+          </View>
+          <Pressable
+            style={styles.addedBarCta}
+            onPress={() => {
+              dismissJustAdded();
+              router.push('/cart');
+            }}
+            accessibilityRole="button"
+          >
+            <Text style={styles.addedBarCtaText}>{t('shop.viewCartShort')}</Text>
+          </Pressable>
+          <Pressable
+            onPress={dismissJustAdded}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+          >
+            <Ionicons name="close" size={18} color={colors.white} />
+          </Pressable>
+        </View>
+      ) : null}
 
       <Modal
         visible={filterOpen}
@@ -1068,7 +1201,12 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     list: {
       paddingHorizontal: spacing.sm,
-      paddingTop: spacing.md,
+      paddingTop: spacing.sm,
+    },
+    listIntro: {
+      paddingHorizontal: spacing.sm,
+      paddingBottom: spacing.sm,
+      gap: 2,
     },
     row: {
       justifyContent: 'space-between',
@@ -1125,6 +1263,78 @@ function createStyles(fonts: UiFonts, compact = false) {
       flex: 1,
       justifyContent: 'center',
       paddingHorizontal: spacing.md,
+    },
+    addedBar: {
+      position: 'absolute',
+      left: spacing.md,
+      right: spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      backgroundColor: colors.pinkDark,
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 6,
+    },
+    retryStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: '#fdecec',
+      borderWidth: 1,
+      borderColor: '#f3c9c9',
+    },
+    retryTitle: {
+      fontFamily: fonts.extraBold,
+      fontSize: 13,
+      color: '#c0392b',
+    },
+    retrySub: {
+      fontFamily: fonts.regular,
+      fontSize: 12,
+      color: colors.ink,
+    },
+    retryCta: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: radii.pill,
+      backgroundColor: colors.pink,
+    },
+    retryCtaText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 12,
+      color: colors.white,
+    },
+    addedBarCopy: {
+      flex: 1,
+    },
+    addedBarTitle: {
+      fontFamily: fonts.extraBold,
+      fontSize: 13,
+      color: colors.white,
+    },
+    addedBarSub: {
+      fontFamily: fonts.regular,
+      fontSize: 12,
+      color: 'rgba(255, 255, 255, 0.85)',
+    },
+    addedBarCta: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: radii.pill,
+      backgroundColor: colors.white,
+    },
+    addedBarCtaText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 12,
+      color: colors.pinkDark,
     },
     filterSheetRoot: {
       flex: 1,

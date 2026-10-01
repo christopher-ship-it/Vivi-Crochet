@@ -59,7 +59,7 @@ public sealed class VideoTests : IClassFixture<ApiFactory>
             courseId,
             fileName = "huge.mp4",
             contentType = "video/mp4",
-            fileSizeBytes = 3L * 1024 * 1024 * 1024
+            fileSizeBytes = 11L * 1024 * 1024 * 1024
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

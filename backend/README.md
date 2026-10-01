@@ -38,9 +38,9 @@ Secrets are **not** in `appsettings.json`. Set them with user-secrets (local) or
 | `Blob__Provider` | `Azure` or `InMemory`. |
 | `Blob__ConnectionString` | Storage account or `UseDevelopmentStorage=true`. |
 | `Blob__ContainerName` | Default `videos` (private). |
-| `Blob__UploadSasMinutes` | Write SAS lifetime. Default `30`. |
+| `Blob__UploadSasMinutes` | Write SAS lifetime. Default `240`. |
 | `Blob__ReadSasMinutes` | Read SAS lifetime. Default `15`. |
-| `Blob__MaxUploadBytes` | Default `2147483648` (2 GB). |
+| `Blob__MaxUploadBytes` | Default `10737418240` (10 GB). |
 | `Cors__AllowedOrigins__0` | Admin SPA origin (add `__1`, `__2` for more). |
 | `Database__AutoMigrate` | Apply EF migrations on startup. Default `false` in Production. |
 | `Database__AutoSeed` | Seed admin/categories when empty. Default `true`. |
@@ -168,7 +168,7 @@ POST /api/videos/upload-url
 }
 ```
 
-Allowed extensions: `.mp4`, `.mov`, `.webm`. Max size: 2 GB. The video row is created as **Draft**.
+Allowed extensions: `.mp4`, `.mov`, `.webm`. Max size: 10 GB. The video row is created as **Draft**.
 
 ### 4. Upload directly to Blob
 

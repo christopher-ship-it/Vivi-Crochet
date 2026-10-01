@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using VIVI.Core;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
+using VIVI.Core.Exceptions;
 using VIVI.Infrastructure.Data;
 
 namespace VIVI.Infrastructure.Commerce;
@@ -8,14 +10,17 @@ namespace VIVI.Infrastructure.Commerce;
 public sealed record CoursePricingResult(
     Guid CourseId,
     string Name,
-    int ListPrice,
-    int? Mrp,
-    int Price,
+    decimal ListPrice,
+    decimal? Mrp,
+    decimal Price,
     bool IsLaunchOffer,
     int? LaunchOfferRemaining,
     int AccessDays,
     bool IsRenewalOffer = false,
-    int? RenewalPercentage = null);
+    int? RenewalPercentage = null,
+    string Currency = "INR",
+    /// <summary>False when the course has no price for the customer's country (it cannot be bought there).</summary>
+    bool AvailableInMarket = true);
 
 public sealed class PricingService
 {
@@ -29,8 +34,10 @@ public sealed class PricingService
     public async Task<CoursePricingResult> GetCoursePricingAsync(
         Guid courseId,
         CancellationToken cancellationToken,
-        Guid? customerId = null)
+        Guid? customerId = null,
+        Market? market = null)
     {
+        market ??= Markets.India;
         var course = await _db.Courses
             .AsNoTracking()
             .Include(c => c.LaunchOffer)
@@ -38,14 +45,38 @@ public sealed class PricingService
             .SingleOrDefaultAsync(c => c.Id == courseId && c.Status == CourseStatus.Published, cancellationToken)
             ?? throw new KeyNotFoundException("Course was not found.");
 
-        var (price, launchActive, remaining) = await ResolveLaunchPriceAsync(course, cancellationToken);
-        var mrp = course.Mrp ?? course.LaunchOffer?.Mrp;
+        CoursePrice? marketRow = null;
+        if (!market.UsesBasePrices)
+        {
+            marketRow = await GetMarketPriceAsync(course.Id, market, cancellationToken);
+            if (marketRow is null)
+            {
+                return new CoursePricingResult(
+                    course.Id, course.Name, 0, null, 0, false, null, course.AccessDays,
+                    Currency: market.Currency, AvailableInMarket: false);
+            }
+        }
+
+        decimal price;
+        bool launchActive;
+        int? remaining;
+        if (marketRow is null)
+        {
+            var (p, l, r) = await ResolveLaunchPriceAsync(course, cancellationToken);
+            (price, launchActive, remaining) = (p, l, r);
+        }
+        else
+        {
+            (price, launchActive, remaining) = await ResolveMarketLaunchPriceAsync(course, marketRow, cancellationToken);
+        }
+
+        decimal? mrp = marketRow is null ? course.Mrp ?? course.LaunchOffer?.Mrp : marketRow.Mrp;
 
         var renewal = false;
         int? renewalPct = null;
         if (customerId.HasValue)
         {
-            var offer = await TryResolveRenewalAsync(course, customerId.Value, DateTime.UtcNow, cancellationToken);
+            var offer = await TryResolveRenewalAsync(course, customerId.Value, DateTime.UtcNow, cancellationToken, market);
             if (offer is not null)
             {
                 price = offer.RenewalPrice;
@@ -60,15 +91,22 @@ public sealed class PricingService
         return new CoursePricingResult(
             course.Id,
             course.Name,
-            course.Price,
+            marketRow?.Price ?? course.Price,
             mrp,
             price,
             launchActive,
             remaining,
             course.AccessDays,
             renewal,
-            renewalPct);
+            renewalPct,
+            market.Currency);
     }
+
+    /// <summary>The course's price row for a non-base market, or null if it is not sold there.</summary>
+    public Task<CoursePrice?> GetMarketPriceAsync(Guid courseId, Market market, CancellationToken cancellationToken)
+        => _db.CoursePrices
+            .AsNoTracking()
+            .SingleOrDefaultAsync(p => p.CourseId == courseId && p.CountryCode == market.CountryCode, cancellationToken);
 
     public async Task<int> ResolveUnitPriceAsync(Course course, CancellationToken cancellationToken)
     {
@@ -77,14 +115,32 @@ public sealed class PricingService
     }
 
     /// <summary>Checkout price for a signed-in customer (applies renewal when eligible).</summary>
-    public async Task<(int UnitPrice, bool IsRenewal, int BasePrice, byte Percentage)> ResolveCheckoutUnitPriceAsync(
+    public async Task<(decimal UnitPrice, bool IsRenewal, decimal BasePrice, byte Percentage)> ResolveCheckoutUnitPriceAsync(
         Course course,
         Guid customerId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Market? market = null)
     {
-        var renewal = await TryResolveRenewalAsync(course, customerId, DateTime.UtcNow, cancellationToken);
+        market ??= Markets.India;
+
+        CoursePrice? marketRow = null;
+        if (!market.UsesBasePrices)
+        {
+            marketRow = await GetMarketPriceAsync(course.Id, market, cancellationToken)
+                ?? throw ViviException.Conflict(
+                    "COURSE_NOT_AVAILABLE_IN_COUNTRY",
+                    "This course is not available in your country yet.");
+        }
+
+        var renewal = await TryResolveRenewalAsync(course, customerId, DateTime.UtcNow, cancellationToken, market);
         if (renewal is not null)
             return (renewal.RenewalPrice, true, renewal.BasePrice, renewal.Percentage);
+
+        if (marketRow is not null)
+        {
+            var (marketPrice, _, _) = await ResolveMarketLaunchPriceAsync(course, marketRow, cancellationToken);
+            return (marketPrice, false, marketPrice, 0);
+        }
 
         var (price, _, _) = await ResolveLaunchPriceAsync(course, cancellationToken);
         return (price, false, price, 0);
@@ -94,8 +150,10 @@ public sealed class PricingService
         Course course,
         Guid customerId,
         DateTime utcNow,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Market? market = null)
     {
+        market ??= Markets.India;
         if (course.RenewalPercentage is < 1 or > 99)
             return null;
 
@@ -117,9 +175,36 @@ public sealed class PricingService
         if (!eligible)
             return null;
 
-        var basePrice = await ResolveRenewalBasePriceAsync(course, cancellationToken);
-        var renewalPrice = ComputeRenewalPrice(basePrice, course.RenewalPercentage);
-        return new RenewalOfferSnapshot(basePrice, renewalPrice, course.RenewalPercentage);
+        if (market.UsesBasePrices)
+        {
+            var basePrice = await ResolveRenewalBasePriceAsync(course, cancellationToken);
+            var renewalPrice = ComputeRenewalPrice(basePrice, course.RenewalPercentage);
+            return new RenewalOfferSnapshot(basePrice, renewalPrice, course.RenewalPercentage);
+        }
+
+        var row = await GetMarketPriceAsync(course.Id, market, cancellationToken);
+        if (row is null)
+            return null;
+
+        var marketBase = course.Type == CourseType.Bundle ? row.RegularPriceAfterLaunch ?? row.Price : row.Price;
+        return new RenewalOfferSnapshot(
+            marketBase,
+            ComputeRenewalPrice(marketBase, course.RenewalPercentage, decimals: 2),
+            course.RenewalPercentage);
+    }
+
+    /// <summary>Renewal price with cents (for non-rupee markets).</summary>
+    public static decimal ComputeRenewalPrice(decimal basePrice, byte renewalPercentage, int decimals)
+    {
+        var minimum = 1m / (decimal)Math.Pow(10, decimals);
+        if (basePrice <= 0 || renewalPercentage >= 100)
+            return minimum;
+
+        var discounted = Math.Round(
+            basePrice * (100 - renewalPercentage) / 100m,
+            decimals,
+            MidpointRounding.AwayFromZero);
+        return Math.Max(minimum, discounted);
     }
 
     public static int ComputeRenewalPrice(int basePrice, byte renewalPercentage)
@@ -213,6 +298,31 @@ public sealed class PricingService
         return offer?.RegularPriceAfterLaunch ?? course.Price;
     }
 
+    /// <summary>Launch / regular price for a non-base market, from its own price row.</summary>
+    private async Task<(decimal Price, bool LaunchActive, int? Remaining)> ResolveMarketLaunchPriceAsync(
+        Course course,
+        CoursePrice row,
+        CancellationToken cancellationToken)
+    {
+        if (course.Type != CourseType.Bundle)
+            return (row.Price, false, null);
+
+        var offer = course.LaunchOffer
+            ?? await _db.LaunchOfferCounters
+                .AsNoTracking()
+                .SingleOrDefaultAsync(x => x.CourseId == course.Id, cancellationToken);
+
+        if (offer is null)
+            return (row.Price, false, null);
+
+        var remaining = Math.Max(0, offer.LaunchLimit - offer.CompletedPurchaseCount);
+        if (offer.IsActive && remaining > 0 && row.LaunchPrice is decimal launchPrice)
+            return (launchPrice, true, remaining);
+
+        // No launch price set for this market, or the offer ended / sold out.
+        return (row.RegularPriceAfterLaunch ?? row.Price, false, row.LaunchPrice is null ? null : 0);
+    }
+
     private async Task<(int Price, bool LaunchActive, int? Remaining)> ResolveLaunchPriceAsync(
         Course course,
         CancellationToken cancellationToken)
@@ -236,4 +346,4 @@ public sealed class PricingService
     }
 }
 
-public sealed record RenewalOfferSnapshot(int BasePrice, int RenewalPrice, byte Percentage);
+public sealed record RenewalOfferSnapshot(decimal BasePrice, decimal RenewalPrice, byte Percentage);

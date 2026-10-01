@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using VIVI.Core;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
@@ -31,6 +32,7 @@ public sealed class PaymentFulfillmentService
     private readonly IDeliveryEstimateService _delivery;
     private readonly InventoryService _inventory;
     private readonly LiveBookingService _liveBookings;
+    private readonly DeliverySequenceService _sequence;
 
     public PaymentFulfillmentService(
         ViviDbContext db,
@@ -41,7 +43,8 @@ public sealed class PaymentFulfillmentService
         PricingService pricing,
         IDeliveryEstimateService delivery,
         InventoryService inventory,
-        LiveBookingService liveBookings)
+        LiveBookingService liveBookings,
+        DeliverySequenceService sequence)
     {
         _db = db;
         _signatureVerifier = signatureVerifier;
@@ -52,6 +55,7 @@ public sealed class PaymentFulfillmentService
         _delivery = delivery;
         _inventory = inventory;
         _liveBookings = liveBookings;
+        _sequence = sequence;
     }
 
     public async Task<PaymentFulfillmentResult> VerifyAndFulfillAsync(
@@ -108,6 +112,9 @@ public sealed class PaymentFulfillmentService
             var expectedPaise = (int)Math.Round(order.TotalAmount * 100m, MidpointRounding.AwayFromZero);
             if (remote.AmountPaise != expectedPaise)
                 throw ViviException.Conflict("AMOUNT_MISMATCH", "Paid amount does not match the order total.");
+            if (!string.IsNullOrWhiteSpace(remote.Currency)
+                && !string.Equals(remote.Currency, order.Currency, StringComparison.OrdinalIgnoreCase))
+                throw ViviException.Conflict("CURRENCY_MISMATCH", "Paid currency does not match the order currency.");
         }
 
         payment.ProviderPaymentId = input.RazorpayPaymentId;
@@ -169,18 +176,83 @@ public sealed class PaymentFulfillmentService
         order.PaidAt = now;
         order.ConfirmedAt = now;
         order.UpdatedAt = now;
-        _delivery.ApplyConfirmedDates(order, now);
 
-        await _inventory.DeductForOrderAsync(order, cancellationToken);
-        await CreateEnrollmentsAsync(order, now, cancellationToken);
-        await _liveBookings.ConfirmBookingForOrderAsync(order, cancellationToken);
-        await _db.SaveChangesAsync(cancellationToken);
-        if (transaction is not null)
-            await transaction.CommitAsync(cancellationToken);
+        // Held until this order (and its delivery date) is saved, so the next Handmade payment
+        // for the same customer sees it.
+        IAsyncDisposable? deliveryLock = null;
+        try
+        {
+            deliveryLock = await ApplyDeliveryDatesAsync(order, now, cancellationToken);
+
+            await _inventory.DeductForOrderAsync(order, cancellationToken);
+            await CreateEnrollmentsAsync(order, now, cancellationToken);
+            await _liveBookings.ConfirmBookingForOrderAsync(order, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+        }
+        finally
+        {
+            if (deliveryLock is not null)
+                await deliveryLock.DisposeAsync();
+        }
 
         await _emails.NotifyPaymentSucceededAsync(order.Id, cancellationToken);
 
         return new PaymentFulfillmentResult(order, payment, AlreadyProcessed: false);
+    }
+
+    /// <summary>
+    /// Fixes the delivery dates of a newly paid physical order. Runs inside the payment transaction
+    /// under a per-customer lock, so simultaneous payments get consecutive (never identical) dates.
+    /// </summary>
+    private async Task<IAsyncDisposable?> ApplyDeliveryDatesAsync(Order order, DateTime paidAtUtc, CancellationToken cancellationToken)
+    {
+        var productIds = order.Items
+            .Where(i => i.ItemType == OrderItemType.Product && i.ProductId.HasValue)
+            .Select(i => i.ProductId!.Value)
+            .Distinct()
+            .ToList();
+
+        // Not a physical order (courses, memberships…) or no estimate was ever made: leave as is.
+        if (productIds.Count == 0 || order.DeliveryEstimateMinDays is null)
+            return null;
+
+        var types = await _db.Products
+            .AsNoTracking()
+            .Where(p => productIds.Contains(p.Id))
+            .Select(p => p.ProductType)
+            .ToListAsync(cancellationToken);
+        if (types.Count == 0)
+        {
+            _delivery.ApplyConfirmedDates(order, paidAtUtc);
+            return null;
+        }
+
+        var isCoimbatore = order.IsCoimbatoreDelivery == true;
+        var standard = _delivery.Combine(types.Select(t => _delivery.WindowFor(t, isCoimbatore)));
+
+        // Only Handmade orders are sequenced; Essentials keep their standard window and need no lock.
+        var isHandmade = types.Contains(ProductType.Handmade);
+        var deliveryLock = isHandmade
+            ? await _sequence.LockCustomerAsync(order.CustomerId, cancellationToken)
+            : null;
+
+        var anchor = paidAtUtc;
+        if (deliveryLock is not null)
+        {
+            // "Most recently paid" is how the next Handmade order finds its predecessor, so the
+            // payment time must follow the order in which the lock lets orders through. It was
+            // stamped before waiting for the lock, which could put overlapping payments out of order.
+            anchor = DateTime.UtcNow;
+            order.PaidAt = anchor;
+            order.ConfirmedAt = anchor;
+            order.UpdatedAt = anchor;
+        }
+
+        var plan = await _sequence.PlanAsync(order.CustomerId, standard, anchor, order.Id, isHandmade, cancellationToken);
+        _delivery.ApplyEstimate(order, plan.Dates, plan.Window, isCoimbatore);
+        return deliveryLock;
     }
 
     private async Task CreateEnrollmentsAsync(Order order, DateTime now, CancellationToken cancellationToken)
@@ -195,17 +267,20 @@ public sealed class PaymentFulfillmentService
                 .Include(c => c.LaunchOffer)
                 .SingleAsync(c => c.Id == item.CourseId.Value, cancellationToken);
 
+            var market = Markets.ForCurrency(order.Currency);
             var renewal = await _pricing.TryResolveRenewalAsync(
                 course,
                 order.CustomerId,
                 now,
-                cancellationToken);
+                cancellationToken,
+                market);
             var isRenewalPurchase = renewal is not null
-                && decimal.Round(item.UnitPrice, 0, MidpointRounding.AwayFromZero) == renewal.RenewalPrice;
+                && decimal.Round(item.UnitPrice, market.UsesBasePrices ? 0 : 2, MidpointRounding.AwayFromZero)
+                    == renewal.RenewalPrice;
 
             int? memberNumber = null;
             if (!isRenewalPurchase)
-                memberNumber = await _launchOffers.EnsureLaunchSlotForPricedOrderOrThrowAsync(course, item.UnitPrice, cancellationToken);
+                memberNumber = await _launchOffers.EnsureLaunchSlotForPricedOrderOrThrowAsync(course, item.UnitPrice, cancellationToken, market);
 
             var isFoundingMembership = memberNumber.HasValue && course.LaunchOffer is not null;
 
@@ -285,6 +360,7 @@ public sealed class PaymentFulfillmentService
                         OrderId = order.Id,
                         OrderItemId = item.Id,
                         MemberNumber = memberNumber!.Value,
+                        MemberCode = PublicIds.NewMemberCode(memberNumber.Value),
                         ViralProjectCourseId = course.LaunchOffer!.ViralProjectCourseId,
                         AccessStartDate = accessStart,
                         AccessExpiryDate = membershipAccessExpiry!.Value,

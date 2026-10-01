@@ -51,8 +51,13 @@ export interface Course {
   /** Short copy for Home Viral / Trending hero slides. */
   description?: string | null;
   about?: string | null;
+  /** Price in `currency` for the user's country. */
   price: number;
   mrp?: number | null;
+  /** INR or USD. Missing = INR (older API). */
+  currency?: string;
+  /** False when this course has no price for the user's country and cannot be bought there. */
+  availableInMarket?: boolean;
   accessDays: number;
   renewalPercentage: number;
   languages?: string | null;
@@ -146,6 +151,9 @@ export interface Product {
   ballWeight?: string | null;
   yarnLength?: string | null;
   crochetHookSize?: string | null;
+  fibreBlend?: string | null;
+  yarnWeight?: string | null;
+  needleSize?: string | null;
   colourName?: string | null;
   colourHex?: string | null;
   parentProductId?: string | null;

@@ -13,6 +13,7 @@ import {
 import { ApiClientError } from '../api/client';
 import type { Category, Course, CourseRequest, CourseType } from '../types';
 import { LANGUAGE_OPTIONS, validateImageFile } from '../utils/format';
+import { prepareUploadImage } from '../utils/imageUploadPrepare';
 import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
 import { confirmDialog } from '../components/AppDialog';
 
@@ -93,6 +94,11 @@ export function CourseFormPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // US price (USD). Off = the course is not sold in the United States.
+  const [usEnabled, setUsEnabled] = useState(false);
+  const [usPrice, setUsPrice] = useState<NumberDraft>('');
+  const [usMrp, setUsMrp] = useState<NumberDraft>('');
+  const [usLaunch, setUsLaunch] = useState<NumberDraft>('');
 
   useEffect(() => {
     listCategories()
@@ -129,6 +135,11 @@ export function CourseFormPage() {
           launchLimit: course.launchOffer?.launchLimit ?? 100,
           regularPriceAfterLaunch: course.launchOffer?.regularPriceAfterLaunch ?? course.price,
         });
+        const us = course.marketPrices?.find((p) => p.countryCode === 'US');
+        setUsEnabled(Boolean(us));
+        setUsPrice(us ? (us.regularPriceAfterLaunch ?? us.price) : '');
+        setUsMrp(us?.mrp ?? '');
+        setUsLaunch(us?.launchPrice ?? '');
         setSelectedLangs(
           course.languages ? course.languages.split(',').map((l) => l.trim()).filter(Boolean) : [],
         );
@@ -161,8 +172,17 @@ export function CourseFormPage() {
       setError('Enter access days (1 or more).');
       return;
     }
+    if (usEnabled && (usPrice === '' || usPrice <= 0)) {
+      setError('Enter the US price in dollars, or turn off "Sell in the United States".');
+      return;
+    }
+    if (usEnabled && form.type === 'Bundle' && usLaunch !== '' && usLaunch <= 0) {
+      setError('The US launch price must be greater than zero.');
+      return;
+    }
     setSaving(true);
     setError(null);
+    const isBundle = form.type === 'Bundle';
     const payload: CourseRequest = {
       ...form,
       price: form.price,
@@ -184,6 +204,16 @@ export function CourseFormPage() {
       regularPriceAfterLaunch: form.type === 'Bundle'
         ? (form.regularPriceAfterLaunch === '' ? form.price : form.regularPriceAfterLaunch)
         : null,
+      // Always sent, so turning the US price off removes it.
+      marketPrices: usEnabled && usPrice !== ''
+        ? [{
+            countryCode: 'US',
+            price: usPrice,
+            mrp: usMrp === '' ? null : usMrp,
+            launchPrice: isBundle && usLaunch !== '' ? usLaunch : null,
+            regularPriceAfterLaunch: isBundle ? usPrice : null,
+          }]
+        : [],
     };
     try {
       if (isEdit && id) {
@@ -202,17 +232,15 @@ export function CourseFormPage() {
 
   async function handleThumbnailSelect(fileList: FileList | null) {
     if (!id || !fileList?.length) return;
-    const file = fileList[0];
-    const validation = validateImageFile(file);
-    if (!validation.valid) {
-      setUploadError(validation.error ?? 'Invalid image');
-      return;
-    }
-
     setUploading(true);
     setUploadError(null);
     setUploadProgress(null);
     try {
+      const file = await prepareUploadImage(fileList[0]);
+      const validation = validateImageFile(file);
+      if (!validation.valid) {
+        throw new Error(validation.error ?? 'Invalid image');
+      }
       const ticket = await requestCourseThumbnailUploadUrl(id, {
         fileName: file.name,
         contentType: validation.contentType ?? file.type,
@@ -387,6 +415,71 @@ export function CourseFormPage() {
                 }
               />
             </div>
+          </div>
+
+          <div className="form-field span-6">
+            <label className="choice" htmlFor="usEnabled">
+              <input
+                id="usEnabled"
+                type="checkbox"
+                checked={usEnabled}
+                onChange={(e) => setUsEnabled(e.target.checked)}
+              />
+              <span>Sell in the United States (priced in US dollars)</span>
+            </label>
+            <span className="form-hint">
+              Customers in the US only see and buy this course if a US price is set. India prices above are unchanged.
+            </span>
+            {usEnabled ? (
+              <div className="form-grid-6" style={{ marginTop: 10 }}>
+                <div className="form-field span-2">
+                  <label htmlFor="usPrice">US price</label>
+                  <div className="input-affix">
+                    <span className="input-affix__prefix">$</span>
+                    <input
+                      id="usPrice"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={usPrice}
+                      onChange={(e) => setUsPrice(parseNumberDraft(e.target.value))}
+                    />
+                  </div>
+                </div>
+                <div className="form-field span-2">
+                  <label htmlFor="usMrp">US MRP / strike-through</label>
+                  <div className="input-affix">
+                    <span className="input-affix__prefix">$</span>
+                    <input
+                      id="usMrp"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="Optional"
+                      value={usMrp}
+                      onChange={(e) => setUsMrp(parseNumberDraft(e.target.value))}
+                    />
+                  </div>
+                </div>
+                {form.type === 'Bundle' ? (
+                  <div className="form-field span-2">
+                    <label htmlFor="usLaunch">US launch price</label>
+                    <div className="input-affix">
+                      <span className="input-affix__prefix">$</span>
+                      <input
+                        id="usLaunch"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        placeholder="Blank = no launch price in US"
+                        value={usLaunch}
+                        onChange={(e) => setUsLaunch(parseNumberDraft(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="form-field">
@@ -564,7 +657,7 @@ export function CourseFormPage() {
             <div>
               <h2 className="card__title">Course thumbnail</h2>
               <p className="card__subtitle">
-                Shown on Learn &amp; Loop course cards. JPG, PNG, or WebP up to 5 MB.
+                Shown on Learn &amp; Loop course cards. JPG, PNG, WebP, or iPhone HEIC photos (large ones are shrunk to fit 5 MB).
               </p>
             </div>
           </div>
@@ -583,7 +676,7 @@ export function CourseFormPage() {
                   {uploading ? 'Uploading…' : 'Replace image'}
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
                     hidden
                     disabled={uploading}
                     onChange={(e) => {
@@ -609,7 +702,7 @@ export function CourseFormPage() {
                 {uploading ? 'Uploading…' : 'Upload thumbnail'}
                 <input
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
                   hidden
                   disabled={uploading}
                   onChange={(e) => {

@@ -10,7 +10,10 @@ public class LiveWeekSummaryResponse
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public bool IsBookable { get; set; }
+    /// <summary>Price for this week (the studio price unless the week has its own).</summary>
     public decimal PackagePrice { get; set; }
+    public string Language { get; set; } = string.Empty;
+    public string Level { get; set; } = string.Empty;
     /// <summary>Tutor display name for this week (default SRI).</summary>
     public string TutorName { get; set; } = "SRI";
     /// <summary>Resolved read URL for the tutor portrait, or null for placeholder.</summary>
@@ -40,6 +43,8 @@ public sealed class LiveSlotAvailabilityResponse
     public string Name { get; set; } = string.Empty;
     /// <summary>Studio hours for this circle, e.g. 10:00 AM – 12:00 PM.</summary>
     public string Hours { get; set; } = string.Empty;
+    /// <summary>This week's own timing, when it differs from the session default (admin view).</summary>
+    public string? HoursOverride { get; set; }
     public int SeatCapacity { get; set; }
     public int SeatsBooked { get; set; }
     public int SeatsRemaining { get; set; }
@@ -150,7 +155,13 @@ public sealed class AdminLiveWeekResponse
     public DateOnly EndDate { get; set; }
     public string? BreakWeekday { get; set; }
     public bool IsBookable { get; set; }
+    /// <summary>Price customers pay for this week.</summary>
     public decimal PackagePrice { get; set; }
+    public decimal? PriceOverride { get; set; }
+    public string Language { get; set; } = string.Empty;
+    public string? LanguageOverride { get; set; }
+    public string Level { get; set; } = string.Empty;
+    public string? LevelOverride { get; set; }
     public string TutorName { get; set; } = "SRI";
     public string? TutorPhotoUrl { get; set; }
     /// <summary>True when this week has its own tutor name/photo instead of the shared default.</summary>
@@ -163,6 +174,49 @@ public sealed class AdminLiveTutorDefaultResponse
 {
     public string TutorName { get; set; } = "SRI";
     public string? TutorPhotoUrl { get; set; }
+}
+
+public sealed class AdminLiveSessionDto
+{
+    /// <summary>Morning, Evening, Extra1, Extra2 or Extra3.</summary>
+    public LiveSlotType SlotType { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Hours { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; }
+    /// <summary>Morning and Evening are always on and cannot be removed.</summary>
+    public bool IsCore { get; set; }
+}
+
+public sealed class AdminLiveSettingsResponse
+{
+    public decimal PackagePrice { get; set; }
+    public int HoursPerClassDay { get; set; }
+    public string Language { get; set; } = string.Empty;
+    public string Level { get; set; } = string.Empty;
+    public IReadOnlyList<AdminLiveSessionDto> Sessions { get; set; } = Array.Empty<AdminLiveSessionDto>();
+}
+
+public sealed class UpdateLiveSettingsRequest
+{
+    public decimal PackagePrice { get; set; }
+    public int HoursPerClassDay { get; set; }
+    public string Language { get; set; } = string.Empty;
+    public string Level { get; set; } = string.Empty;
+    public List<AdminLiveSessionDto> Sessions { get; set; } = new();
+}
+
+public sealed class SetLiveWeekOverridesRequest
+{
+    /// <summary>Null clears the override and uses the studio price.</summary>
+    public decimal? PriceOverride { get; set; }
+    public string? LanguageOverride { get; set; }
+    public string? LevelOverride { get; set; }
+}
+
+public sealed class SetLiveSlotHoursRequest
+{
+    /// <summary>Null or empty clears the override and uses the session's default hours.</summary>
+    public string? Hours { get; set; }
 }
 
 public sealed class LiveTutorPhotoUploadUrlRequest

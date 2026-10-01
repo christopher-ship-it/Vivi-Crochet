@@ -96,7 +96,7 @@ function createStyles(fonts: UiFonts) {
       marginBottom: spacing.md,
     },
     label: {
-      fontFamily: fonts.body,
+      fontFamily: fonts.regular,
       fontSize: 15,
       color: colors.ink,
       marginBottom: spacing.sm,
@@ -114,13 +114,11 @@ function createStyles(fonts: UiFonts) {
       gap: spacing.sm,
     },
     card: {
-      width: '30%',
-      minWidth: 96,
-      flexGrow: 1,
+      width: 68,
       borderWidth: 1.5,
       borderColor: colors.border,
-      borderRadius: radii.md,
-      padding: 6,
+      borderRadius: radii.sm,
+      padding: 4,
       backgroundColor: colors.white,
     },
     cardSelected: {
@@ -133,8 +131,8 @@ function createStyles(fonts: UiFonts) {
     thumb: {
       width: '100%',
       aspectRatio: 1,
-      borderRadius: 8,
-      marginBottom: 6,
+      borderRadius: 6,
+      marginBottom: 4,
       backgroundColor: 'rgba(0,0,0,0.04)',
     },
     thumbFallback: {
@@ -147,19 +145,19 @@ function createStyles(fonts: UiFonts) {
       color: colors.muted,
     },
     price: {
-      fontFamily: fonts.heading,
-      fontSize: 13,
+      fontFamily: fonts.extraBold,
+      fontSize: 11,
       color: colors.ink,
     },
     mrp: {
-      fontFamily: fonts.body,
-      fontSize: 11,
+      fontFamily: fonts.regular,
+      fontSize: 9,
       color: colors.muted,
       textDecorationLine: 'line-through',
     },
     outLabel: {
-      fontFamily: fonts.body,
-      fontSize: 10,
+      fontFamily: fonts.regular,
+      fontSize: 9,
       color: colors.pink,
       marginTop: 2,
     },

@@ -20,6 +20,7 @@ import {
   getLiveWeek,
   listLiveWeeks,
   listMyLiveBookings,
+  sortSlotsByTime,
   type LiveBooking,
   type LiveSlotAvailability,
   type LiveSlotType,
@@ -43,6 +44,8 @@ import { useI18n } from '../../src/i18n';
 import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, radii, spacing } from '../../src/theme';
 import { formatInr } from '../../src/utils/format';
+import { MarketNotice } from '../../src/components/MarketNotice';
+import { usePreferences } from '../../src/preferences/PreferencesContext';
 import { applyStatusBar } from '../../src/utils/statusBar';
 import {
   isUsableCustomerEmail,
@@ -51,12 +54,21 @@ import {
 } from '../../src/utils/validation';
 
 const LIVE_HERO_GRADIENT = ['#ff8eb0', '#ffb3c9', '#ffd0e0'] as const;
-const TUTOR_PLACEHOLDER_GRADIENT = ['#ffb3c9', '#ff8eb0', '#f06a96'] as const;
 
-const SLOT_FALLBACK: Record<LiveSlotType, { label: string; hours: string }> = {
+/** Labels for the two core sessions. Additional sessions use the name set in the admin. */
+const SLOT_FALLBACK: Partial<Record<LiveSlotType, { label: string; hours: string }>> = {
   Morning: { label: 'MORNING', hours: '10:00 AM – 12:00 PM' },
   Evening: { label: 'EVENING', hours: '6:00 PM – 8:00 PM' },
 };
+
+/** Language and level are typed by an admin; known values are translated, others shown as typed. */
+const KNOWN_LANGUAGES = ['tamil', 'english', 'hindi'] as const;
+const KNOWN_LEVELS = ['basic', 'intermediate', 'advanced'] as const;
+
+function knownKey<T extends string>(list: readonly T[], value: string | undefined): T | null {
+  const key = (value ?? '').trim().toLowerCase() as T;
+  return list.includes(key) ? key : null;
+}
 
 /** Split "10:00 AM – 12:00 PM" into large start + small end for the editorial clock. */
 function splitHours(hours: string): { start: string; end: string } {
@@ -170,6 +182,7 @@ export default function LiveScreen() {
   const insets = useSafeAreaInsets();
   const dockClearance = useTabDockClearance();
   const { t, language } = useI18n();
+  const { market } = usePreferences();
   const fonts = uiFonts(language);
   const styles = useMemo(() => createStyles(fonts), [language]);
   const { isAuthenticated, user } = useShoppingSession();
@@ -177,7 +190,8 @@ export default function LiveScreen() {
   const params = useLocalSearchParams<{ weekId?: string; slot?: string }>();
   const preferredWeekId = typeof params.weekId === 'string' ? params.weekId : undefined;
   const preferredSlot: LiveSlotType | null =
-    params.slot === 'Evening' ? 'Evening' : params.slot === 'Morning' ? 'Morning' : null;
+    (['Morning', 'Evening', 'Extra1', 'Extra2', 'Extra3'] as const).find((s) => s === params.slot) ??
+    null;
   const preferredSlotRef = useRef(preferredSlot);
   preferredSlotRef.current = preferredSlot;
 
@@ -300,7 +314,9 @@ export default function LiveScreen() {
     setDetailLoading(true);
     setError(null);
     try {
-      const data = await getLiveWeek(weekId);
+      const loaded = await getLiveWeek(weekId);
+      // Sessions in the order they happen (Morning, any mid-day session, Evening).
+      const data = { ...loaded, slots: sortSlotsByTime(loaded.slots) };
       setDetail(data);
       setSelectedSlot((prev: LiveSlotType | null) => {
         const preferred = preferredSlotRef.current;
@@ -356,6 +372,14 @@ export default function LiveScreen() {
 
   const packagePrice = detail?.packagePrice ?? weeks[0]?.packagePrice;
   const classHours = hoursPerClassDay(detail);
+
+  const selectedWeekSummary = weeks.find((w) => w.id === selectedWeekId);
+  const rawLanguage = (detail?.language ?? selectedWeekSummary?.language ?? '').trim();
+  const rawLevel = (detail?.level ?? selectedWeekSummary?.level ?? '').trim();
+  const languageKey = knownKey(KNOWN_LANGUAGES, rawLanguage);
+  const levelKey = knownKey(KNOWN_LEVELS, rawLevel);
+  const languageLabel = languageKey ? t(`live.languageNames.${languageKey}`) : rawLanguage;
+  const levelLabel = levelKey ? t(`live.levelNames.${levelKey}`) : rawLevel;
   const bookingForSelectedWeek = useMemo(() => {
     if (!detail) return null;
     const start = String(detail.startDate).slice(0, 10);
@@ -371,6 +395,7 @@ export default function LiveScreen() {
     [bookingForSelectedWeek],
   );
   const canBook =
+    market.canBookLive &&
     !!detail &&
     !!selectedSlotData &&
     detail.isBookable &&
@@ -564,20 +589,30 @@ export default function LiveScreen() {
             <Text style={styles.heroTitleLive}>{t('live.heroLive')}</Text>
           </Text>
 
-          <View style={styles.heroRule} />
-
           {packagePrice != null ? (
             <View style={styles.heroPriceRow}>
               <Text style={styles.heroPrice}>{formatInr(packagePrice)}</Text>
-              <Text style={styles.heroPriceMeta}>{t('live.perPackage')}</Text>
+              <Text style={styles.heroPriceMeta}>{t('live.packageMeta')}</Text>
             </View>
           ) : null}
 
-          <View style={styles.heroNote}>
-            <Ionicons name="information-circle-outline" size={15} color={colors.pinkDark} />
-            <Text style={styles.heroNoteText}>{t('live.basicOnlyNote')}</Text>
+          <View style={styles.heroPills}>
+            {levelLabel ? (
+              <View style={styles.heroNote}>
+                <Ionicons name="leaf-outline" size={15} color={colors.pinkDark} />
+                <Text style={styles.heroNoteText}>{levelLabel}</Text>
+              </View>
+            ) : null}
+            {languageLabel ? (
+              <View style={styles.heroNote}>
+                <Ionicons name="language-outline" size={15} color={colors.pinkDark} />
+                <Text style={styles.heroNoteText}>{languageLabel}</Text>
+              </View>
+            ) : null}
           </View>
         </LinearGradient>
+
+        {!market.canBookLive ? <MarketNotice text={t('market.liveIndiaOnly')} /> : null}
 
         {/* Tutor — copy left, portrait right */}
         <View style={styles.studioWrap}>
@@ -586,6 +621,14 @@ export default function LiveScreen() {
               <Text style={styles.tutorBadgeLabel}>{t('live.yourTutor')}</Text>
               <Text style={styles.tutorBadgeName}>{toNameCase(tutorName)}</Text>
               <Text style={styles.tutorCopyHint}>{t('live.tutorLead')}</Text>
+              {levelKey === 'basic' ? (
+                <View style={styles.tutorChips}>
+                  <View style={styles.tutorChip}>
+                    <Ionicons name="leaf-outline" size={13} color={colors.pinkDark} />
+                    <Text style={styles.tutorChipText}>{t('live.tutorChipBeginner')}</Text>
+                  </View>
+                </View>
+              ) : null}
             </View>
             <View style={styles.studioFrame}>
               {tutorPhotoUrl ? (
@@ -597,15 +640,10 @@ export default function LiveScreen() {
                   priority="high"
                 />
               ) : (
-                <LinearGradient
-                  colors={[...TUTOR_PLACEHOLDER_GRADIENT]}
-                  start={{ x: 0.1, y: 0 }}
-                  end={{ x: 0.9, y: 1 }}
-                  style={styles.tutorPlaceholder}
-                >
-                  <Text style={styles.tutorPlaceholderMark}>{tutorName}</Text>
+                <View style={styles.tutorPlaceholder}>
+                  <Ionicons name="person-outline" size={34} color={colors.pinkDark} />
                   <Text style={styles.tutorPlaceholderHint}>{t('live.tutorPlaceholderHint')}</Text>
-                </LinearGradient>
+                </View>
               )}
             </View>
           </View>
@@ -687,13 +725,16 @@ export default function LiveScreen() {
           </View>
         ) : detail ? (
           <>
-            {/* Two-column morning | evening */}
+            {/* One column per session: Morning | Evening, plus any additional sessions (2 per row) */}
             <View style={styles.circlesPanelOuter}>
-              <LiveGlass style={styles.circlesPanel}>
+              <LiveGlass
+                style={[styles.circlesPanel, detail.slots.length > 2 && styles.circlesPanelWrap]}
+              >
               {detail.slots.map((slot, index) => {
                 const type = slot.slotType as LiveSlotType;
+                const wrapSlots = detail.slots.length > 2;
                 const fallback = SLOT_FALLBACK[type] ?? {
-                  label: String(slot.slotType).toUpperCase(),
+                  label: (slot.name || String(slot.slotType)).toUpperCase(),
                   hours: '',
                 };
                 const hours = slot.hours || fallback.hours;
@@ -706,8 +747,13 @@ export default function LiveScreen() {
                   : slot.seatsBooked;
 
                 return (
-                  <View key={slot.slotType} style={styles.circleColumnWrap}>
-                    {index > 0 ? <View style={styles.circleDivider} /> : null}
+                  <View
+                    key={slot.slotType}
+                    style={[styles.circleColumnWrap, wrapSlots && styles.circleColumnWrapGrid]}
+                  >
+                    {(wrapSlots ? index % 2 === 1 : index > 0) ? (
+                      <View style={styles.circleDivider} />
+                    ) : null}
                     <Pressable
                       style={[
                         styles.circleColumn,
@@ -803,9 +849,11 @@ export default function LiveScreen() {
               >
                 {bookingBusy
                   ? t('live.pleaseWait')
-                  : bookingForSelectedWeek
-                    ? t('live.viewYourBooking')
-                    : t('live.chooseYourCircle')}
+                  : !market.canBookLive
+                    ? t('market.liveUnavailableShort')
+                    : bookingForSelectedWeek
+                      ? t('live.viewYourBooking')
+                      : t('live.chooseYourCircle')}
               </Text>
               {!bookingBusy ? (
                 <Ionicons
@@ -876,7 +924,7 @@ function createStyles(fonts: UiFonts) {
   hero: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   heroBrandRow: {
     flexDirection: 'row',
@@ -903,7 +951,8 @@ function createStyles(fonts: UiFonts) {
     fontSize: 26,
     lineHeight: 30,
     color: colors.ink,
-    textAlign: 'center',
+    textAlign: 'left',
+    marginTop: spacing.xs,
   },
   heroTitleLive: {
     fontFamily: fonts.heading,
@@ -911,33 +960,30 @@ function createStyles(fonts: UiFonts) {
     lineHeight: 34,
     color: colors.pinkDark,
   },
-  heroRule: {
-    width: 40,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.pinkDark,
-    opacity: 0.45,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
   heroPriceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 10,
+    gap: 8,
     flexWrap: 'wrap',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    marginTop: spacing.sm,
   },
   heroPrice: {
     fontFamily: fonts.display,
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: 34,
+    lineHeight: 38,
     color: colors.ink,
+  },
+  heroPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: spacing.sm,
   },
   heroNote: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
     gap: 6,
-    marginTop: spacing.sm,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
@@ -953,11 +999,11 @@ function createStyles(fonts: UiFonts) {
   },
   heroPriceMeta: {
     fontFamily: fonts.semiBold,
-    fontSize: 8,
+    fontSize: 10,
     letterSpacing: 1,
     color: colors.ink,
     opacity: 0.72,
-    maxWidth: 110,
+    flexShrink: 1,
   },
 
   studioWrap: {
@@ -976,8 +1022,28 @@ function createStyles(fonts: UiFonts) {
     paddingRight: spacing.xs,
     justifyContent: 'center',
   },
+  tutorChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  tutorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: colors.white,
+  },
+  tutorChipText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 11,
+    color: colors.pinkDark,
+  },
   tutorCopyHint: {
-    marginTop: 6,
+    marginTop: 2,
     fontFamily: fonts.regular,
     fontSize: 13,
     lineHeight: 18,
@@ -985,12 +1051,11 @@ function createStyles(fonts: UiFonts) {
     opacity: 0.72,
   },
   studioFrame: {
-    width: 104,
-    height: 128,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    borderRadius: radii.md,
+    width: 112,
+    height: 136,
+    borderWidth: 3,
+    borderColor: colors.white,
+    borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: colors.mediaWash,
     flexShrink: 0,
@@ -1006,21 +1071,13 @@ function createStyles(fonts: UiFonts) {
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.sm,
-  },
-  tutorPlaceholderMark: {
-    fontFamily: fonts.extraBold,
-    fontSize: 22,
-    letterSpacing: 2,
-    color: colors.white,
+    backgroundColor: '#ffd3e2',
   },
   tutorPlaceholderHint: {
     marginTop: 4,
     fontFamily: fonts.semiBold,
-    fontSize: 8,
-    letterSpacing: 0.6,
-    color: colors.white,
-    opacity: 0.88,
-    textTransform: 'uppercase',
+    fontSize: 11,
+    color: colors.pinkDark,
     textAlign: 'center',
   },
   tutorBadgeLabel: {
@@ -1161,9 +1218,18 @@ function createStyles(fonts: UiFonts) {
     backgroundColor: 'rgba(255, 255, 255, 0.28)',
     overflow: 'hidden',
   },
+  circlesPanelWrap: {
+    flexWrap: 'wrap',
+  },
   circleColumnWrap: {
     flex: 1,
     flexDirection: 'row',
+  },
+  // With 3+ sessions the panel wraps to two per row.
+  circleColumnWrapGrid: {
+    flexGrow: 0,
+    flexBasis: '50%',
+    maxWidth: '50%',
   },
   circleDivider: {
     width: StyleSheet.hairlineWidth,

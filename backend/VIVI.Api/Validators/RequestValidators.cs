@@ -1,6 +1,7 @@
 using System.Linq;
 using FluentValidation;
 using VIVI.Api.DTOs.AdminUsers;
+using VIVI.Api.DTOs.AppHealth;
 using VIVI.Api.DTOs.Auth;
 using VIVI.Api.DTOs.Categories;
 using VIVI.Api.DTOs.Courses;
@@ -253,6 +254,9 @@ public sealed class ProductRequestValidator : AbstractValidator<ProductRequest>
         RuleFor(x => x.BallWeight).MaximumLength(40);
         RuleFor(x => x.YarnLength).MaximumLength(40);
         RuleFor(x => x.CrochetHookSize).MaximumLength(40);
+        RuleFor(x => x.FibreBlend).MaximumLength(80);
+        RuleFor(x => x.YarnWeight).MaximumLength(40);
+        RuleFor(x => x.NeedleSize).MaximumLength(40);
         RuleFor(x => x.ColourName).MaximumLength(40);
         RuleFor(x => x.VariantOptionName).MaximumLength(40);
         RuleFor(x => x.ColourHex)
@@ -386,7 +390,38 @@ public sealed class CreateSupportInquiryRequestValidator : AbstractValidator<Cre
     }
 }
 
-public sealed class RegisterPushTokenRequestValidator : AbstractValidator<RegisterPushTokenRequest>
+public sealed class ReportAppIssueRequestValidator : AbstractValidator<ReportAppIssueRequest>
+{
+    public ReportAppIssueRequestValidator()
+    {
+        RuleFor(x => x.Kind).Must(VIVI.Core.Entities.AppIssueKinds.IsValid)
+            .WithMessage("Kind must be Crash, Bug or Buffering.");
+        RuleFor(x => x.Title).NotEmpty().MaximumLength(300);
+        RuleFor(x => x.Details).MaximumLength(8000);
+        RuleFor(x => x.Screen).MaximumLength(200);
+        RuleFor(x => x.AppVersion).MaximumLength(40);
+        RuleFor(x => x.Platform).MaximumLength(40);
+        RuleFor(x => x.DeviceInfo).MaximumLength(300);
+    }
+}
+
+public sealed class ReportTapsRequestValidator : AbstractValidator<ReportTapsRequest>
+{
+    public ReportTapsRequestValidator()
+    {
+        RuleFor(x => x.Screen).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Cells).NotNull().Must(c => c.Count <= 200)
+            .WithMessage("Too many cells in one report.");
+        RuleForEach(x => x.Cells).ChildRules(cell =>
+        {
+            cell.RuleFor(c => c.Col).InclusiveBetween(0, VIVI.Core.Entities.ScreenTapCell.GridColumns - 1);
+            cell.RuleFor(c => c.Row).InclusiveBetween(0, VIVI.Core.Entities.ScreenTapCell.GridRows - 1);
+            cell.RuleFor(c => c.Taps).InclusiveBetween(1, 500);
+        });
+    }
+}
+
+public sealed class RegisterPushTokenRequestValidator: AbstractValidator<RegisterPushTokenRequest>
 {
     public RegisterPushTokenRequestValidator()
     {

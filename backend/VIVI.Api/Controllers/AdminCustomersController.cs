@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Customers;
 using VIVI.Api.Mapping;
+using VIVI.Core;
 using VIVI.Core.Enums;
 using VIVI.Infrastructure.Commerce;
 using VIVI.Infrastructure.Data;
@@ -39,11 +40,22 @@ public sealed class AdminCustomersController : ControllerBase
         if (!string.IsNullOrWhiteSpace(q))
         {
             var term = q.Trim().ToLowerInvariant();
+            // IDs are typed in any case, with or without the dash ("vc k7m2qx", "VVKQTD007").
+            var code = PublicIds.Normalize(q).Replace("-", string.Empty);
+            var searchCodes = code.Length >= 3; // "vc" alone would match every customer
             query = query.Where(c =>
                 c.FullName.ToLower().Contains(term)
                 || (c.PhoneNumber != null && c.PhoneNumber.Contains(term))
                 || (c.Email != null && c.Email.ToLower().Contains(term))
-                || (c.ShipFullName != null && c.ShipFullName.ToLower().Contains(term)));
+                || (c.ShipFullName != null && c.ShipFullName.ToLower().Contains(term))
+                || (searchCodes
+                    && c.CustomerCode != null
+                    && c.CustomerCode.Replace("-", "").Contains(code))
+                || (searchCodes
+                    && _db.LaunchMemberships.Any(m =>
+                        m.CustomerId == c.Id
+                        && m.MemberCode != null
+                        && m.MemberCode.Replace("-", "").Contains(code))));
         }
 
         var customers = await query
@@ -60,6 +72,15 @@ public sealed class AdminCustomersController : ControllerBase
             .Select(g => new { CustomerId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.CustomerId, x => x.Count, cancellationToken);
 
+        var memberCodes = await _db.LaunchMemberships
+            .AsNoTracking()
+            .Where(m => customerIds.Contains(m.CustomerId) && m.MemberCode != null)
+            .Select(m => new { m.CustomerId, m.MemberCode })
+            .ToListAsync(cancellationToken);
+        var memberCodeByCustomer = memberCodes
+            .GroupBy(m => m.CustomerId)
+            .ToDictionary(g => g.Key, g => g.First().MemberCode);
+
         return Ok(customers.Select(c =>
         {
             var email = c.Email?.Trim() ?? string.Empty;
@@ -67,6 +88,8 @@ public sealed class AdminCustomersController : ControllerBase
             return new AdminCustomerListItemResponse
             {
                 Id = c.Id,
+                CustomerCode = c.CustomerCode,
+                MemberCode = memberCodeByCustomer.GetValueOrDefault(c.Id),
                 FullName = CommerceMapper.DisplayCustomerName(c),
                 PhoneNumber = c.PhoneNumber ?? string.Empty,
                 Email = isSynthetic ? string.Empty : email,

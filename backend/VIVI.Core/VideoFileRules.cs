@@ -5,7 +5,7 @@ namespace VIVI.Core;
 
 public static class VideoFileRules
 {
-    public const long DefaultMaxBytes = 2L * 1024 * 1024 * 1024;
+    public const long DefaultMaxBytes = 10L * 1024 * 1024 * 1024;
 
     public static readonly HashSet<string> AllowedExtensions =
         new(StringComparer.OrdinalIgnoreCase) { ".mp4", ".mov", ".webm" };

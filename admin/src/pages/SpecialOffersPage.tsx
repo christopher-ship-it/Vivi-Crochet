@@ -3,7 +3,7 @@ import { listSpecialOffers, updateSpecialOffer, listFoundingMembers } from '../a
 import { listCourses } from '../api/courses';
 import { ApiClientError } from '../api/client';
 import type { AdminSpecialOffer, AdminSpecialOfferRequest, Course, FoundingMember } from '../types';
-import { formatDate, formatInr } from '../utils/format';
+import { formatDate, formatInr, formatMoney } from '../utils/format';
 
 type NumberDraft = number | '';
 
@@ -19,6 +19,11 @@ type OfferFormState = {
   mrp: NumberDraft;
   accessDurationDays: NumberDraft;
   viralProjectCourseId: string;
+  /** Sell the membership in the US (USD). */
+  usEnabled: boolean;
+  usLaunchPrice: NumberDraft;
+  usRegularPrice: NumberDraft;
+  usMrp: NumberDraft;
 };
 
 function parseNumberDraft(raw: string): NumberDraft {
@@ -40,6 +45,10 @@ function toForm(offer: AdminSpecialOffer): OfferFormState {
     mrp: offer.mrp,
     accessDurationDays: offer.accessDurationDays,
     viralProjectCourseId: offer.viralProjectCourseId ?? '',
+    usEnabled: Boolean(offer.usPrice),
+    usLaunchPrice: offer.usPrice?.launchPrice ?? '',
+    usRegularPrice: offer.usPrice?.regularPriceAfterLaunch ?? '',
+    usMrp: offer.usPrice?.mrp ? offer.usPrice.mrp : '',
   };
 }
 
@@ -126,6 +135,10 @@ export function SpecialOffersPage() {
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (!offer || !form) return;
+    if (form.usEnabled && (form.usLaunchPrice === '' || form.usLaunchPrice <= 0 || form.usRegularPrice === '' || form.usRegularPrice <= 0)) {
+      setSaveError('Enter the US launch price and US regular price in dollars, or turn off "Sell in the United States".');
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     setSaved(false);
@@ -142,6 +155,14 @@ export function SpecialOffersPage() {
         mrp: form.mrp === '' ? offer.mrp : form.mrp,
         accessDurationDays: form.accessDurationDays === '' ? offer.accessDurationDays : form.accessDurationDays,
         viralProjectCourseId: form.viralProjectCourseId || null,
+        usPrice: form.usEnabled
+          ? {
+              launchPrice: Number(form.usLaunchPrice),
+              regularPriceAfterLaunch: Number(form.usRegularPrice),
+              mrp: form.usMrp === '' ? 0 : Number(form.usMrp),
+            }
+          : null,
+        removeUsPrice: !form.usEnabled && Boolean(offer.usPrice),
       };
       const updated = await updateSpecialOffer(offer.courseId, payload);
       setOffer(updated);
@@ -208,7 +229,10 @@ export function SpecialOffersPage() {
         </div>
         <div className="card card--stat">
           <span className="card__label">Revenue</span>
-          <span className="card__value">{formatInr(offer.revenue)}</span>
+          <span className="card__value">
+            {formatInr(offer.revenue)}
+            {offer.revenueUsd ? ` + ${formatMoney(offer.revenueUsd, 'USD')}` : ''}
+          </span>
         </div>
       </div>
 
@@ -337,6 +361,69 @@ export function SpecialOffersPage() {
             </div>
           </div>
 
+          <div className="form-field span-6">
+            <label className="choice" htmlFor="usEnabled">
+              <input
+                id="usEnabled"
+                type="checkbox"
+                checked={form.usEnabled}
+                onChange={(e) => setForm({ ...form, usEnabled: e.target.checked })}
+              />
+              <span>Sell in the United States (priced in US dollars)</span>
+            </label>
+            <span className="form-hint">
+              US customers only see this membership when US prices are set. Launch slots are shared with India.
+            </span>
+          </div>
+
+          {form.usEnabled ? (
+            <>
+              <div className="form-field span-2">
+                <label htmlFor="usLaunchPrice">US launch price</label>
+                <div className="input-affix">
+                  <span className="input-affix__prefix">$</span>
+                  <input
+                    id="usLaunchPrice"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.usLaunchPrice}
+                    onChange={(e) => setForm({ ...form, usLaunchPrice: parseNumberDraft(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <div className="form-field span-2">
+                <label htmlFor="usRegularPrice">US regular price after launch</label>
+                <div className="input-affix">
+                  <span className="input-affix__prefix">$</span>
+                  <input
+                    id="usRegularPrice"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.usRegularPrice}
+                    onChange={(e) => setForm({ ...form, usRegularPrice: parseNumberDraft(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <div className="form-field span-2">
+                <label htmlFor="usMrp">US MRP (strikethrough)</label>
+                <div className="input-affix">
+                  <span className="input-affix__prefix">$</span>
+                  <input
+                    id="usMrp"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="Optional"
+                    value={form.usMrp}
+                    onChange={(e) => setForm({ ...form, usMrp: parseNumberDraft(e.target.value) })}
+                  />
+                </div>
+              </div>
+            </>
+          ) : null}
+
           <div className="form-field span-2">
             <label htmlFor="viralProject">Free viral project</label>
             <select
@@ -436,6 +523,8 @@ export function SpecialOffersPage() {
                 <thead>
                   <tr>
                     <th>Member #</th>
+                    <th>Founding ID</th>
+                    <th>Customer ID</th>
                     <th>Customer</th>
                     <th>Email</th>
                     <th>Phone</th>
@@ -451,12 +540,14 @@ export function SpecialOffersPage() {
                   {members.map((m) => (
                     <tr key={m.id}>
                       <td className="cell-strong">#{String(m.memberNumber).padStart(3, '0')}</td>
+                      <td className="cell-strong" style={{ whiteSpace: 'nowrap' }}>{m.memberCode || '—'}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{m.customerCode || '—'}</td>
                       <td>{m.customerName || '—'}</td>
                       <td className="cell-clip">{m.customerEmail}</td>
                       <td>{m.customerPhone || '—'}</td>
                       <td>{formatDate(m.joinedDate)}</td>
                       <td>{formatDate(m.expiryDate)}</td>
-                      <td>{formatInr(m.amountPaid)}</td>
+                      <td>{formatMoney(m.amountPaid, m.currency)}</td>
                       <td className="cell-clip">{m.orderNumber}</td>
                       <td>
                         <span className={`badge ${m.isActive ? 'badge--published' : 'badge--inactive'}`}>

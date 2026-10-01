@@ -47,13 +47,25 @@ public static class ShopSlotSchemaBootstrapper
                 FOREIGN KEY ([ParentProductId]) REFERENCES [Products] ([Id])');
         """;
 
+    /// <summary>Fibre / yarn weight / needle size specs for Crochet Essentials yarns (AddProductYarnSpecs migration).</summary>
+    public const string YarnSpecColumnsSql = """
+        IF COL_LENGTH('Products', 'FibreBlend') IS NULL
+            ALTER TABLE [Products] ADD [FibreBlend] nvarchar(80) NULL;
+
+        IF COL_LENGTH('Products', 'YarnWeight') IS NULL
+            ALTER TABLE [Products] ADD [YarnWeight] nvarchar(40) NULL;
+
+        IF COL_LENGTH('Products', 'NeedleSize') IS NULL
+            ALTER TABLE [Products] ADD [NeedleSize] nvarchar(40) NULL;
+        """;
+
     public const string DropLegacySlotsSql = """
         IF OBJECT_ID(N'[ShopSlotProducts]', N'U') IS NOT NULL DROP TABLE [ShopSlotProducts];
         IF OBJECT_ID(N'[ShopSlots]', N'U') IS NOT NULL DROP TABLE [ShopSlots];
         """;
 
     /// <summary>Full bootstrap: product columns + drop legacy slot tables.</summary>
-    public const string SchemaSql = ProductColumnsSql + "\n" + DropLegacySlotsSql;
+    public const string SchemaSql = ProductColumnsSql + "\n" + YarnSpecColumnsSql + "\n" + DropLegacySlotsSql;
 
     public static async Task EnsureAsync(ViviDbContext db, CancellationToken cancellationToken)
     {

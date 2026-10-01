@@ -11,6 +11,7 @@ import {
   View,
   type LayoutChangeEvent,
 } from 'react-native';
+import { reportIssue } from '../telemetry/telemetry';
 import { colors, fonts, radii } from '../theme';
 import { formatDuration } from '../utils/format';
 
@@ -32,6 +33,8 @@ interface LessonPlayerProps {
 }
 
 const CONTROLS_HIDE_MS = 3200;
+/** A stall longer than this is reported to the admin App health page. */
+const BUFFERING_REPORT_MS = 5000;
 /** Above this, show a clearer “large file” loading hint (production camera MOVs are often 400MB+). */
 const LARGE_LESSON_BYTES = 80 * 1024 * 1024;
 
@@ -51,6 +54,7 @@ function resolveContentType(
 
 export function LessonPlayer({
   streamUrl,
+  title,
   fileSizeBytes,
   contentType: sourceMime,
   onError,
@@ -133,6 +137,31 @@ export function LessonPlayer({
   useEffect(() => {
     onPlayingChange?.(isPlaying);
   }, [isPlaying, onPlayingChange]);
+
+  // Report to admin App health when the video sits in "loading" for over 5 seconds, either
+  // before it first plays or as a mid-play stall. One report per stall.
+  useEffect(() => {
+    if (status !== 'loading' || isPlaying) return;
+    const timer = setTimeout(() => {
+      if (scrubbingRef.current) return;
+      let host = '';
+      try { host = new URL(streamUrl).host; } catch { host = 'unknown'; }
+      void reportIssue({
+        kind: 'Buffering',
+        title: `${hasStarted ? 'Stalled mid-play' : 'Slow start'} >${BUFFERING_REPORT_MS / 1000}s: ${title}`,
+        details: [
+          `phase: ${hasStarted ? 'rebuffer' : 'initial load'}`,
+          `video: ${title}`,
+          `position: ${Math.round(player.currentTime || 0)}s of ${Math.round(player.duration || 0)}s`,
+          `fileSizeMB: ${fileSizeBytes != null ? Math.round(fileSizeBytes / 1048576) : 'unknown'}`,
+          `host: ${host}`,
+        ].join('\n'),
+      });
+    }, BUFFERING_REPORT_MS);
+    return () => clearTimeout(timer);
+    // hasStarted is read at fire time but must not restart the timer when it flips.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, isPlaying, streamUrl]);
 
   const isLoadingStatus = status === 'loading' || status === 'idle';
   const showInitialLoader = !hasStarted && isLoadingStatus;

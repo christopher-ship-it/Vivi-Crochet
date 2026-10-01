@@ -25,11 +25,49 @@ public sealed class LiveWeek
     /// set automatically the first time an admin edits the tutor for this specific week.
     /// </summary>
     public bool HasCustomTutor { get; set; }
+    /// <summary>Price for this week only; null uses <see cref="LiveSettings.PackagePrice"/>.</summary>
+    public decimal? PriceOverride { get; set; }
+    /// <summary>Class language for this week only; null uses <see cref="LiveSettings.Language"/>.</summary>
+    public string? LanguageOverride { get; set; }
+    /// <summary>Level for this week only; null uses <see cref="LiveSettings.Level"/>.</summary>
+    public string? LevelOverride { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
     public ICollection<LiveWeekSlot> Slots { get; set; } = new List<LiveWeekSlot>();
     public ICollection<LiveBooking> Bookings { get; set; } = new List<LiveBooking>();
+}
+
+/// <summary>
+/// Singleton row of studio-wide Live settings editable in the admin: price, class length,
+/// language and level. Weeks can override price, language and level individually.
+/// </summary>
+public sealed class LiveSettings
+{
+    /// <summary>Fixed id — there is only ever one row in this table.</summary>
+    public static readonly Guid SingletonId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+    public Guid Id { get; set; } = SingletonId;
+    public decimal PackagePrice { get; set; }
+    public int HoursPerClassDay { get; set; }
+    public string Language { get; set; } = "Tamil";
+    public string Level { get; set; } = "Basic";
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Name, timing and on/off state of one class session. Morning and Evening are always enabled;
+/// Extra1–Extra3 are the optional additional sessions an admin can switch on.
+/// </summary>
+public sealed class LiveSessionDefinition
+{
+    public Guid Id { get; set; }
+    public LiveSlotType SlotType { get; set; }
+    public string Name { get; set; } = string.Empty;
+    /// <summary>Display hours, e.g. "10:00 AM – 12:00 PM".</summary>
+    public string Hours { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 /// <summary>
@@ -57,6 +95,8 @@ public sealed class LiveWeekSlot
     public int SeatsBooked { get; set; }
     /// <summary>When true, customers cannot book this Morning/Evening circle for the week.</summary>
     public bool IsBlocked { get; set; }
+    /// <summary>Timing for this week only; null uses the session's default hours.</summary>
+    public string? HoursOverride { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

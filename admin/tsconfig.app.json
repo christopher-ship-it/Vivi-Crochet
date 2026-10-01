@@ -22,5 +22,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Unit tests run with `node --test` and use Node's own modules, which the browser app doesn't load.
+  "exclude": ["src/**/*.test.ts"]
 }

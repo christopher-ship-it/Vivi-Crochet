@@ -12,16 +12,20 @@ import { CustomersPage } from './pages/CustomersPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LiveBookingDetailPage } from './pages/LiveBookingDetailPage';
 import { LiveBookingsPage } from './pages/LiveBookingsPage';
+import { LiveSettingsPage } from './pages/LiveSettingsPage';
 import { LiveClassBookingsPage } from './pages/LiveClassBookingsPage';
 import { LoginPage } from './pages/LoginPage';
 import { OrderDetailPage } from './pages/OrderDetailPage';
 import { OrdersPage } from './pages/OrdersPage';
+import { PaymentsPage } from './pages/PaymentsPage';
 import { ProductFormPage } from './pages/ProductFormPage';
+import { ProductImportPage } from './pages/ProductImportPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { SpecialOffersPage } from './pages/SpecialOffersPage';
 import { ViralProjectsPage } from './pages/ViralProjectsPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { SupportPage } from './pages/SupportPage';
+import { AppHealthPage } from './pages/AppHealthPage';
 import { AccountPage } from './pages/AccountPage';
 import { DeleteAccountPage } from './pages/DeleteAccountPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
@@ -47,6 +51,7 @@ export default function App() {
               <Route path="course-orders" element={<CourseOrdersPage />} />
               <Route path="live-bookings" element={<LiveClassBookingsPage />} />
               <Route path="live" element={<LiveBookingsPage />} />
+              <Route path="live/settings" element={<LiveSettingsPage />} />
               <Route path="live/bookings/:id" element={<LiveBookingDetailPage />} />
               <Route path="courses" element={<CoursesPage />} />
               <Route path="courses/new" element={<CourseFormPage />} />
@@ -55,10 +60,13 @@ export default function App() {
               <Route path="categories" element={<CategoriesPage />} />
               <Route path="special-offers" element={<SpecialOffersPage />} />
               <Route path="viral-projects" element={<ViralProjectsPage />} />
-              <Route path="customers" element={<CustomersPage />} />
+              <Route path="payments" element={<PaymentsPage />} />
+              <Route path="customers"element={<CustomersPage />} />
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="support" element={<SupportPage />} />
+              <Route path="app-health" element={<AppHealthPage />} />
               <Route path="products" element={<ProductsPage />} />
+              <Route path="products/import" element={<ProductImportPage />} />
               <Route path="products/new" element={<ProductFormPage />} />
               <Route path="products/:id/edit" element={<ProductFormPage />} />
               <Route path="account" element={<AccountPage />} />

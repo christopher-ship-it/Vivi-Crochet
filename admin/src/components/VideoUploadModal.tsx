@@ -184,7 +184,7 @@ export function VideoUploadModal({
         {step === 'select' && (
           <>
             <div className="form-field" style={{ marginBottom: 16 }}>
-              <label>Video file (MP4, MOV, WebM · max 2 GB)</label>
+              <label>Video file (MP4, MOV, WebM · max 10 GB)</label>
               <input
                 ref={fileInputRef}
                 type="file"

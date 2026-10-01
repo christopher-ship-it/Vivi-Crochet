@@ -94,7 +94,6 @@ export function ProductCard({
   const imageBlock = (
     <ProductImageFrame
       uri={product.imageUrl}
-      fleece={product.productType === 'Resell'}
       style={[
         styles.imageWell,
         isRail

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { deleteAdminOrder, listAdminOrders } from '../api/orders';
 import { ApiClientError } from '../api/client';
 import type { AdminOrderListItem } from '../types';
-import { formatInr } from '../utils/format';
+import { formatMoney, parseApiDate } from '../utils/format';
 import { downloadExcel, type ExcelColumn } from '../utils/exportExcel';
 import { RowActionsMenu } from './RowActionsMenu';
 import { confirmDialog } from './AppDialog';
@@ -59,7 +59,7 @@ const COLUMNS: ColumnDef[] = [
     id: 'category', label: 'Category', width: 140, shopOnly: true, clip: true,
     render: (o) => (o.productRoom ? ROOM_LABEL[o.productRoom] ?? o.productRoom : '—'),
   },
-  { id: 'amount', label: 'Amount', width: 96, render: (o) => formatInr(o.totalAmount) },
+  { id: 'amount', label: 'Amount', width: 96, render: (o) => formatMoney(o.totalAmount, o.currency) },
   { id: 'payment', label: 'Payment', width: 96, render: (o) => o.paymentStatus ?? '—' },
   {
     id: 'status', label: 'Status', width: 120,
@@ -226,7 +226,7 @@ export function OrderList({
           width: Math.max(10, Math.round(c.width / 7)),
           value: EXCEL_VALUE[c.id],
         })),
-        { header: 'Placed on', width: 20, value: (o: AdminOrderListItem) => new Date(o.createdAt) },
+        { header: 'Placed on', width: 20, value: (o: AdminOrderListItem) => parseApiDate(o.createdAt) },
       ];
       await downloadExcel(showDelivery ? 'product-orders' : 'course-orders', 'Orders', sheetColumns, visibleOrders);
     } catch (err) {

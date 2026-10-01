@@ -22,6 +22,10 @@ export interface FoundingMembershipOffer {
   launchPrice: number;
   regularPriceAfterLaunch: number;
   mrp: number;
+  /** INR or USD. */
+  currency?: string;
+  /** False when the membership is not sold in the user's country. */
+  availableInMarket?: boolean;
   launchLimit: number;
   completedPurchaseCount: number;
   remaining: number;
@@ -34,6 +38,8 @@ export interface FoundingMembershipOffer {
 export interface MyMembership {
   isMember: boolean;
   memberNumber?: number | null;
+  /** Founding-member ID, e.g. VV-KQTD-007. */
+  memberCode?: string | null;
   offerName?: string | null;
   badgeGrantedAt?: string | null;
   accessExpiryDate?: string | null;

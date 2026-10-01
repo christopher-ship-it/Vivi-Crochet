@@ -3,7 +3,7 @@ import { deleteAdminCustomer, listAdminCustomers } from '../api/customers';
 import { ApiClientError } from '../api/client';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { AdminCustomerListItem } from '../types';
-import { formatDate } from '../utils/format';
+import { formatDate, parseApiDate } from '../utils/format';
 import { downloadExcel, type ExcelColumn } from '../utils/exportExcel';
 import { confirmDialog } from '../components/AppDialog';
 
@@ -61,6 +61,8 @@ export function CustomersPage() {
     setExporting(true);
     try {
       const columns: ExcelColumn<AdminCustomerListItem>[] = [
+        { header: 'Customer ID', width: 16, value: (x) => x.customerCode },
+        { header: 'Founding member ID', width: 20, value: (x) => x.memberCode },
         { header: 'Name', width: 24, value: (x) => x.fullName },
         { header: 'Track', width: 14, value: (x) => x.track },
         { header: 'Age', width: 8, value: (x) => x.age },
@@ -70,8 +72,8 @@ export function CustomersPage() {
         { header: 'Phone', width: 16, value: (x) => x.phoneNumber },
         { header: 'Email', width: 30, value: (x) => x.email },
         { header: 'Orders', width: 9, value: (x) => x.orderCount },
-        { header: 'Signed up', width: 20, value: (x) => new Date(x.signedUpAt) },
-        { header: 'Last active', width: 20, value: (x) => new Date(x.lastActiveAt) },
+        { header: 'Signed up', width: 20, value: (x) => parseApiDate(x.signedUpAt) },
+        { header: 'Last active', width: 20, value: (x) => parseApiDate(x.lastActiveAt) },
         { header: 'Status', width: 10, value: (x) => (x.isActive ? 'Active' : 'Inactive') },
       ];
       await downloadExcel('customers', 'Customers', columns, customers);
@@ -108,7 +110,7 @@ export function CustomersPage() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Name or phone"
+          placeholder="Name, phone or customer ID"
           style={{ minWidth: 220 }}
         />
         <button type="submit" className="btn">
@@ -161,6 +163,7 @@ export function CustomersPage() {
         <div className="table-wrap">
           <table className="data-table data-table--customers">
             <colgroup>
+              <col className="col-code" />
               <col className="col-name" />
               <col className="col-track" />
               <col className="col-age" />
@@ -177,6 +180,7 @@ export function CustomersPage() {
             </colgroup>
             <thead>
               <tr>
+                <th className="col-code">Customer ID</th>
                 <th className="col-name">Name</th>
                 <th className="col-track">Track</th>
                 <th className="col-age">Age</th>
@@ -195,6 +199,14 @@ export function CustomersPage() {
             <tbody>
               {customers.map((customer) => (
                 <tr key={customer.id}>
+                  <td className="col-code">
+                    <div className="cell-strong">{customer.customerCode || '—'}</div>
+                    {customer.memberCode ? (
+                      <div style={{ fontSize: 12, color: 'var(--vivi-pink-dark)' }} title="Founding member ID">
+                        {customer.memberCode}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="col-name col-clip cell-strong">
                     {customer.fullName || '—'}
                   </td>

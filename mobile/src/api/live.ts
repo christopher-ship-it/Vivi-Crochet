@@ -1,6 +1,7 @@
 import { apiRequest } from './client';
 
-export type LiveSlotType = 'Morning' | 'Evening';
+/** Morning and Evening are always offered; Extra1–Extra3 are additional sessions admin can switch on. */
+export type LiveSlotType = 'Morning' | 'Evening' | 'Extra1' | 'Extra2' | 'Extra3';
 
 export interface LiveSlotAvailability {
   slotType: LiveSlotType | string;
@@ -12,6 +13,8 @@ export interface LiveSlotAvailability {
   status: 'Available' | 'FullyBooked' | 'Blocked' | string;
   isBlocked?: boolean;
 }
+
+export { sessionStartMinutes, sortSlotsByTime } from './liveSessions';
 
 export interface LiveDay {
   date: string;
@@ -27,7 +30,11 @@ export interface LiveWeekSummary {
   startDate: string;
   endDate: string;
   isBookable: boolean;
+  /** Price for this week, set in the admin (a week can have its own price). */
   packagePrice: number;
+  /** Class language and level for this week, set in the admin. */
+  language?: string;
+  level?: string;
   tutorName?: string | null;
   tutorPhotoUrl?: string | null;
   slots: LiveSlotAvailability[];
@@ -72,9 +79,6 @@ export interface LiveBooking {
   confirmedAt?: string | null;
 }
 
-/** Morning Circle start (IST) — matches LiveStudio:MorningSlotHours. */
-export const MORNING_CIRCLE_START_MINUTES = 10 * 60; // 10:00 AM
-
 function toLocalIsoDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -96,33 +100,6 @@ export function indiaNow(from = new Date()): Date {
   }).formatToParts(from);
   const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
   return new Date(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
-}
-
-/** Monday that starts the current Live week (India calendar). */
-export function currentWeekMondayIndia(from = new Date()): Date {
-  const d = indiaNow(from);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay(); // 0 = Sun
-  const offset = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + offset);
-  return d;
-}
-
-/**
- * First Monday still open for new bookings: current week until Monday
- * Morning Circle start (10:00 IST); afterward next Monday.
- */
-export function firstOpenWeekMondayIndia(from = new Date()): Date {
-  const monday = currentWeekMondayIndia(from);
-  const now = indiaNow(from);
-  const cutoff = new Date(monday);
-  cutoff.setHours(10, 0, 0, 0);
-  if (now.getTime() >= cutoff.getTime()) {
-    const next = new Date(monday);
-    next.setDate(next.getDate() + 7);
-    return next;
-  }
-  return monday;
 }
 
 /**
@@ -156,18 +133,15 @@ export function formatLiveClassWeekRange(startDate: string): string {
   return `${start.getDate()} ${months[start.getMonth()]} – ${end.getDate()} ${months[end.getMonth()]}`;
 }
 
-/** Customer UI: next 2 open weeks from first Monday still bookable (Mon 10:00 IST cutoff). */
-export function filterCurrentAndNextLiveWeeks(weeks: LiveWeekSummary[]): LiveWeekSummary[] {
-  const mondayIso = toLocalIsoDate(firstOpenWeekMondayIndia());
-  return weeks
-    .filter((w) => String(w.startDate).slice(0, 10) >= mondayIso)
-    .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.weekNumber - b.weekNumber)
-    .slice(0, 2);
-}
-
+/**
+ * The server decides which weeks are open for booking (it knows the Morning session's start
+ * time, which admin can change), so the app shows exactly what it returns.
+ */
 export async function listLiveWeeks(): Promise<LiveWeekSummary[]> {
   const weeks = await apiRequest<LiveWeekSummary[]>('/api/live/weeks', {}, false);
-  return filterCurrentAndNextLiveWeeks(weeks);
+  return [...weeks].sort(
+    (a, b) => a.startDate.localeCompare(b.startDate) || a.weekNumber - b.weekNumber,
+  );
 }
 
 export async function getLiveWeek(weekId: string): Promise<LiveWeekDetail> {

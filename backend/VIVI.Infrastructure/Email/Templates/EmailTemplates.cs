@@ -425,6 +425,12 @@ public static class LaunchMembershipConfirmationEmail
         string? viralProjectName)
     {
         var memberTag = $"#{membership.MemberNumber:D3}";
+        var memberIdHtml = string.IsNullOrWhiteSpace(membership.MemberCode)
+            ? string.Empty
+            : $"""<tr><td><strong>Founding member ID</strong></td><td align="right">{WebUtility.HtmlEncode(membership.MemberCode)}</td></tr>""";
+        var memberIdText = string.IsNullOrWhiteSpace(membership.MemberCode)
+            ? string.Empty
+            : $"Founding member ID: {membership.MemberCode}\n";
         var benefits = new List<string>
         {
             "1-year access",
@@ -445,6 +451,7 @@ public static class LaunchMembershipConfirmationEmail
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;font-size:14px;">
   <tr><td><strong>Order</strong></td><td align="right">{WebUtility.HtmlEncode(order.OrderNumber)}</td></tr>
   <tr><td><strong>Founding member number</strong></td><td align="right">{memberTag}</td></tr>
+  {memberIdHtml}
   <tr><td><strong>Amount paid</strong></td><td align="right">{EmailLayout.FormatInr(order.TotalAmount)}</td></tr>
   <tr><td><strong>Access expires</strong></td><td align="right">{EmailLayout.FormatDate(membership.AccessExpiryDate)}</td></tr>
 </table>
@@ -461,7 +468,7 @@ Welcome to {offerName}. You are Founding Member {memberTag}.
 
 Order: {order.OrderNumber}
 Founding member number: {memberTag}
-Amount paid: {EmailLayout.FormatInr(order.TotalAmount)}
+{memberIdText}Amount paid:{EmailLayout.FormatInr(order.TotalAmount)}
 Access expires: {EmailLayout.FormatDate(membership.AccessExpiryDate)}
 
 Your benefits:

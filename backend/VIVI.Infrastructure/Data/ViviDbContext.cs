@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using VIVI.Core;
 using VIVI.Core.Entities;
 
 namespace VIVI.Infrastructure.Data;
@@ -7,6 +8,47 @@ public sealed class ViviDbContext : DbContext
 {
     public ViviDbContext(DbContextOptions<ViviDbContext> options) : base(options)
     {
+    }
+
+    /// <summary>Every new customer gets a unique customer ID (VC-…) no matter where it is created.</summary>
+    public override async Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var customer in NewCustomersWithoutCode())
+            customer.CustomerCode = await UnusedCustomerCodeAsync(cancellationToken);
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        foreach (var customer in NewCustomersWithoutCode())
+            customer.CustomerCode = UnusedCustomerCodeAsync(CancellationToken.None).GetAwaiter().GetResult();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    private List<Customer> NewCustomersWithoutCode() =>
+        ChangeTracker.Entries<Customer>()
+            .Where(e => e.State == EntityState.Added && string.IsNullOrEmpty(e.Entity.CustomerCode))
+            .Select(e => e.Entity)
+            .ToList();
+
+    /// <summary>A code no tracked or stored customer has (the unique index is the final guard).</summary>
+    public async Task<string> UnusedCustomerCodeAsync(CancellationToken cancellationToken)
+    {
+        var pending = ChangeTracker.Entries<Customer>()
+            .Select(e => e.Entity.CustomerCode)
+            .Where(c => !string.IsNullOrEmpty(c))
+            .ToHashSet();
+
+        while (true)
+        {
+            var code = PublicIds.NewCustomerCode();
+            if (pending.Contains(code))
+                continue;
+            if (!await Customers.AsNoTracking().AnyAsync(c => c.CustomerCode == code, cancellationToken))
+                return code;
+        }
     }
 
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
@@ -25,6 +67,7 @@ public sealed class ViviDbContext : DbContext
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<CourseEnrollment> CourseEnrollments => Set<CourseEnrollment>();
     public DbSet<CourseBundleItem> CourseBundleItems => Set<CourseBundleItem>();
+    public DbSet<CoursePrice> CoursePrices => Set<CoursePrice>();
     public DbSet<LaunchOfferCounter> LaunchOfferCounters => Set<LaunchOfferCounter>();
     public DbSet<LaunchMembership> LaunchMemberships => Set<LaunchMembership>();
     public DbSet<EmailNotification> EmailNotifications => Set<EmailNotification>();
@@ -33,8 +76,12 @@ public sealed class ViviDbContext : DbContext
     public DbSet<LiveWeekSlot> LiveWeekSlots => Set<LiveWeekSlot>();
     public DbSet<LiveBooking> LiveBookings => Set<LiveBooking>();
     public DbSet<LiveTutorDefault> LiveTutorDefaults => Set<LiveTutorDefault>();
+    public DbSet<LiveSettings> LiveSettings => Set<LiveSettings>();
+    public DbSet<LiveSessionDefinition> LiveSessionDefinitions => Set<LiveSessionDefinition>();
     public DbSet<SupportInquiry> SupportInquiries => Set<SupportInquiry>();
     public DbSet<DevicePushToken> DevicePushTokens => Set<DevicePushToken>();
+    public DbSet<AppIssue> AppIssues => Set<AppIssue>();
+    public DbSet<ScreenTapCell> ScreenTapCells => Set<ScreenTapCell>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -135,6 +182,9 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.BallWeight).HasMaxLength(40);
             entity.Property(x => x.YarnLength).HasMaxLength(40);
             entity.Property(x => x.CrochetHookSize).HasMaxLength(40);
+            entity.Property(x => x.FibreBlend).HasMaxLength(80);
+            entity.Property(x => x.YarnWeight).HasMaxLength(40);
+            entity.Property(x => x.NeedleSize).HasMaxLength(40);
             entity.Property(x => x.ColourName).HasMaxLength(40);
             entity.Property(x => x.ColourHex).HasMaxLength(7);
             entity.Property(x => x.VariantOptionName).HasMaxLength(40);
@@ -230,12 +280,16 @@ public sealed class ViviDbContext : DbContext
         {
             entity.ToTable("Customers");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.CustomerCode).HasMaxLength(16);
+            entity.HasIndex(x => x.CustomerCode).IsUnique();
             entity.Property(x => x.FullName).HasMaxLength(120).IsRequired();
             entity.Property(x => x.PhoneNumber).HasMaxLength(20);
             entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
             entity.Property(x => x.Country).HasMaxLength(80);
             entity.Property(x => x.State).HasMaxLength(80);
             entity.Property(x => x.City).HasMaxLength(80);
+            entity.Property(x => x.LanguageCode).HasMaxLength(8);
+            entity.Property(x => x.CountryCode).HasMaxLength(2);
             entity.Property(x => x.AuthMethod).HasConversion<int>().IsRequired();
             entity.Property(x => x.ShipFullName).HasMaxLength(120);
             entity.Property(x => x.ShipPhone).HasMaxLength(20);
@@ -369,8 +423,30 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.BreakWeekday).HasConversion<int?>();
             entity.Property(x => x.TutorName).HasMaxLength(100).IsRequired();
             entity.Property(x => x.TutorPhotoBlobPath).HasMaxLength(500);
+            entity.Property(x => x.PriceOverride).HasPrecision(18, 2);
+            entity.Property(x => x.LanguageOverride).HasMaxLength(40);
+            entity.Property(x => x.LevelOverride).HasMaxLength(40);
             entity.HasIndex(x => new { x.SeasonYear, x.WeekNumber }).IsUnique();
             entity.HasIndex(x => x.StartDate);
+        });
+
+        modelBuilder.Entity<LiveSettings>(entity =>
+        {
+            entity.ToTable("LiveSettings");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.PackagePrice).HasPrecision(18, 2);
+            entity.Property(x => x.Language).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Level).HasMaxLength(40).IsRequired();
+        });
+
+        modelBuilder.Entity<LiveSessionDefinition>(entity =>
+        {
+            entity.ToTable("LiveSessionDefinitions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.SlotType).HasConversion<int>().IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Hours).HasMaxLength(60).IsRequired();
+            entity.HasIndex(x => x.SlotType).IsUnique();
         });
 
         modelBuilder.Entity<LiveTutorDefault>(entity =>
@@ -386,6 +462,7 @@ public sealed class ViviDbContext : DbContext
             entity.ToTable("LiveWeekSlots");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.SlotType).HasConversion<int>().IsRequired();
+            entity.Property(x => x.HoursOverride).HasMaxLength(60);
             entity.HasIndex(x => new { x.LiveWeekId, x.SlotType }).IsUnique();
             entity.Property(x => x.SeatsBooked).IsConcurrencyToken();
             entity.HasOne(x => x.Week)
@@ -469,6 +546,24 @@ public sealed class ViviDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<CoursePrice>(entity =>
+        {
+            entity.ToTable("CoursePrices");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.CountryCode).HasMaxLength(2).IsRequired();
+            entity.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.Price).HasPrecision(12, 2);
+            entity.Property(x => x.Mrp).HasPrecision(12, 2);
+            entity.Property(x => x.LaunchPrice).HasPrecision(12, 2);
+            entity.Property(x => x.RegularPriceAfterLaunch).HasPrecision(12, 2);
+            entity.HasIndex(x => new { x.CourseId, x.CountryCode }).IsUnique();
+
+            entity.HasOne(x => x.Course)
+                .WithMany(x => x.MarketPrices)
+                .HasForeignKey(x => x.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<CourseBundleItem>(entity =>
         {
             entity.ToTable("CourseBundleItems");
@@ -515,6 +610,8 @@ public sealed class ViviDbContext : DbContext
         {
             entity.ToTable("LaunchMemberships");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.MemberCode).HasMaxLength(16);
+            entity.HasIndex(x => x.MemberCode).IsUnique();
             entity.HasIndex(x => new { x.CourseId, x.MemberNumber }).IsUnique();
             entity.HasIndex(x => x.OrderItemId).IsUnique();
             entity.HasIndex(x => x.CustomerId);
@@ -576,6 +673,29 @@ public sealed class ViviDbContext : DbContext
                 .WithMany(x => x.SupportInquiries)
                 .HasForeignKey(x => x.CustomerId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AppIssue>(entity =>
+        {
+            entity.ToTable("AppIssues");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Kind).HasMaxLength(16).IsRequired();
+            entity.Property(x => x.Title).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.Details).HasMaxLength(8000);
+            entity.Property(x => x.Screen).HasMaxLength(200);
+            entity.Property(x => x.AppVersion).HasMaxLength(40);
+            entity.Property(x => x.Platform).HasMaxLength(40);
+            entity.Property(x => x.DeviceInfo).HasMaxLength(300);
+            entity.HasIndex(x => x.CreatedAt);
+            entity.HasIndex(x => new { x.Kind, x.IsResolved });
+        });
+
+        modelBuilder.Entity<ScreenTapCell>(entity =>
+        {
+            entity.ToTable("ScreenTapCells");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Screen).HasMaxLength(200).IsRequired();
+            entity.HasIndex(x => new { x.Screen, x.Col, x.Row }).IsUnique();
         });
     }
 }

@@ -5,6 +5,7 @@ import {
   Alert,
   Dimensions,
   NativeScrollEvent,
+  Modal,
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
@@ -13,6 +14,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProduct } from '../../src/api/products';
 import { ApiClientError } from '../../src/api/client';
@@ -25,21 +27,23 @@ import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { BackButton } from '../../src/components/BackButton';
 import { LearnThisModal } from '../../src/components/LearnThisModal';
 import { ProductVariantPicker } from '../../src/components/ProductVariantPicker';
+import { ZoomableImage } from '../../src/components/ZoomableImage';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Product } from '../../src/types';
 import { useI18n } from '../../src/i18n';
 import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, radii, spacing } from '../../src/theme';
 import { formatInr } from '../../src/utils/format';
+import { usePreferences } from '../../src/preferences/PreferencesContext';
 import { LEARN_PROMPT_DELAY_MS } from '../../src/utils/learnPromptTimer';
 import { useWishlist } from '../../src/wishlist/WishlistContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 /** Compact product gallery so title, price, and CTAs stay closer to first view. */
 const GALLERY_HEIGHT = Math.round(SCREEN_WIDTH * 0.72);
 /** Inset so product photos aren’t edge-cropped / feel zoomed. */
 const IMAGE_SIZE = Math.round(Math.min(SCREEN_WIDTH, GALLERY_HEIGHT) * 0.88);
-const DESC_PREVIEW_CHARS = 220;
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -60,8 +64,12 @@ export default function ProductDetailScreen() {
   const [cartMessage, setCartMessage] = useState<string | null>(null);
   const [cartError, setCartError] = useState<string | null>(null);
   const [activeImage, setActiveImage] = useState(0);
-  const [descExpanded, setDescExpanded] = useState(false);
-  const { addProduct, setCartToProduct } = useCart();
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [viewerZoomed, setViewerZoomed] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsTab, setDetailsTab] = useState<'specs' | 'description'>('specs');
+  const { addProduct, setCartToProduct, peekItems } = useCart();
+  const { market } = usePreferences();
   const { isWishlisted, toggleWishlist } = useWishlist();
   const learnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -90,7 +98,8 @@ export default function ProductDetailScreen() {
       setSelectedVariantId(initialVariantId);
       setLearnDismissed(false);
       setLearnModalVisible(false);
-      setDescExpanded(false);
+      setDetailsOpen(false);
+      setDetailsTab('specs');
       const stock = initialVariantId
         ? (variants.find((v) => v.id === initialVariantId)?.availableStock ?? 0)
         : (data.availableStock ?? 0);
@@ -206,17 +215,36 @@ export default function ProductDetailScreen() {
   const wishlistId = product.parentProductId ?? product.id;
   const wishlisted = isWishlisted(wishlistId);
   const description = product.description?.trim() ?? '';
-  const descNeedsMore = description.length > DESC_PREVIEW_CHARS;
-  const descShown =
-    !descExpanded && descNeedsMore
-      ? `${description.slice(0, DESC_PREVIEW_CHARS).trimEnd()}…`
-      : description;
+  const hasSpecs = Boolean(
+    (!isEssentials && display.productCode?.trim()) ||
+      product.spec1?.trim() ||
+      product.spec2?.trim() ||
+      product.ballWeight?.trim() ||
+      product.yarnLength?.trim() ||
+      product.crochetHookSize?.trim() ||
+      product.fibreBlend?.trim() ||
+      product.yarnWeight?.trim() ||
+      product.needleSize?.trim(),
+  );
+  const hasDescription = description.length > 0;
+  const highlights = [
+    { label: t('product.codeLabel'), value: isEssentials ? undefined : display.productCode?.trim() },
+    { label: t('product.ballWeightLabel'), value: product.ballWeight?.trim() },
+    { label: t('product.yarnLengthLabel'), value: product.yarnLength?.trim() },
+    { label: t('product.hookSizeLabel'), value: product.crochetHookSize?.trim() },
+    { label: t('product.fibreLabel'), value: product.fibreBlend?.trim() },
+    { label: t('product.yarnWeightLabel'), value: product.yarnWeight?.trim() },
+    { label: t('product.needleSizeLabel'), value: product.needleSize?.trim() },
+  ].filter((h): h is { label: string; value: string } => Boolean(h.value));
+  const activeDetailsTab: 'specs' | 'description' =
+    detailsTab === 'specs' && !hasSpecs && hasDescription ? 'description' : detailsTab;
 
   const learnMeta = course
     ? [
         course.level,
         t('product.lessonsCount', { count: course.videoCount }),
-        t('product.priceFrom', { price: formatInr(course.price) }),
+        // The linked course price is India-market copy; outside India the course page shows its own price.
+        market.canOrderProducts ? t('product.priceFrom', { price: formatInr(course.price) }) : null,
       ]
         .filter(Boolean)
         .join(' · ')
@@ -281,7 +309,13 @@ export default function ProductDetailScreen() {
     setCartMessage(null);
     try {
       await addProduct(sellableProduct, qty);
-      setCartMessage(`Added ${qty} to your cart.`);
+      // Show the running total too: adding a second colour says "Added 1", but the cart now holds 2.
+      const total = peekItems().reduce((sum, line) => sum + line.quantity, 0);
+      setCartMessage(
+        total > qty
+          ? `Added ${qty} to your cart · ${total} items in cart`
+          : `Added ${qty} to your cart.`,
+      );
     } catch (err) {
       setCartError(err instanceof Error ? err.message : 'Could not add to cart.');
     } finally {
@@ -352,7 +386,7 @@ export default function ProductDetailScreen() {
           style={styles.scroll}
           contentContainerStyle={{
             // Leave room so specs/description aren't hidden under the sticky cart bar.
-            paddingBottom: outOfStock ? 28 : 200,
+            paddingBottom: outOfStock || !market.canOrderProducts ? 28 : 200,
           }}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
@@ -373,11 +407,16 @@ export default function ProductDetailScreen() {
                     // at once delayed the first (hero) paint.
                     const shouldLoad = Math.abs(index - activeImage) <= 1;
                     return (
-                      <View key={`${url}-${index}`} style={styles.heroSlide}>
+                      <Pressable
+                        key={`${url}-${index}`}
+                        style={styles.heroSlide}
+                        onPress={() => setViewerIndex(index)}
+                        accessibilityRole="imagebutton"
+                        accessibilityLabel={`View ${product.name} image ${index + 1} full screen`}
+                      >
                         {shouldLoad ? (
                           <ProductImageFrame
                             uri={url}
-                            fleece={isEssentials}
                             style={styles.heroFrame}
                             imageStyle={[styles.heroImage, outOfStock && styles.heroImageDimmed]}
                             contentFit="contain"
@@ -389,7 +428,7 @@ export default function ProductDetailScreen() {
                             placeholderSize="hero"
                           />
                         ) : null}
-                      </View>
+                      </Pressable>
                     );
                   })}
                 </ScrollView>
@@ -432,7 +471,6 @@ export default function ProductDetailScreen() {
               <ProductImageFrame
                 style={[styles.heroSlide, styles.heroFallback]}
                 uri={null}
-                fleece={isEssentials}
                 placeholderMark={product.name.charAt(0).toUpperCase() || 'V'}
                 placeholderSize="hero"
                 dimmed={outOfStock}
@@ -528,38 +566,73 @@ export default function ProductDetailScreen() {
               </Pressable>
             ) : null}
 
-            {description ? (
-              <View style={[styles.descBlock, isEssentials && styles.descBlockCompact]}>
-                <Text style={[styles.sectionLabel, isEssentials && styles.sectionLabelCompact]}>
-                  About
-                </Text>
-                <Text style={[styles.desc, isEssentials && styles.descCompact]}>{descShown}</Text>
-                {descNeedsMore ? (
-                  <Pressable
-                    style={styles.readMoreBtn}
-                    onPress={() => setDescExpanded((v) => !v)}
-                    hitSlop={6}
-                  >
-                    <Text style={styles.readMoreText}>
-                      {descExpanded ? 'Show less' : 'Show more'}
-                    </Text>
-                    <Ionicons
-                      name={descExpanded ? 'chevron-up' : 'chevron-down'}
-                      size={14}
-                      color={colors.pink}
-                    />
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-
-            {display.productCode?.trim() || product.spec1?.trim() || product.spec2?.trim() ||
-            product.ballWeight?.trim() || product.yarnLength?.trim() || product.crochetHookSize?.trim() ? (
+            {hasSpecs || hasDescription ? (
               <View style={styles.detailsBlock}>
-                <Text style={[styles.sectionLabel, isEssentials && styles.sectionLabelCompact]}>
-                  {t('product.productDetails')}
-                </Text>
-                {display.productCode?.trim() ? (
+                <Pressable
+                  style={styles.detailsHeader}
+                  onPress={() => setDetailsOpen((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: detailsOpen }}
+                >
+                  <Text style={styles.detailsTitle}>{t('product.productDetails')}</Text>
+                  <View style={styles.detailsChevron}>
+                    <Ionicons
+                      name={detailsOpen ? 'chevron-up' : 'chevron-down'}
+                      size={20}
+                      color={colors.ink}
+                    />
+                  </View>
+                </Pressable>
+                {detailsOpen ? (
+                  <View>
+                    {highlights.length > 0 ? (
+                      <View style={styles.highlightGrid}>
+                        {highlights.map((h) => (
+                          <View key={h.label} style={styles.highlightCell}>
+                            <Text style={styles.detailKey}>{h.label}</Text>
+                            <Text style={styles.detailValue}>{h.value}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                    <View style={styles.detailsTabs}>
+                      {hasSpecs ? (
+                        <Pressable
+                          style={[styles.detailsTab, activeDetailsTab === 'specs' && styles.detailsTabActive]}
+                          onPress={() => setDetailsTab('specs')}
+                        >
+                          <Text
+                            style={[
+                              styles.detailsTabText,
+                              activeDetailsTab === 'specs' && styles.detailsTabTextActive,
+                            ]}
+                          >
+                            Specifications
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                      {hasDescription ? (
+                        <Pressable
+                          style={[
+                            styles.detailsTab,
+                            activeDetailsTab === 'description' && styles.detailsTabActive,
+                          ]}
+                          onPress={() => setDetailsTab('description')}
+                        >
+                          <Text
+                            style={[
+                              styles.detailsTabText,
+                              activeDetailsTab === 'description' && styles.detailsTabTextActive,
+                            ]}
+                          >
+                            Description
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    {activeDetailsTab === 'specs' ? (
+                      <View>
+                {!isEssentials && display.productCode?.trim() ? (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailKey}>{t('product.codeLabel')}</Text>
                     <Text style={styles.detailValue}>{display.productCode.trim()}</Text>
@@ -591,6 +664,30 @@ export default function ProductDetailScreen() {
                   <View style={styles.detailRow}>
                     <Text style={styles.detailKey}>{t('product.hookSizeLabel')}</Text>
                     <Text style={styles.detailValue}>{product.crochetHookSize.trim()}</Text>
+                  </View>
+                ) : null}
+                {product.fibreBlend?.trim() ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailKey}>{t('product.fibreLabel')}</Text>
+                    <Text style={styles.detailValue}>{product.fibreBlend.trim()}</Text>
+                  </View>
+                ) : null}
+                {product.yarnWeight?.trim() ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailKey}>{t('product.yarnWeightLabel')}</Text>
+                    <Text style={styles.detailValue}>{product.yarnWeight.trim()}</Text>
+                  </View>
+                ) : null}
+                {product.needleSize?.trim() ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailKey}>{t('product.needleSizeLabel')}</Text>
+                    <Text style={styles.detailValue}>{product.needleSize.trim()}</Text>
+                  </View>
+                ) : null}
+                      </View>
+                    ) : (
+                      <Text style={[styles.desc, isEssentials && styles.descCompact]}>{description}</Text>
+                    )}
                   </View>
                 ) : null}
               </View>
@@ -642,7 +739,11 @@ export default function ProductDetailScreen() {
           </View>
         </ScrollView>
 
-        {!outOfStock ? (
+        {!market.canOrderProducts ? (
+          <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, 8) + 12, paddingTop: 12 }]}>
+            <Text style={styles.indiaOnlyNote}>{t('market.productsIndiaOnly')}</Text>
+          </View>
+        ) : !outOfStock ? (
           <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, 8) + 4 }]}>
             {cartMessage ? (
               <View style={styles.successBanner}>
@@ -714,6 +815,57 @@ export default function ProductDetailScreen() {
         ) : null}
       </View>
 
+      <Modal
+        visible={viewerIndex !== null}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setViewerIndex(null)}
+        onShow={() => setViewerZoomed(false)}
+      >
+        <GestureHandlerRootView style={styles.viewerRoot}>
+          {viewerIndex !== null ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              scrollEnabled={!viewerZoomed}
+              showsHorizontalScrollIndicator={false}
+              contentOffset={{ x: viewerIndex * SCREEN_WIDTH, y: 0 }}
+              onMomentumScrollEnd={(e) =>
+                setViewerIndex(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH))
+              }
+            >
+              {galleryUrls.map((url, index) => (
+                <ZoomableImage
+                  key={`viewer-${url}-${index}`}
+                  uri={url}
+                  width={SCREEN_WIDTH}
+                  height={SCREEN_HEIGHT}
+                  active={index === viewerIndex}
+                  onTap={() => setViewerIndex(null)}
+                  onZoomChange={setViewerZoomed}
+                  accessibilityLabel={`${product.name} image ${index + 1}`}
+                />
+              ))}
+            </ScrollView>
+          ) : null}
+          <Pressable
+            style={[styles.viewerClose, { top: insets.top + 12 }]}
+            onPress={() => setViewerIndex(null)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Close image"
+          >
+            <Ionicons name="close" size={24} color={colors.white} />
+          </Pressable>
+          {galleryUrls.length > 1 && viewerIndex !== null ? (
+            <Text style={[styles.viewerCounter, { bottom: insets.bottom + 20 }]}>
+              {viewerIndex + 1} / {galleryUrls.length}
+            </Text>
+          ) : null}
+        </GestureHandlerRootView>
+      </Modal>
+
       {course && (
         <LearnThisModal
           visible={learnModalVisible}
@@ -729,6 +881,37 @@ export default function ProductDetailScreen() {
 
 function createStyles(fonts: UiFonts) {
   return StyleSheet.create({
+  viewerRoot: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  viewerSlide: {
+    width: SCREEN_WIDTH,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerImage: {
+    width: SCREEN_WIDTH,
+    height: '100%',
+  },
+  viewerClose: {
+    position: 'absolute',
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerCounter: {
+    position: 'absolute',
+    alignSelf: 'center',
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.white,
+  },
   root: {
     flex: 1,
     backgroundColor: colors.shopCanvas,
@@ -957,12 +1140,6 @@ function createStyles(fonts: UiFonts) {
   sectionLabelCompact: {
     marginBottom: 4,
   },
-  descBlock: {
-    marginTop: spacing.lg,
-  },
-  descBlockCompact: {
-    marginTop: spacing.sm,
-  },
   desc: {
     fontFamily: fonts.regular,
     fontSize: 15,
@@ -973,19 +1150,67 @@ function createStyles(fonts: UiFonts) {
     fontSize: 14,
     lineHeight: 20,
   },
-  readMoreBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-  },
-  readMoreText: {
-    fontFamily: fonts.semiBold,
-    fontSize: 13,
-    color: colors.pink,
-  },
   detailsBlock: {
     marginTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  detailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  detailsTitle: {
+    fontFamily: fonts.extraBold,
+    fontSize: 18,
+    color: colors.ink,
+  },
+  detailsChevron: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#f3f3f3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  highlightGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 14,
+  },
+  highlightCell: {
+    width: '50%',
+    paddingRight: 12,
+    paddingVertical: 8,
+    gap: 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  detailsTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  detailsTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  detailsTabActive: {
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
+  },
+  detailsTabText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  detailsTabTextActive: {
+    color: colors.white,
   },
   detailRow: {
     flexDirection: 'row',
@@ -1038,12 +1263,19 @@ function createStyles(fonts: UiFonts) {
     fontSize: 14,
     color: colors.ink,
   },
+  indiaOnlyNote: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.pinkDark,
+    textAlign: 'center',
+  },
   stickyBar: {
     backgroundColor: colors.white,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.softBorder,
     paddingHorizontal: spacing.md,
-    paddingTop: 10,
+    paddingTop: 6,
   },
   qtyBlock: {
     marginTop: 0,
@@ -1073,8 +1305,8 @@ function createStyles(fonts: UiFonts) {
     overflow: 'hidden',
   },
   qtyBtn: {
-    width: 40,
-    height: 40,
+    width: 30,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1087,10 +1319,10 @@ function createStyles(fonts: UiFonts) {
     color: colors.ink,
   },
   qtyValue: {
-    minWidth: 36,
+    minWidth: 30,
     textAlign: 'center',
     fontFamily: fonts.extraBold,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.ink,
   },
   stockHint: {
@@ -1129,14 +1361,14 @@ function createStyles(fonts: UiFonts) {
   actionRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: 10,
-    marginTop: 10,
+    gap: 8,
+    marginTop: 6,
   },
   addBtn: {
     flex: 1.15,
     backgroundColor: colors.pink,
     borderRadius: radii.md,
-    paddingVertical: 15,
+    paddingVertical: 10,
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1145,14 +1377,14 @@ function createStyles(fonts: UiFonts) {
   },
   addBtnText: {
     fontFamily: fonts.extraBold,
-    fontSize: 14,
+    fontSize: 13,
     color: colors.white,
   },
   buyBtn: {
     flex: 1,
     backgroundColor: colors.white,
     borderRadius: radii.md,
-    paddingVertical: 15,
+    paddingVertical: 9,
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1163,7 +1395,7 @@ function createStyles(fonts: UiFonts) {
   },
   buyBtnText: {
     fontFamily: fonts.extraBold,
-    fontSize: 14,
+    fontSize: 13,
     color: colors.pink,
   },
   btnDisabled: {
@@ -1211,12 +1443,14 @@ function createStyles(fonts: UiFonts) {
     marginTop: 2,
   },
   successBanner: {
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
     backgroundColor: '#f3f8f4',
     borderWidth: 1,
     borderColor: '#d5e8db',
     borderRadius: radii.md,
-    padding: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1234,7 +1468,8 @@ function createStyles(fonts: UiFonts) {
     color: colors.pink,
   },
   errorBanner: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
     backgroundColor: '#fff5f5',
     borderWidth: 1,
     borderColor: '#f0d0d0',

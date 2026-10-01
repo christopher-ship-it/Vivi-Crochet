@@ -63,6 +63,97 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.ToTable("AdminUsers", (string)null);
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.AppIssue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DeviceInfo")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("IsFatal")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsResolved")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("Platform")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Screen")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Kind", "IsResolved");
+
+                    b.ToTable("AppIssues", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.ScreenTapCell", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Col")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Row")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Screen")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<long>("Taps")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Screen", "Col", "Row")
+                        .IsUnique();
+
+                    b.ToTable("ScreenTapCells", (string)null);
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -177,6 +268,52 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasIndex("CategoryId", "SortOrder");
 
                     b.ToTable("Courses", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.CoursePrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<Guid>("CourseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<decimal?>("LaunchPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<decimal?>("Mrp")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<decimal?>("RegularPriceAfterLaunch")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseId", "CountryCode")
+                        .IsUnique();
+
+                    b.ToTable("CoursePrices", (string)null);
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.CourseBundleItem", b =>
@@ -295,8 +432,16 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<string>("CountryCode")
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("CustomerCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -313,6 +458,10 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<string>("LanguageCode")
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
 
                     b.Property<DateTime?>("LastWeeklyPushAt")
                         .HasColumnType("datetime2");
@@ -375,6 +524,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CustomerCode")
+                        .IsUnique()
+                        .HasFilter("[CustomerCode] IS NOT NULL");
 
                     b.HasIndex("Email")
                         .IsUnique();
@@ -567,6 +720,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("MemberCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<int>("MemberNumber")
                         .HasColumnType("int");
 
@@ -585,6 +742,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("MemberCode")
+                        .IsUnique()
+                        .HasFilter("[MemberCode] IS NOT NULL");
 
                     b.HasIndex("OrderId");
 
@@ -716,6 +877,70 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.ToTable("LiveBookings", (string)null);
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.LiveSessionDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Hours")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SlotType")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SlotType")
+                        .IsUnique();
+
+                    b.ToTable("LiveSessionDefinitions", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.LiveSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("HoursPerClassDay")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("PackagePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LiveSettings", (string)null);
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.LiveTutorDefault", b =>
                 {
                     b.Property<Guid>("Id")
@@ -760,6 +985,18 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<bool>("IsBookable")
                         .HasColumnType("bit");
 
+                    b.Property<string>("LanguageOverride")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("LevelOverride")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal?>("PriceOverride")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("SeasonYear")
                         .HasColumnType("int");
 
@@ -799,6 +1036,10 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("HoursOverride")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
 
                     b.Property<bool>("IsBlocked")
                         .HasColumnType("bit");
@@ -1244,6 +1485,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<string>("FibreBlend")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
@@ -1255,6 +1500,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("NeedleSize")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<Guid?>("ParentProductId")
                         .HasColumnType("uniqueidentifier");
@@ -1291,6 +1540,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("YarnLength")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("YarnWeight")
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
@@ -1545,6 +1798,17 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Navigation("BundleCourse");
 
                     b.Navigation("IncludedCourse");
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.CoursePrice", b =>
+                {
+                    b.HasOne("VIVI.Core.Entities.Course", "Course")
+                        .WithMany("MarketPrices")
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Course");
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.CourseEnrollment", b =>
@@ -1892,6 +2156,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Navigation("IncludedInBundles");
 
                     b.Navigation("LaunchOffer");
+
+                    b.Navigation("MarketPrices");
 
                     b.Navigation("Videos");
                 });

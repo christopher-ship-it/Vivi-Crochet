@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AnimatedSplash, SPLASH_STAGE_COLOR } from '../src/components/AnimatedSplash';
 import { loadStoredLanguage } from '../src/i18n/storage';
+import { routeAfterSplash } from '../src/preferences/onboardingFlow';
+import { loadStoredCountry } from '../src/preferences/storage';
 import { loadLastHref, wasRecentlyBackgrounded } from '../src/navigation/lastRoute';
 import { wakeApi } from '../src/utils/wakeApi';
 
@@ -34,8 +36,10 @@ export default function SplashRoute() {
     }
     void (async () => {
       try {
-        const stored = await loadStoredLanguage();
-        router.replace(stored ? '/(tabs)' : '/language-onboarding');
+        // New user: Language -> Country -> app. Returning user with both saved: straight in.
+        // Someone missing one of them is asked only for that one.
+        const [language, country] = await Promise.all([loadStoredLanguage(), loadStoredCountry()]);
+        router.replace(routeAfterSplash(language, country));
       } catch {
         router.replace('/(tabs)');
       }

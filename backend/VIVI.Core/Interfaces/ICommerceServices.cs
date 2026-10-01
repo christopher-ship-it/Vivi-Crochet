@@ -73,4 +73,8 @@ public interface IDeliveryEstimateService
     string CustomerDeliveryLabel(Order order);
     void ApplySystemEstimate(Order order, DeliveryWindow window, bool isCoimbatore, DateTime utcAnchor);
     void ApplyConfirmedDates(Order order, DateTime paidAtUtc);
+    /// <summary>Stores an already-planned estimate (window + calendar dates) on the order.</summary>
+    void ApplyEstimate(Order order, DeliveryDateRange dates, DeliveryWindow window, bool isCoimbatore);
+    /// <summary>The IST calendar day a UTC instant falls on.</summary>
+    DateTime IstDate(DateTime utcAnchor);
 }

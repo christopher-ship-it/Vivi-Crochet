@@ -2,6 +2,7 @@ import { apiRequest } from './client';
 import type {
   AdminLiveBookingDetail,
   AdminLiveBookingListItem,
+  AdminLiveSettings,
   AdminLiveTutorDefault,
   AdminLiveWeek,
   LiveBookingStatus,
@@ -70,6 +71,44 @@ export async function setLiveSlotBlocked(
   await apiRequest<void>(`/api/admin/live/weeks/${weekId}/slots/${slotType}/blocked`, {
     method: 'PUT',
     body: JSON.stringify({ isBlocked }),
+  });
+}
+
+export async function getLiveSettings(): Promise<AdminLiveSettings> {
+  return apiRequest<AdminLiveSettings>('/api/admin/live/settings');
+}
+
+export async function updateLiveSettings(settings: AdminLiveSettings): Promise<AdminLiveSettings> {
+  return apiRequest<AdminLiveSettings>('/api/admin/live/settings', {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  });
+}
+
+/** Null clears an override so the week uses the studio-wide value again. */
+export async function setLiveWeekOverrides(
+  weekId: string,
+  overrides: {
+    priceOverride: number | null;
+    languageOverride: string | null;
+    levelOverride: string | null;
+  },
+): Promise<void> {
+  await apiRequest<void>(`/api/admin/live/weeks/${weekId}/overrides`, {
+    method: 'PUT',
+    body: JSON.stringify(overrides),
+  });
+}
+
+/** Null or empty clears the override so the session uses its default hours. */
+export async function setLiveSlotHours(
+  weekId: string,
+  slotType: LiveSlotType | string,
+  hours: string | null,
+): Promise<void> {
+  await apiRequest<void>(`/api/admin/live/weeks/${weekId}/slots/${slotType}/hours`, {
+    method: 'PUT',
+    body: JSON.stringify({ hours }),
   });
 }
 

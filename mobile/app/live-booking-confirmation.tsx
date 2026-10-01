@@ -58,7 +58,8 @@ export default function LiveBookingConfirmationScreen() {
     return <ErrorView message={error ?? t('liveBookingConfirmation.notFound')} onRetry={load} />;
   }
 
-  const time = slotTimeCopy(booking.slotType);
+  // The server sends this booking's real timing (admin can change it); the copy is a fallback.
+  const time = booking.slotHours?.trim() || slotTimeCopy(booking.slotType);
 
   return (
     <>

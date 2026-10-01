@@ -9,7 +9,7 @@ import { OrderStatusBadge } from '../../src/components/OrderStatusBadge';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
 import { HeroGradient } from '../../src/components/HeroGradient';
 import { colors, fonts, radii, spacing } from '../../src/theme';
-import { formatInr } from '../../src/utils/format';
+import { formatMoney } from '../../src/utils/format';
 import {
   buildOrderPipeline,
   formatDeliveryRange,
@@ -86,14 +86,14 @@ export default function OrderDetailScreen() {
               <View style={styles.itemBody}>
                 <Text style={styles.itemName}>{item.itemNameSnapshot}</Text>
                 <Text style={styles.itemMeta}>
-                  Qty {item.quantity} · {formatInr(item.totalAmount)}
+                  Qty {item.quantity} · {formatMoney(item.totalAmount, order.currency)}
                 </Text>
               </View>
             </View>
           ))}
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total paid</Text>
-            <Text style={styles.totalValue}>{formatInr(order.totalAmount)}</Text>
+            <Text style={styles.totalValue}>{formatMoney(order.totalAmount, order.currency)}</Text>
           </View>
         </View>
 

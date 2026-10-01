@@ -20,13 +20,13 @@ public sealed class DeliveryTests
     public DeliveryTests(ApiFactory factory) => _factory = factory;
 
     [Fact]
-    public async Task Handmade_coimbatore_is_next_day()
+    public async Task Handmade_coimbatore_is_one_to_two_days()
     {
         var quote = await QuoteAsync(await PublishProductAsync("Handmade", ProductType.Handmade), "Coimbatore");
         Assert.True(quote.IsCoimbatore);
         Assert.Equal(1, quote.MinDays);
-        Assert.Equal(1, quote.MaxDays);
-        Assert.Equal("Tomorrow", quote.Summary);
+        Assert.Equal(2, quote.MaxDays);
+        Assert.Equal("1–2 days", quote.Summary);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class DeliveryTests
     {
         var quote = await QuoteAsync(await PublishProductAsync($"City {city}", ProductType.Handmade), city);
         Assert.True(quote.IsCoimbatore);
-        Assert.Equal(1, quote.MaxDays);
+        Assert.Equal(2, quote.MaxDays);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public sealed class DeliveryTests
         created.EnsureSuccessStatusCode();
         var body = await created.Content.ReadFromJsonAsync<CreateOrderResponse>(AuthTests.Json);
         Assert.Equal(1, body!.Delivery!.MinDays);
-        Assert.Equal(1, body.Delivery.MaxDays);
+        Assert.Equal(2, body.Delivery.MaxDays);
         Assert.NotEqual(new DateTime(2030, 1, 1), body.Delivery.EstimatedDeliveryDateFrom.Date);
         Assert.Equal("Online Payment", body.PaymentMethod);
     }
@@ -235,6 +235,124 @@ public sealed class DeliveryTests
         delivered.EnsureSuccessStatusCode();
         var afterDeliver = await delivered.Content.ReadFromJsonAsync<AdminOrderDetailResponse>(AuthTests.Json);
         Assert.Equal(OrderStatus.Delivered, afterDeliver!.Status);
+    }
+
+    [Fact]
+    public async Task Same_customer_paid_orders_get_delivery_dates_two_days_apart()
+    {
+        var productId = await PublishProductAsync("Repeat Buyer", ProductType.Handmade);
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+
+        var ends = new List<DateTime>();
+        for (var i = 0; i < 3; i++)
+        {
+            var created = await customer.PostAsJsonAsync("/api/orders", new
+            {
+                items = new[] { new { itemType = "Product", productId, quantity = 1 } },
+                paymentMethod = "OnlinePayment",
+                shippingAddress = Address("Coimbatore")
+            });
+            created.EnsureSuccessStatusCode();
+            var body = await created.Content.ReadFromJsonAsync<CreateOrderResponse>(AuthTests.Json);
+            await PayAsync(customer, body!.OrderId);
+            var order = await customer.GetFromJsonAsync<OrderResponse>($"/api/orders/{body.OrderId}", AuthTests.Json);
+            ends.Add(order!.Delivery!.ExpectedTo.Date);
+        }
+
+        Assert.Equal(ends[0].AddDays(2), ends[1]);
+        Assert.Equal(ends[1].AddDays(2), ends[2]);
+    }
+
+    [Fact]
+    public async Task Repeat_order_quote_reflects_previous_order_delivery()
+    {
+        var productId = await PublishProductAsync("Quote Repeat", ProductType.Handmade);
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        var created = await customer.PostAsJsonAsync("/api/orders", new
+        {
+            items = new[] { new { itemType = "Product", productId, quantity = 1 } },
+            paymentMethod = "OnlinePayment",
+            shippingAddress = Address("Chennai")
+        });
+        var body = await created.Content.ReadFromJsonAsync<CreateOrderResponse>(AuthTests.Json);
+        await PayAsync(customer, body!.OrderId);
+        var first = await customer.GetFromJsonAsync<OrderResponse>($"/api/orders/{body.OrderId}", AuthTests.Json);
+
+        var quote = await customer.PostAsJsonAsync("/api/orders/delivery-quote", new
+        {
+            items = new[] { new { itemType = "Product", productId, quantity = 1 } },
+            shippingAddress = Address("Chennai")
+        });
+        quote.EnsureSuccessStatusCode();
+        var next = await quote.Content.ReadFromJsonAsync<DeliveryQuoteResponse>(AuthTests.Json);
+        Assert.Equal(first!.Delivery!.ExpectedTo.Date.AddDays(2), next!.EstimatedDeliveryDateTo.Date);
+        Assert.Equal(next.EstimatedDeliveryDateFrom.Date, next.EstimatedDeliveryDateTo.Date);
+    }
+
+    [Fact]
+    public async Task Essentials_orders_are_not_chained_and_do_not_affect_handmade()
+    {
+        var handmade = await PublishProductAsync("Chain HM", ProductType.Handmade);
+        var essentials = await PublishProductAsync("Chain ES", ProductType.Resell);
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+
+        var hm1 = await PlaceAndPayAsync(customer, handmade, "Coimbatore");
+        var es1 = await PlaceAndPayAsync(customer, essentials, "Coimbatore");
+        var es2 = await PlaceAndPayAsync(customer, essentials, "Coimbatore");
+        var hm2 = await PlaceAndPayAsync(customer, handmade, "Coimbatore");
+
+        // Essentials keep the standard window: same dates each time, no chaining.
+        Assert.Equal(es1.Delivery!.ExpectedTo.Date, es2.Delivery!.ExpectedTo.Date);
+        Assert.Equal(es1.Delivery.ExpectedTo.Date, es1.Delivery.ExpectedFrom.Date.AddDays(1));
+        // Handmade chains from the previous Handmade order, ignoring the Essentials orders.
+        Assert.Equal(hm1.Delivery!.ExpectedTo.Date.AddDays(2), hm2.Delivery!.ExpectedTo.Date);
+    }
+
+    [Fact]
+    public async Task Concurrent_handmade_payments_get_sequential_delivery_dates()
+    {
+        var handmade = await PublishProductAsync("Concurrent HM", ProductType.Handmade);
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+
+        var orderIds = new List<Guid>();
+        for (var i = 0; i < 3; i++)
+        {
+            var created = await customer.PostAsJsonAsync("/api/orders", new
+            {
+                items = new[] { new { itemType = "Product", productId = handmade, quantity = 1 } },
+                paymentMethod = "OnlinePayment",
+                shippingAddress = Address("Coimbatore")
+            });
+            created.EnsureSuccessStatusCode();
+            orderIds.Add((await created.Content.ReadFromJsonAsync<CreateOrderResponse>(AuthTests.Json))!.OrderId);
+        }
+
+        await Task.WhenAll(orderIds.Select(id => PayAsync(customer, id)));
+
+        var ends = new List<DateTime>();
+        foreach (var id in orderIds)
+        {
+            var order = await customer.GetFromJsonAsync<OrderResponse>($"/api/orders/{id}", AuthTests.Json);
+            ends.Add(order!.Delivery!.ExpectedTo.Date);
+        }
+
+        ends.Sort();
+        Assert.Equal(ends[0].AddDays(2), ends[1]);
+        Assert.Equal(ends[1].AddDays(2), ends[2]);
+    }
+
+    private async Task<OrderResponse> PlaceAndPayAsync(HttpClient customer, Guid productId, string city)
+    {
+        var created = await customer.PostAsJsonAsync("/api/orders", new
+        {
+            items = new[] { new { itemType = "Product", productId, quantity = 1 } },
+            paymentMethod = "OnlinePayment",
+            shippingAddress = Address(city)
+        });
+        created.EnsureSuccessStatusCode();
+        var body = await created.Content.ReadFromJsonAsync<CreateOrderResponse>(AuthTests.Json);
+        await PayAsync(customer, body!.OrderId);
+        return (await customer.GetFromJsonAsync<OrderResponse>($"/api/orders/{body.OrderId}", AuthTests.Json))!;
     }
 
     [Fact]

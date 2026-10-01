@@ -33,7 +33,7 @@ import { useI18n } from '../../src/i18n';
 import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, radii, spacing } from '../../src/theme';
 import type { Course } from '../../src/types';
-import { formatInr } from '../../src/utils/format';
+import { formatMoney } from '../../src/utils/format';
 import { resolveCollectionOwnership } from '../../src/utils/mainCourses';
 import { applyStatusBar } from '../../src/utils/statusBar';
 
@@ -266,6 +266,11 @@ export default function OffersScreen() {
     ? offer?.launchPrice ?? course?.price ?? 0
     : offer?.regularPriceAfterLaunch ?? course?.price ?? 0;
   const displayMrp = offer?.mrp ?? course?.mrp ?? null;
+  // Prices arrive from the server in the user's currency; no price = not sold in their country.
+  const currency = offer?.currency ?? course?.currency ?? 'INR';
+  const money = (amount: number) => formatMoney(amount, currency);
+  const unavailableInCountry =
+    !showAsOwned && (offer?.availableInMarket === false || course?.availableInMarket === false);
   const accessDays = offer?.accessDurationDays ?? course?.accessDays ?? 30;
   const title = offer?.offerName || course?.name || t('offers.collectionName');
 
@@ -465,30 +470,32 @@ export default function OffersScreen() {
                       </View>
                     ) : null}
                   </>
+                ) : unavailableInCountry ? (
+                  <Text style={styles.note}>{t('market.membershipUnavailable')}</Text>
                 ) : (
                   <Animated.View style={fadeUp(priceAnim)}>
                     <View style={styles.priceRow}>
                       <Animated.Text
                         style={[styles.price, { transform: [{ scale: priceScale }] }]}
                       >
-                        {formatInr(displayPrice)}
+                        {money(displayPrice)}
                       </Animated.Text>
                       {savings > 0 && displayMrp != null ? (
-                        <Text style={styles.mrp}>{formatInr(displayMrp)}</Text>
+                        <Text style={styles.mrp}>{money(displayMrp)}</Text>
                       ) : null}
                     </View>
                     {savings > 0 ? (
                       <View style={styles.saveChip}>
                         <Ionicons name="pricetag" size={12} color={colors.success} />
                         <Text style={styles.saveText}>
-                          {t('offers.youSave', { amount: formatInr(savings) })}
+                          {t('offers.youSave', { amount: money(savings) })}
                         </Text>
                       </View>
                     ) : null}
                   </Animated.View>
                 )}
 
-                {spotsRemaining != null ? (
+                {spotsRemaining != null && !unavailableInCountry ? (
                   <View style={styles.spots}>
                     <View style={styles.spotsHeader}>
                       <Ionicons name="flame" size={14} color={colors.pink} />
@@ -511,6 +518,7 @@ export default function OffersScreen() {
                   </View>
                 ) : null}
 
+                {unavailableInCountry ? null : (
                 <Animated.View
                   style={[
                     styles.ctaWrap,
@@ -549,8 +557,9 @@ export default function OffersScreen() {
                     </LinearGradient>
                   </Pressable>
                 </Animated.View>
+                )}
 
-                {!showAsOwned ? (
+                {!showAsOwned && !unavailableInCountry ? (
                   <View style={styles.noteRow}>
                     <Ionicons name="lock-closed" size={11} color={colors.muted} />
                     <Text style={styles.note}>

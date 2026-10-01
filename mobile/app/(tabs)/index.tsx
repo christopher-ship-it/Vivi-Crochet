@@ -17,7 +17,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourse, listCourses } from '../../src/api/courses';
 import { listMyEnrollments } from '../../src/api/enrollments';
-import { formatLiveClassWeekRange, listLiveWeeks, type LiveWeekSummary } from '../../src/api/live';
+import {
+  formatLiveClassWeekRange,
+  listLiveWeeks,
+  sortSlotsByTime,
+  type LiveSlotAvailability,
+  type LiveWeekSummary,
+} from '../../src/api/live';
 import { listProducts } from '../../src/api/products';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { useCart } from '../../src/cart/CartContext';
@@ -31,7 +37,7 @@ import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, spacing } from '../../src/theme';
 import { selectDiscoverCourses, selectMainCourses } from '../../src/utils/mainCourses';
 import { getCoursePathCursor } from '../../src/utils/coursePathProgress';
-import { formatInr } from '../../src/utils/format';
+import { formatCoursePrice } from '../../src/utils/format';
 import { applyStatusBar } from '../../src/utils/statusBar';
 
 const GAP = 10;
@@ -49,10 +55,16 @@ type ResumeInfo = {
 const LEARN_CHIP_ICONS = ['heart-outline', 'flower-outline', 'ribbon-outline'] as const;
 
 /** Display hours when the API sends none. */
-const SLOT_FALLBACK_HOURS: Record<'Morning' | 'Evening', string> = {
+const SLOT_FALLBACK_HOURS: Record<string, string> = {
   Morning: '10:00 AM – 12:00 PM',
   Evening: '6:00 PM – 8:00 PM',
 };
+
+/** Shown until the week loads; once it does, the week's own sessions (including any additional ones) are used. */
+const DEFAULT_LIVE_SLOTS = ['Morning', 'Evening'] as const;
+
+/** The Home card has room for three session chips; the Live tab lists them all. */
+const MAX_HOME_LIVE_SLOTS = 3;
 
 /** "10:00 AM – 12:00 PM" → "10 AM–12 PM" so it fits a small chip. */
 function compactHours(hours: string, dropMeridiem = false): string {
@@ -316,14 +328,14 @@ export default function HomeScreen() {
             style={({ pressed }) => [styles.slotChip, styles.slotChipTight, pressed && styles.pressed]}
             onPress={() => router.push(`/course/${course.id}`)}
             accessibilityRole="button"
-            accessibilityLabel={`${course.name}, ${formatInr(course.price)}`}
+            accessibilityLabel={`${course.name}, ${formatCoursePrice(course, t('market.notAvailable'))}`}
           >
             <Ionicons name={LEARN_CHIP_ICONS[i] ?? 'ribbon-outline'} size={14} color={room.accent} />
             <Text style={[styles.slotLabel, styles.chipName]} numberOfLines={1}>
               {course.name.split(' ')[0]}
             </Text>
             <Text style={styles.slotSeats} numberOfLines={1}>
-              {formatInr(course.price)}
+              {formatCoursePrice(course, t('market.notAvailable'))}
             </Text>
           </Pressable>
         ))}
@@ -331,28 +343,47 @@ export default function HomeScreen() {
     );
   }
 
-  const liveSlots = useMemo(
-    () =>
-      (['Morning', 'Evening'] as const).map((type) => {
-        const slot = liveWeek?.slots.find((s) => s.slotType === type);
-        const full = slot
-          ? slot.isBlocked === true ||
-            slot.status === 'Blocked' ||
-            slot.status === 'FullyBooked' ||
-            slot.seatsRemaining <= 0
-          : false;
-        return {
-          type,
-          hours: compactHours(slot?.hours?.trim() || SLOT_FALLBACK_HOURS[type], language !== 'en'),
-          full,
-          seats: slot?.seatsRemaining ?? null,
-        };
-      }),
-    [liveWeek, language],
-  );
+  const liveSlots = useMemo(() => {
+    const fromWeek: Pick<LiveSlotAvailability, 'slotType' | 'name' | 'hours'>[] = liveWeek?.slots?.length
+      ? sortSlotsByTime(liveWeek.slots)
+      : DEFAULT_LIVE_SLOTS.map((type) => ({ slotType: type, name: type, hours: undefined }));
+
+    return fromWeek.slice(0, MAX_HOME_LIVE_SLOTS).map((entry) => {
+      const type = String(entry.slotType);
+      const slot = liveWeek?.slots.find((s) => s.slotType === type);
+      const full = slot
+        ? slot.isBlocked === true ||
+          slot.status === 'Blocked' ||
+          slot.status === 'FullyBooked' ||
+          slot.seatsRemaining <= 0
+        : false;
+      // Morning and Evening have translated labels; additional sessions use the admin's name.
+      const label =
+        type === 'Morning'
+          ? t('home.slotMorning')
+          : type === 'Evening'
+            ? t('home.slotEvening')
+            : entry.name || type;
+      return {
+        type,
+        label,
+        icon: (type === 'Morning'
+          ? 'sunny-outline'
+          : type === 'Evening'
+            ? 'moon-outline'
+            : 'partly-sunny-outline') as 'sunny-outline' | 'moon-outline' | 'partly-sunny-outline',
+        hours: compactHours(
+          entry.hours?.trim() || SLOT_FALLBACK_HOURS[type] || '',
+          language !== 'en' && (type === 'Morning' || type === 'Evening'),
+        ),
+        full,
+        seats: slot?.seatsRemaining ?? null,
+      };
+    });
+  }, [liveWeek, language, t]);
   const liveWeekRange = liveWeek ? formatLiveClassWeekRange(liveWeek.startDate) : '';
 
-  function openLiveSlot(type: 'Morning' | 'Evening') {
+  function openLiveSlot(type: string) {
     if (!liveWeek) {
       router.push('/(tabs)/live');
       return;
@@ -436,7 +467,7 @@ export default function HomeScreen() {
             accessibilityIgnoresInvertColors
           />
         </View>
-        <View style={[styles.tallBody, room.id === 'learn' && styles.tallBodyLearn]}>
+        <View style={[styles.tallBody, room.id === 'learn' && styles.tallBodyLearn, styles.tallPanel]}>
           <Text
             style={styles.tallTitle}
             numberOfLines={room.id === 'live' ? 1 : 2}
@@ -465,36 +496,40 @@ export default function HomeScreen() {
                 {liveSlots.map((slot) => (
                   <Pressable
                     key={slot.type}
-                    style={({ pressed }) => [styles.slotChip, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.slotChip,
+                      liveSlots.length > 2 && styles.slotChipTight,
+                      pressed && styles.pressed,
+                    ]}
                     onPress={() => openLiveSlot(slot.type)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${t(slot.type === 'Morning' ? 'home.slotMorning' : 'home.slotEvening')} ${slot.hours}`}
+                    accessibilityLabel={`${slot.label} ${slot.hours}`}
                   >
-                    <Ionicons
-                      name={slot.type === 'Morning' ? 'sunny-outline' : 'moon-outline'}
-                      size={14}
-                      color={room.accent}
-                    />
+                    <Ionicons name={slot.icon} size={14} color={room.accent} />
                     <View style={styles.slotCopy}>
-                      <Text style={styles.slotLabel} numberOfLines={1}>
-                        {t(slot.type === 'Morning' ? 'home.slotMorning' : 'home.slotEvening')}
-                      </Text>
-                      <Text style={styles.slotHours} numberOfLines={1}>
+                      <View style={styles.slotTopRow}>
+                        <Text style={[styles.slotLabel, styles.slotLabelFlex]} numberOfLines={1}>
+                          {slot.label}
+                        </Text>
+                        {slot.seats != null ? (
+                          <Text
+                            style={[styles.slotSeats, slot.full && styles.slotSeatsFull]}
+                            numberOfLines={1}
+                          >
+                            {slot.full
+                              ? t('home.slotFull')
+                              : slot.seats === 1
+                                ? t('home.seatOneLeft')
+                                : t('home.seatsShort', { count: slot.seats })}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {/* Own full-width row so the time range is never cut to "12…". */}
+                      <Text style={styles.slotHours} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
                         {slot.hours}
                       </Text>
                     </View>
-                    {slot.seats != null ? (
-                      <Text
-                        style={[styles.slotSeats, slot.full && styles.slotSeatsFull]}
-                        numberOfLines={1}
-                      >
-                        {slot.full
-                          ? t('home.slotFull')
-                          : slot.seats === 1
-                            ? t('home.seatOneLeft')
-                            : t('home.seatsShort', { count: slot.seats })}
-                      </Text>
-                    ) : null}
+
                   </Pressable>
                 ))}
               </View>
@@ -540,6 +575,63 @@ export default function HomeScreen() {
               />
             </Animated.View>
           ) : null}
+        </View>
+      </Pressable>
+    );
+  }
+
+  /** Full-bleed photo slideshow with the copy set over a gradient (Shop, Viral & Trending). */
+  function renderPhotoCard(room: Room, grow: number) {
+    const isShop = room.id === 'shop';
+    const title = t(room.title);
+    const tint = isShop ? '58, 38, 23' : '40, 22, 70';
+    return (
+      <Pressable
+        key={room.id}
+        style={({ pressed }) => [
+          styles.card,
+          styles.projectsCard,
+          { flexGrow: grow, flexBasis: 0, backgroundColor: room.wash[1] },
+          pressed && styles.pressed,
+        ]}
+        onPress={() => open(room)}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}. ${t(room.sub)}`}
+      >
+        <View style={StyleSheet.absoluteFill}>
+          <RoomSlideshow items={isShop ? shopSlides : projectSlides} fallback={room.image} bare />
+        </View>
+        <LinearGradient
+          colors={[`rgba(${tint}, 0.28)`, `rgba(${tint}, 0)`, `rgba(${tint}, 0.55)`, `rgba(${tint}, 0.94)`]}
+          locations={[0, 0.3, 0.62, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={[styles.projectsBadge, isShop && styles.shopBadge]}>
+          <Ionicons name={isShop ? 'bag-handle' : 'flame'} size={11} color={colors.white} />
+          <Text style={styles.badgeText} numberOfLines={1}>
+            {isShop ? t('shop.handmadeHeroTitle') : t(room.badge ?? 'home.badgeProjects')}
+          </Text>
+        </View>
+        <View style={styles.projectsBody}>
+          <View style={styles.squareCopy}>
+            <Text style={styles.projectsTitle} numberOfLines={3}>
+              {isShop ? (
+                title
+              ) : (
+                <>
+                  {t('home.roomProjectsTitleViral')}
+                  <Text style={styles.projectsTitleAccent}>{t('home.roomProjectsTitleTrending')}</Text>
+                </>
+              )}
+            </Text>
+            <Text style={styles.projectsSub} numberOfLines={2}>
+              {t(room.sub)}
+            </Text>
+          </View>
+          <View style={styles.projectsArrow}>
+            <Ionicons name="arrow-forward" size={14} color={room.accent} />
+          </View>
         </View>
       </Pressable>
     );
@@ -659,10 +751,10 @@ export default function HomeScreen() {
           <View style={[styles.cols, { flexGrow: 1, flexBasis: colsMin, minHeight: colsMin }]}>
             <View style={styles.col}>
               {renderTall(LEARN, 0.7)}
-              {renderSquare(SHOP, 1)}
+              {renderPhotoCard(SHOP, 1)}
             </View>
             <View style={styles.col}>
-              {renderSquare(PROJECTS, 1)}
+              {renderPhotoCard(PROJECTS, 1)}
               {renderTall(LIVE, 0.7)}
             </View>
           </View>
@@ -823,7 +915,7 @@ function createStyles(fonts: UiFonts, compact = false) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      backgroundColor: colors.white,
+      backgroundColor: '#fff0f5',
       borderRadius: 10,
       paddingHorizontal: 7,
       paddingVertical: 4,
@@ -840,6 +932,15 @@ function createStyles(fonts: UiFonts, compact = false) {
       lineHeight: 13,
       color: colors.ink,
     },
+    slotTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 6,
+    },
+    slotLabelFlex: {
+      flexShrink: 1,
+    },
     slotHours: {
       fontFamily: fonts.regular,
       fontSize: 10,
@@ -854,7 +955,7 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     resumeBox: {
       marginTop: 5,
-      backgroundColor: colors.white,
+      backgroundColor: '#fff0f5',
       borderRadius: 12,
       paddingHorizontal: 9,
       paddingVertical: 7,
@@ -910,6 +1011,20 @@ function createStyles(fonts: UiFonts, compact = false) {
     tallBodyLearn: {
       paddingBottom: 18,
     },
+    /* Frosted panel holding the copy, so the illustration above stays uncluttered. */
+    tallPanel: {
+      flex: 0,
+      flexShrink: 0,
+      marginHorizontal: 7,
+      marginBottom: 7,
+      paddingHorizontal: 10,
+      paddingTop: 9,
+      paddingBottom: 10,
+      borderRadius: 16,
+      backgroundColor: 'rgba(255, 255, 255, 0.78)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.95)',
+    },
     tallTitle: {
       fontFamily: fonts.extraBold,
       fontSize: compact ? 14 : 16,
@@ -954,6 +1069,65 @@ function createStyles(fonts: UiFonts, compact = false) {
       fontSize: 11.5,
       color: colors.white,
       flexShrink: 1,
+    },
+    projectsCard: {
+      justifyContent: 'flex-end',
+      borderWidth: 0,
+      shadowColor: '#6a4c9c',
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    projectsBadge: {
+      position: 'absolute',
+      top: 10,
+      left: 10,
+      zIndex: 2,
+      maxWidth: '85%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: 'rgba(106, 76, 156, 0.92)',
+    },
+    shopBadge: {
+      backgroundColor: 'rgba(122, 90, 60, 0.92)',
+    },
+    projectsBody: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingBottom: 12,
+    },
+    projectsTitle: {
+      fontFamily: fonts.extraBold,
+      fontSize: compact ? 13 : 16,
+      lineHeight: compact ? 19 : 21,
+      color: colors.white,
+      textShadowColor: 'rgba(0, 0, 0, 0.35)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
+    },
+    projectsTitleAccent: {
+      color: '#e4d3ff',
+    },
+    projectsSub: {
+      marginTop: 3,
+      fontFamily: fonts.regular,
+      fontSize: 11,
+      lineHeight: 14,
+      color: 'rgba(255, 255, 255, 0.82)',
+    },
+    projectsArrow: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.white,
     },
     squareImageWrap: {
       height: '60%',

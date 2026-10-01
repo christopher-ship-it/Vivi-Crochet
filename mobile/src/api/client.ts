@@ -33,6 +33,17 @@ export function getMemoryAccessToken(): string | null {
   return memoryAccessToken;
 }
 
+/**
+ * The country the user chose (IN / US), sent on every request so guests see prices for their
+ * country. Signed-in customers are priced by the country saved on their profile; the server
+ * never trusts this header at checkout.
+ */
+let memoryCountry: string | null = null;
+
+export function setMemoryCountry(country: string | null): void {
+  memoryCountry = country;
+}
+
 async function getToken(): Promise<string | null> {
   if (memoryAccessToken) return memoryAccessToken;
   const session = await loadShoppingSession();
@@ -112,6 +123,8 @@ async function apiRequestOnce<T>(
   if (!headers.has('Content-Type') && options.body) {
     headers.set('Content-Type', 'application/json');
   }
+
+  if (memoryCountry) headers.set('X-Vivi-Country', memoryCountry);
 
   let usedToken: string | null = null;
   if (auth) {

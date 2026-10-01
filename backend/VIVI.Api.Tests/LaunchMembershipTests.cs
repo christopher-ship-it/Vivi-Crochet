@@ -82,6 +82,8 @@ public sealed class LaunchMembershipTests
         Assert.NotNull(membership);
         Assert.True(membership!.IsMember);
         Assert.Equal(1, membership.MemberNumber);
+        // Founding-member ID: VV- + 4 random letters + the 3-digit member number.
+        Assert.Matches("^VV-[A-HJKMNP-Z]{4}-001$", membership.MemberCode);
         Assert.NotNull(membership.ViralProject);
         Assert.Equal(viralProjectId, membership.ViralProject!.Id);
     }
@@ -105,6 +107,7 @@ public sealed class LaunchMembershipTests
     {
         public bool IsMember { get; set; }
         public int? MemberNumber { get; set; }
+        public string? MemberCode { get; set; }
         public ViralProjectDto? ViralProject { get; set; }
     }
 

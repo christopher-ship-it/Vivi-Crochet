@@ -96,13 +96,16 @@ builder.Services.AddSingleton<IPasswordHasher<AdminUser>, PasswordHasher<AdminUs
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<CustomerAccountService>();
 builder.Services.AddScoped<CustomerResolver>();
+builder.Services.AddScoped<VIVI.Api.Services.MarketResolver>();
 builder.Services.AddScoped<PricingService>();
 builder.Services.AddScoped<LaunchOfferService>();
 builder.Services.AddScoped<IDeliveryEstimateService, DeliveryEstimateService>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<AdminDataCleanupService>();
 builder.Services.AddScoped<LiveCalendarService>();
+builder.Services.AddScoped<ProductImportService>();
 builder.Services.AddScoped<LiveBookingService>();
+builder.Services.AddScoped<DeliverySequenceService>();
 builder.Services.AddScoped<OrderCheckoutService>();
 builder.Services.AddScoped<PaymentFulfillmentService>();
 builder.Services.AddScoped<ICourseAccessService, CourseAccessService>();
@@ -268,6 +271,16 @@ if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("
                     Window = TimeSpan.FromMinutes(15),
                     QueueLimit = 0
                 }));
+        // Crash/bug reports and tap batches from the app (anonymous endpoints).
+        options.AddPolicy("telemetry", context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 120,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
     });
 }
 
@@ -430,6 +443,28 @@ using (var scope = app.Services.CreateScope())
             catch (Exception pushEx)
             {
                 logger.LogError(pushEx, "Push schema bootstrap failed. /api/admin/push/reach will error until DevicePushTokens exists.");
+            }
+
+            // Customer IDs (VC-…) and founding-member IDs (VV-…): columns, indexes, and an ID for
+            // every existing customer/member. Runs before anything that loads customers for display.
+            try
+            {
+                await PublicIdSchema.EnsureAsync(db, CancellationToken.None);
+                logger.LogInformation("Customer and founding-member IDs verified.");
+            }
+            catch (Exception publicIdEx)
+            {
+                logger.LogError(publicIdEx, "Customer ID bootstrap failed. New customers will not get IDs until the columns exist.");
+            }
+
+            try
+            {
+                await AppHealthSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
+                logger.LogInformation("App health schema verified.");
+            }
+            catch (Exception appHealthEx)
+            {
+                logger.LogError(appHealthEx, "App health schema bootstrap failed. /api/admin/app-health will error until AppIssues and ScreenTapCells exist.");
             }
 
             try

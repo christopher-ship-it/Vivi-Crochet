@@ -51,7 +51,7 @@ import { EmptyView, LoadingView } from '../src/components/StateViews';
 import { useI18n } from '../src/i18n';
 import { uiFonts, type UiFonts } from '../src/i18n/uiFonts';
 import { colors, spacing } from '../src/theme';
-import { formatInr } from '../src/utils/format';
+import { usePreferences } from '../src/preferences/PreferencesContext';
 import { formatDeliveryRange } from '../src/utils/orders';
 import {
   getShippingAddressError,
@@ -148,6 +148,7 @@ function SummaryLine({
   index: number;
   styles: ReturnType<typeof createStyles>;
 }) {
+  const { formatPrice } = usePreferences();
   const { t } = useI18n();
   const fallback = ['#ffe3ec', '#fff0f4', '#ffeaf1', '#ffffff'][index % 4];
   return (
@@ -167,7 +168,7 @@ function SummaryLine({
             : t('checkout.qtyShort', { count: item.quantity })}
         </Text>
       </View>
-      <Text style={styles.summaryLinePrice}>{formatInr(lineTotal(item))}</Text>
+      <Text style={styles.summaryLinePrice}>{formatPrice(lineTotal(item))}</Text>
     </View>
   );
 }
@@ -234,6 +235,7 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string {
 }
 
 export default function CheckoutScreen() {
+  const { formatPrice } = usePreferences();
   const { t, language } = useI18n();
   const fonts = uiFonts(language);
   const styles = useMemo(() => createStyles(fonts), [language]);
@@ -1055,7 +1057,7 @@ export default function CheckoutScreen() {
                     <Text style={styles.orderSummaryKey}>
                       {t('checkout.itemsCount', { count: itemCount })}
                     </Text>
-                    <Text style={styles.orderSummaryVal}>{formatInr(subtotal)}</Text>
+                    <Text style={styles.orderSummaryVal}>{formatPrice(subtotal)}</Text>
                   </View>
                   {hasPhysicalItems ? (
                     <View style={styles.orderSummaryRow}>
@@ -1070,7 +1072,7 @@ export default function CheckoutScreen() {
                   ) : null}
                   <View style={[styles.orderSummaryRow, styles.orderSummaryTotal]}>
                     <Text style={styles.orderSummaryTotalKey}>{t('checkout.totalAmount')}</Text>
-                    <Text style={styles.orderSummaryTotalVal}>{formatInr(subtotal)}</Text>
+                    <Text style={styles.orderSummaryTotalVal}>{formatPrice(subtotal)}</Text>
                   </View>
                 </View>
               </View>
@@ -1762,7 +1764,7 @@ function createStyles(fonts: UiFonts) {
     justifyContent: 'flex-end',
   },
   sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(34, 26, 30, 0.45)',
   },
   sheet: {

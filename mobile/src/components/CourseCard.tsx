@@ -5,7 +5,7 @@ import type { Course } from '../types';
 import { useI18n } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
 import { colors, radii, spacing } from '../theme';
-import { formatAccessDays, formatInr } from '../utils/format';
+import { formatAccessDays, formatCoursePrice, formatMoney } from '../utils/format';
 import { AppImage } from './AppImage';
 
 interface CourseCardProps {
@@ -124,7 +124,7 @@ export function CourseCard({
                 {t('learn.continueArrow')}
               </Text>
             ) : (
-              <Text style={styles.editorialPrice}>{formatInr(course.price)}</Text>
+              <Text style={styles.editorialPrice}>{formatCoursePrice(course, t('market.notAvailable'))}</Text>
             )}
             <Ionicons name="arrow-forward" size={16} color={colors.pink} />
           </View>
@@ -137,7 +137,7 @@ export function CourseCard({
         style={({ pressed }) => [styles.editorialOuter, pressed && styles.cardPressed]}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`${course.name}, ${formatInr(course.price)}`}
+        accessibilityLabel={`${course.name}, ${formatCoursePrice(course, t('market.notAvailable'))}`}
       >
         {Platform.OS === 'ios' ? (
           <BlurView intensity={26} tint="light" style={styles.editorialCard}>
@@ -178,7 +178,7 @@ export function CourseCard({
         </Text>
 
         <View style={styles.railFooter}>
-          <Text style={styles.railPrice}>{formatInr(course.price)}</Text>
+          <Text style={styles.railPrice}>{formatCoursePrice(course, t('market.notAvailable'))}</Text>
           <View style={styles.railArrow}>
             <Text style={styles.railArrowText}>→</Text>
           </View>
@@ -191,7 +191,7 @@ export function CourseCard({
         style={({ pressed }) => [styles.railOuter, pressed && styles.cardPressed]}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`${course.name}, ${formatInr(course.price)}`}
+        accessibilityLabel={`${course.name}, ${formatCoursePrice(course, t('market.notAvailable'))}`}
       >
         {Platform.OS === 'ios' ? (
           <BlurView intensity={26} tint="light" style={styles.railCard}>
@@ -209,7 +209,7 @@ export function CourseCard({
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${course.name}, ${formatInr(course.price)}`}
+      accessibilityLabel={`${course.name}, ${formatCoursePrice(course, t('market.notAvailable'))}`}
     >
       <View style={styles.media}>
         {thumb ? (
@@ -246,9 +246,9 @@ export function CourseCard({
 
         <View style={styles.footer}>
           <View style={styles.priceBlock}>
-            <Text style={styles.price}>{formatInr(course.price)}</Text>
+            <Text style={styles.price}>{formatCoursePrice(course, t('market.notAvailable'))}</Text>
             {course.mrp != null && course.mrp > course.price ? (
-              <Text style={styles.mrp}>{formatInr(course.mrp)}</Text>
+              <Text style={styles.mrp}>{formatMoney(course.mrp, course.currency)}</Text>
             ) : null}
           </View>
           <Text style={styles.accessCta} numberOfLines={1}>

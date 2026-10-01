@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using VIVI.Core;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
@@ -36,6 +37,7 @@ public sealed class OrderCheckoutService
     private readonly RazorpayOptionsAccessor _razorpayOptions;
     private readonly IDeliveryEstimateService _delivery;
     private readonly InventoryService _inventory;
+    private readonly DeliverySequenceService _sequence;
 
     public OrderCheckoutService(
         ViviDbContext db,
@@ -43,7 +45,8 @@ public sealed class OrderCheckoutService
         IRazorpayPaymentGateway razorpay,
         RazorpayOptionsAccessor razorpayOptions,
         IDeliveryEstimateService delivery,
-        InventoryService inventory)
+        InventoryService inventory,
+        DeliverySequenceService sequence)
     {
         _db = db;
         _pricing = pricing;
@@ -51,21 +54,25 @@ public sealed class OrderCheckoutService
         _razorpayOptions = razorpayOptions;
         _delivery = delivery;
         _inventory = inventory;
+        _sequence = sequence;
     }
 
     public async Task<DeliveryQuoteSnapshot> QuoteDeliveryAsync(
         IReadOnlyList<CheckoutLineInput> items,
         ShippingAddressInput shipping,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? customerId = null)
     {
         _delivery.EnsureOnlinePaymentOrThrow(null);
         EnsureNotMixed(items);
         if (!items.Any(i => i.ItemType == OrderItemType.Product))
             throw ViviException.Conflict("NOT_A_PHYSICAL_ORDER", "Delivery estimates apply to physical products only.");
+        if (customerId is Guid quoteCustomerId)
+            EnsureProductsAllowed(await LoadMarketAsync(quoteCustomerId, cancellationToken));
 
         ValidateShipping(shipping);
         var types = await LoadProductTypesAsync(items, cancellationToken);
-        return BuildQuote(types, shipping, DateTime.UtcNow);
+        return await BuildQuoteAsync(types, shipping, DateTime.UtcNow, customerId, null, cancellationToken);
     }
 
     public async Task<CheckoutResult> CreateCheckoutAsync(
@@ -82,7 +89,10 @@ public sealed class OrderCheckoutService
         _delivery.EnsureOnlinePaymentOrThrow(paymentMethod);
         EnsureNotMixed(items);
 
+        var market = await LoadMarketAsync(customerId, cancellationToken);
         var hasPhysical = items.Any(i => i.ItemType == OrderItemType.Product);
+        if (hasPhysical)
+            EnsureProductsAllowed(market);
 
         if (hasPhysical)
         {
@@ -101,7 +111,7 @@ public sealed class OrderCheckoutService
             OrderNumber = await GenerateOrderNumberAsync(cancellationToken),
             CustomerId = customerId,
             Status = OrderStatus.PendingPayment,
-            Currency = "INR",
+            Currency = market.Currency,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -112,7 +122,7 @@ public sealed class OrderCheckoutService
 
         foreach (var line in items)
         {
-            var (orderItem, productType) = await BuildOrderItemAsync(line, customerId, cancellationToken);
+            var (orderItem, productType) = await BuildOrderItemAsync(line, customerId, market, cancellationToken);
             orderItem.OrderId = order.Id;
             order.Items.Add(orderItem);
             subtotal += orderItem.UnitPrice * orderItem.Quantity;
@@ -134,12 +144,13 @@ public sealed class OrderCheckoutService
         if (hasPhysical && shipping is not null)
         {
             ApplyShipping(order, shipping);
-            var quote = BuildQuote(productTypes, shipping, now);
-            _delivery.ApplySystemEstimate(
+            // Provisional: the final sequence is fixed when payment is confirmed.
+            var quote = await BuildQuoteAsync(productTypes, shipping, now, customerId, null, cancellationToken);
+            _delivery.ApplyEstimate(
                 order,
+                new DeliveryDateRange(quote.EstimatedDeliveryDateFrom, quote.EstimatedDeliveryDateTo),
                 new DeliveryWindow(quote.MinDays, quote.MaxDays),
-                quote.IsCoimbatore,
-                now);
+                quote.IsCoimbatore);
             deliveryQuote = quote;
 
             if (saveShippingAddress)
@@ -185,22 +196,31 @@ public sealed class OrderCheckoutService
             deliveryQuote);
     }
 
-    private DeliveryQuoteSnapshot BuildQuote(
+    private async Task<DeliveryQuoteSnapshot> BuildQuoteAsync(
         IReadOnlyList<ProductType> types,
         ShippingAddressInput shipping,
-        DateTime utcAnchor)
+        DateTime utcAnchor,
+        Guid? customerId,
+        Guid? excludeOrderId,
+        CancellationToken cancellationToken)
     {
         var isCoimbatore = _delivery.IsCoimbatore(shipping);
-        var window = _delivery.Combine(types.Select(t => _delivery.WindowFor(t, isCoimbatore)));
-        var dates = _delivery.ToCalendarDates(window, utcAnchor);
+        var standard = _delivery.Combine(types.Select(t => _delivery.WindowFor(t, isCoimbatore)));
+        var plan = await _sequence.PlanAsync(
+            customerId,
+            standard,
+            utcAnchor,
+            excludeOrderId,
+            types.Contains(ProductType.Handmade),
+            cancellationToken);
         return new DeliveryQuoteSnapshot(
             isCoimbatore,
             isCoimbatore ? "Coimbatore" : "Outside Coimbatore",
-            window.MinDays,
-            window.MaxDays,
-            _delivery.FormatWindowSummary(window),
-            dates.From,
-            dates.To);
+            plan.Window.MinDays,
+            plan.Window.MaxDays,
+            _delivery.FormatWindowSummary(plan.Window),
+            plan.Dates.From,
+            plan.Dates.To);
     }
 
     private async Task<IReadOnlyList<ProductType>> LoadProductTypesAsync(
@@ -296,16 +316,38 @@ public sealed class OrderCheckoutService
         order.ShipCountry = string.IsNullOrWhiteSpace(shipping.Country) ? "India" : shipping.Country.Trim();
     }
 
+    /// <summary>The customer's market, from the country they chose (missing = India, for older accounts).</summary>
+    private async Task<Market> LoadMarketAsync(Guid customerId, CancellationToken cancellationToken)
+    {
+        var country = await _db.Customers
+            .AsNoTracking()
+            .Where(c => c.Id == customerId)
+            .Select(c => c.CountryCode)
+            .SingleOrDefaultAsync(cancellationToken);
+        return Markets.For(country);
+    }
+
+    private static void EnsureProductsAllowed(Market market)
+    {
+        if (!market.CanOrderProducts)
+        {
+            throw ViviException.Conflict(
+                "PRODUCTS_NOT_AVAILABLE_IN_COUNTRY",
+                "Products are available in India only. You can still buy courses.");
+        }
+    }
+
     private async Task<(OrderItem Item, ProductType? ProductType)> BuildOrderItemAsync(
         CheckoutLineInput line,
         Guid customerId,
+        Market market,
         CancellationToken cancellationToken)
     {
         return line.ItemType switch
         {
             OrderItemType.Product => await BuildProductItemAsync(line, cancellationToken),
-            OrderItemType.Course => (await BuildCourseItemAsync(line, OrderItemType.Course, customerId, cancellationToken), null),
-            OrderItemType.CourseBundle => (await BuildCourseItemAsync(line, OrderItemType.CourseBundle, customerId, cancellationToken), null),
+            OrderItemType.Course => (await BuildCourseItemAsync(line, OrderItemType.Course, customerId, market, cancellationToken), null),
+            OrderItemType.CourseBundle => (await BuildCourseItemAsync(line, OrderItemType.CourseBundle, customerId, market, cancellationToken), null),
             OrderItemType.LivePackage => throw ViviException.Conflict(
                 "USE_LIVE_BOOKING_API",
                 "Book live packages via POST /api/live/bookings."),
@@ -378,6 +420,7 @@ public sealed class OrderCheckoutService
         CheckoutLineInput line,
         OrderItemType itemType,
         Guid customerId,
+        Market market,
         CancellationToken cancellationToken)
     {
         if (!line.CourseId.HasValue)
@@ -402,9 +445,14 @@ public sealed class OrderCheckoutService
         var (unitPrice, isRenewal, basePrice, _) = await _pricing.ResolveCheckoutUnitPriceAsync(
             course,
             customerId,
-            cancellationToken);
+            cancellationToken,
+            market);
 
-        var listForDiscount = course.Mrp ?? (isRenewal ? basePrice : unitPrice);
+        // The list price used for the "you save" discount comes from the same market as the price.
+        decimal? marketMrp = market.UsesBasePrices
+            ? course.Mrp
+            : (await _pricing.GetMarketPriceAsync(course.Id, market, cancellationToken))?.Mrp;
+        var listForDiscount = marketMrp ?? (isRenewal ? basePrice : unitPrice);
         var discount = listForDiscount > unitPrice ? listForDiscount - unitPrice : 0;
 
         return new OrderItem

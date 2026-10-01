@@ -1,4 +1,4 @@
-export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 const ALLOWED_EXTENSIONS = ['.mp4', '.mov', '.webm'];
@@ -23,7 +23,7 @@ export function validateVideoFile(file: File): FileValidationResult {
     return { valid: false, error: 'File is empty.' };
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    return { valid: false, error: 'File exceeds the 2 GB limit.' };
+    return { valid: false, error: 'File exceeds the 10 GB limit.' };
   }
   const contentType = ALLOWED_MIME[ext] ?? (file.type || 'video/mp4');
   return { valid: true, contentType };
@@ -37,7 +37,7 @@ const IMAGE_MIME: Record<string, string> = {
   '.webp': 'image/webp',
 };
 
-export function validateImageFile(file: File): FileValidationResult {
+export function validateImageFile(file: File, maxBytes: number = MAX_IMAGE_BYTES): FileValidationResult {
   const ext = file.name.includes('.') ? `.${file.name.split('.').pop()!.toLowerCase()}` : '';
   if (!IMAGE_EXTENSIONS.includes(ext)) {
     return { valid: false, error: 'Only JPG, PNG, and WebP images are allowed.' };
@@ -45,8 +45,8 @@ export function validateImageFile(file: File): FileValidationResult {
   if (file.size <= 0) {
     return { valid: false, error: 'File is empty.' };
   }
-  if (file.size > MAX_IMAGE_BYTES) {
-    return { valid: false, error: 'Image exceeds the 5 MB limit.' };
+  if (file.size > maxBytes) {
+    return { valid: false, error: `Image exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB limit.` };
   }
   const contentType = IMAGE_MIME[ext] ?? (file.type || 'image/jpeg');
   return { valid: true, contentType };
@@ -140,11 +140,31 @@ export function formatInr(amount: number): string {
   }).format(amount);
 }
 
+/** Formats an amount in its own currency: whole rupees for INR, dollars and cents for USD. */
+export function formatMoney(amount: number, currency: string | null | undefined): string {
+  if (currency === 'USD') {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  }
+  return formatInr(amount);
+}
+
+/**
+ * The API stores UTC but often sends timestamps without a "Z" (e.g. 2026-09-30T08:00:00).
+ * Browsers read those as local time, which shifts every time by the UTC offset.
+ * Treat a timestamp with a time part but no zone as UTC, so it shows in the viewer's local time.
+ */
+export function parseApiDate(value: string | number | Date): Date {
+  if (typeof value !== 'string') return new Date(value);
+  const hasTime = /T\d{2}:\d{2}/.test(value);
+  const hasZone = /(Z|[+-]\d{2}:?\d{2})$/i.test(value);
+  return new Date(hasTime && !hasZone ? `${value}Z` : value);
+}
+
 export function formatDate(iso: string): string {
   return new Intl.DateTimeFormat('en-IN', {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(new Date(iso));
+  }).format(parseApiDate(iso));
 }
 
 export function formatDay(iso: string): string {
@@ -152,7 +172,7 @@ export function formatDay(iso: string): string {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-  }).format(new Date(iso));
+  }).format(parseApiDate(iso));
 }
 
 export const COURSE_TYPE_LABELS: Record<string, string> = {

@@ -138,6 +138,8 @@ public sealed class AdminOrderListItemResponse
     public OrderStatus Status { get; set; }
     public PaymentStatus? PaymentStatus { get; set; }
     public decimal TotalAmount { get; set; }
+    /// <summary>Currency of <see cref="TotalAmount"/> (INR or USD).</summary>
+    public string Currency { get; set; } = "INR";
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerEmail { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;

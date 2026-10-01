@@ -65,6 +65,9 @@ interface CartContextValue {
   isLoading: boolean;
   storageError: string | null;
   clearStorageError: () => void;
+  /** True after a product was added via "Add to cart"; drives the shop's "Added to cart" bar. */
+  justAdded: boolean;
+  dismissJustAdded: () => void;
   /** Latest cart lines (survives concurrent async updates). */
   peekItems: () => CartLineItem[];
   addProduct: (product: Product, quantity: number) => Promise<void>;
@@ -91,6 +94,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartLineItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [justAdded, setJustAdded] = useState(false);
+  const dismissJustAdded = useCallback(() => setJustAdded(false), []);
   const itemsRef = useRef<CartLineItem[]>([]);
   const ownerIdRef = useRef(ownerId);
   itemsRef.current = items;
@@ -167,6 +172,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           )
         : [...current, productToLine(product, qty)];
       await persist(next);
+      setJustAdded(true);
     },
     [persist],
   );
@@ -297,6 +303,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       isLoading,
       storageError,
       clearStorageError: () => setStorageError(null),
+      justAdded,
+      dismissJustAdded,
       peekItems,
       addProduct,
       setCartToProduct,
@@ -310,6 +318,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       items,
       isLoading,
       storageError,
+      justAdded,
+      dismissJustAdded,
       peekItems,
       addProduct,
       setCartToProduct,

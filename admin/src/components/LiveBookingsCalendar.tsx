@@ -1,5 +1,10 @@
 import { Link } from 'react-router-dom';
-import type { AdminLiveBookingListItem, AdminLiveWeek, LiveBookingStatus } from '../types';
+import type {
+  AdminLiveBookingListItem,
+  AdminLiveWeek,
+  LiveBookingStatus,
+  LiveSlotType,
+} from '../types';
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 const MAX_VISIBLE_NAMES = 4;
@@ -25,8 +30,8 @@ type Props = {
   busySlot?: string | null;
   onPreviousWeek: () => void;
   onNextWeek: () => void;
-  onBlockSlot?: (slotType: 'Morning' | 'Evening', isBlocked: boolean) => void;
-  onModifyCapacity?: (slotType: 'Morning' | 'Evening', currentCapacity: number) => void;
+  onBlockSlot?: (slotType: LiveSlotType, isBlocked: boolean) => void;
+  onModifyCapacity?: (slotType: LiveSlotType, currentCapacity: number) => void;
 };
 
 function parseDateOnly(value: string): Date {
@@ -88,12 +93,11 @@ function buildDayColumns(week: AdminLiveWeek, today: Date): DayColumn[] {
   });
 }
 
-function slotMeta(week: AdminLiveWeek, slotType: 'Morning' | 'Evening') {
+function slotMeta(week: AdminLiveWeek, slotType: LiveSlotType) {
   const slot = week.slots.find((s) => s.slotType === slotType);
-  const defaultHours =
-    slotType === 'Morning' ? '10:00 AM – 12:00 PM' : '6:00 PM – 8:00 PM';
   return {
-    hours: slot?.hours || defaultHours,
+    name: slot?.name || slotType,
+    hours: slot?.hours ?? '',
     seatCapacity: slot?.seatCapacity ?? 4,
     seatsBooked: slot?.seatsBooked ?? 0,
     isBlocked: Boolean(slot?.isBlocked || slot?.status === 'Blocked'),
@@ -115,14 +119,14 @@ function SlotCard({
   onBlockSlot,
   onModifyCapacity,
 }: {
-  slotType: 'Morning' | 'Evening';
+  slotType: LiveSlotType;
   week: AdminLiveWeek;
   bookings: AdminLiveBookingListItem[];
   statusFilter: LiveBookingStatus | '';
   showActions?: boolean;
   busy?: boolean;
-  onBlockSlot?: (slotType: 'Morning' | 'Evening', isBlocked: boolean) => void;
-  onModifyCapacity?: (slotType: 'Morning' | 'Evening', currentCapacity: number) => void;
+  onBlockSlot?: (slotType: LiveSlotType, isBlocked: boolean) => void;
+  onModifyCapacity?: (slotType: LiveSlotType, currentCapacity: number) => void;
 }) {
   const meta = slotMeta(week, slotType);
   const slotBookings = bookings.filter((b) => b.slotType === slotType);
@@ -134,8 +138,9 @@ function SlotCard({
   const capacity = meta.seatCapacity;
   const blocked = meta.isBlocked;
   const fullyBooked = !blocked && displayBooked >= capacity && capacity > 0;
-  const shortLabel = slotType === 'Morning' ? 'Morning' : 'Evening';
-  const icon = slotType === 'Morning' ? '☀' : '☾';
+  const shortLabel =
+    slotType === 'Morning' ? 'Morning' : slotType === 'Evening' ? 'Evening' : meta.name;
+  const icon = slotType === 'Morning' ? '☀' : slotType === 'Evening' ? '☾' : '◐';
 
   let stateLabel: 'FULLY BOOKED' | 'AVAILABLE' | 'BOOKED' | 'FILTER' | 'BLOCKED' = 'AVAILABLE';
   if (blocked) stateLabel = 'BLOCKED';
@@ -160,7 +165,7 @@ function SlotCard({
     <div
       className={[
         'slot-card',
-        slotType === 'Morning' ? 'slot-card--morning' : 'slot-card--evening',
+        slotType === 'Evening' ? 'slot-card--evening' : 'slot-card--morning',
         fullyBooked ? 'slot-card--full' : '',
         blocked ? 'slot-card--blocked' : '',
         displayBooked > 0 ? 'slot-card--booked' : '',
@@ -313,16 +318,16 @@ export function LiveBookingsCalendar({
   const canPrev = weekIndex > 0;
   const canNext = weekIndex < weeks.length - 1;
   const weekHasBookings = bookings.length > 0;
-  const morningBooked = Math.max(
-    week.slots.find((s) => s.slotType === 'Morning')?.seatsBooked ?? 0,
-    bookings.filter((b) => b.slotType === 'Morning' && holdsSeat(String(b.status))).length,
-  );
-  const eveningBooked = Math.max(
-    week.slots.find((s) => s.slotType === 'Evening')?.seatsBooked ?? 0,
-    bookings.filter((b) => b.slotType === 'Evening' && holdsSeat(String(b.status))).length,
-  );
-  const morningCap = week.slots.find((s) => s.slotType === 'Morning')?.seatCapacity ?? 4;
-  const eveningCap = week.slots.find((s) => s.slotType === 'Evening')?.seatCapacity ?? 4;
+  // One entry per session this week has (Morning, Evening and any additional sessions switched on).
+  const slotStats = week.slots.map((slot) => ({
+    slotType: slot.slotType as LiveSlotType,
+    label: slot.slotType === 'Morning' || slot.slotType === 'Evening' ? slot.slotType : slot.name,
+    booked: Math.max(
+      slot.seatsBooked ?? 0,
+      bookings.filter((b) => b.slotType === slot.slotType && holdsSeat(String(b.status))).length,
+    ),
+    capacity: slot.seatCapacity ?? 4,
+  }));
   const firstActionDayKey = days.find((d) => d.kind === 'Class' || d.kind === 'Replacement')?.date.toISOString() ?? null;
 
   return (
@@ -342,15 +347,16 @@ export function LiveBookingsCalendar({
           </div>
           <div className="live-cal__week-range">{formatWeekRange(start, end)}</div>
           <div className="live-cal__week-stats">
-            <span>
-              Morning {morningBooked}/{morningCap}
-            </span>
-            <span className="live-cal__week-stats-dot" aria-hidden>
-              ·
-            </span>
-            <span>
-              Evening {eveningBooked}/{eveningCap}
-            </span>
+            {slotStats.map((stat, i) => (
+              <span key={stat.slotType}>
+                {i > 0 ? (
+                  <span className="live-cal__week-stats-dot" aria-hidden>
+                    {' · '}
+                  </span>
+                ) : null}
+                {stat.label} {stat.booked}/{stat.capacity}
+              </span>
+            ))}
           </div>
           <div className="live-cal__legend" aria-hidden>
             <span><i className="slot-card__status slot-card__status--confirmed" />Confirmed</span>
@@ -424,26 +430,19 @@ export function LiveBookingsCalendar({
                   {day.kind === 'Replacement' ? (
                     <div className="live-cal__replacement-tag">Saturday replacement</div>
                   ) : null}
-                  <SlotCard
-                    slotType="Morning"
-                    week={week}
-                    bookings={bookings}
-                    statusFilter={statusFilter}
-                    showActions={day.date.toISOString() === firstActionDayKey}
-                    busy={busySlot === 'Morning'}
-                    onBlockSlot={onBlockSlot}
-                    onModifyCapacity={onModifyCapacity}
-                  />
-                  <SlotCard
-                    slotType="Evening"
-                    week={week}
-                    bookings={bookings}
-                    statusFilter={statusFilter}
-                    showActions={day.date.toISOString() === firstActionDayKey}
-                    busy={busySlot === 'Evening'}
-                    onBlockSlot={onBlockSlot}
-                    onModifyCapacity={onModifyCapacity}
-                  />
+                  {slotStats.map((stat) => (
+                    <SlotCard
+                      key={stat.slotType}
+                      slotType={stat.slotType}
+                      week={week}
+                      bookings={bookings}
+                      statusFilter={statusFilter}
+                      showActions={day.date.toISOString() === firstActionDayKey}
+                      busy={busySlot === stat.slotType}
+                      onBlockSlot={onBlockSlot}
+                      onModifyCapacity={onModifyCapacity}
+                    />
+                  ))}
                 </div>
               ) : null}
             </div>

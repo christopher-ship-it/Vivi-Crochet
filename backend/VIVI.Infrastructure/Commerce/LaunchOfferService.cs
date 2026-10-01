@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
+using VIVI.Core;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
@@ -45,11 +46,28 @@ public sealed class LaunchOfferService
     public async Task<LaunchOfferConsumptionResult> TryConsumeForSuccessfulPurchaseAsync(
         Guid bundleCourseId,
         decimal unitPrice,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Market? market = null)
     {
         var offer = await _db.LaunchOfferCounters
             .SingleOrDefaultAsync(c => c.CourseId == bundleCourseId, cancellationToken);
-        if (offer is null || !offer.IsActive || !IsLaunchUnitPrice(offer, unitPrice))
+        if (offer is null || !offer.IsActive)
+            return LaunchOfferConsumptionResult.NotApplicable;
+
+        var isLaunchPrice = IsLaunchUnitPrice(offer, unitPrice);
+        if (market is { UsesBasePrices: false })
+        {
+            // Sold in another currency: compare with that market's own launch price.
+            var row = await _db.CoursePrices
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    p => p.CourseId == bundleCourseId && p.CountryCode == market.CountryCode,
+                    cancellationToken);
+            isLaunchPrice = row?.LaunchPrice is decimal launch
+                            && decimal.Round(unitPrice, 2, MidpointRounding.AwayFromZero) == launch;
+        }
+
+        if (!isLaunchPrice)
             return LaunchOfferConsumptionResult.NotApplicable;
 
         if (_db.Database.IsRelational())
@@ -98,12 +116,13 @@ public sealed class LaunchOfferService
     public async Task<int?> EnsureLaunchSlotForPricedOrderOrThrowAsync(
         Course course,
         decimal unitPrice,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Market? market = null)
     {
         if (course.Type != CourseType.Bundle)
             return null;
 
-        var result = await TryConsumeForSuccessfulPurchaseAsync(course.Id, unitPrice, cancellationToken);
+        var result = await TryConsumeForSuccessfulPurchaseAsync(course.Id, unitPrice, cancellationToken, market);
         if (!result.IsApplicable)
             return null;
 

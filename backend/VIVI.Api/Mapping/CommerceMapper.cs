@@ -114,6 +114,8 @@ public static class CommerceMapper
         Mrp = pricing.Mrp,
         Price = pricing.Price,
         ApplicablePrice = pricing.Price,
+        Currency = pricing.Currency,
+        AvailableInMarket = pricing.AvailableInMarket,
         IsLaunchOffer = pricing.IsLaunchOffer,
         LaunchOfferActive = pricing.IsLaunchOffer,
         LaunchOfferRemaining = pricing.LaunchOfferRemaining,
@@ -137,6 +139,7 @@ public static class CommerceMapper
             Status = order.Status,
             PaymentStatus = payment?.Status,
             TotalAmount = order.TotalAmount,
+            Currency = order.Currency,
             CustomerName = DisplayCustomerName(order.Customer, order.ShipFullName),
             CustomerEmail = order.Customer?.Email ?? string.Empty,
             CustomerPhone = order.Customer?.PhoneNumber ?? order.ShipPhone ?? string.Empty,
@@ -174,7 +177,7 @@ public static class CommerceMapper
     /// Prefer product names on mixed carts, else course/bundle, else live — always from
     /// <see cref="OrderItem.ItemNameSnapshot"/> so renamed catalog titles do not rewrite history.
     /// </summary>
-    private static string BuildTitleSummary(IEnumerable<OrderItem> items)
+    internal static string BuildTitleSummary(IEnumerable<OrderItem> items)
     {
         var list = items?.ToList() ?? new List<OrderItem>();
         if (list.Count == 0) return string.Empty;

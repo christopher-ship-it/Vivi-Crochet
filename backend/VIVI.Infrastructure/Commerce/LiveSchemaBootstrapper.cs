@@ -11,6 +11,9 @@ public static class LiveSchemaBootstrapper
 {
     public static async Task EnsureAsync(ViviDbContext db, CancellationToken cancellationToken)
     {
+        // Admin-editable Live settings (price, language, level, sessions) and per-week overrides.
+        await db.Database.ExecuteSqlRawAsync(LiveSettingsSchemaSql.Ddl, cancellationToken);
+
         // Always ensure slot block + tutor photo columns exist (tables may already be present).
         await db.Database.ExecuteSqlRawAsync(
             """

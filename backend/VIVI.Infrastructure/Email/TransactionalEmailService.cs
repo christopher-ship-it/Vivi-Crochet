@@ -159,9 +159,17 @@ public sealed class TransactionalEmailService
         if (booking?.Week is null)
             return;
 
-        var slotName = booking.SlotType == LiveSlotType.Morning
-            ? "Morning Crochet Circle"
-            : "Evening Crochet Circle";
+        var slotName = await _db.LiveSessionDefinitions
+            .AsNoTracking()
+            .Where(d => d.SlotType == booking.SlotType)
+            .Select(d => d.Name)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? booking.SlotType switch
+            {
+                LiveSlotType.Morning => "Morning Crochet Circle",
+                LiveSlotType.Evening => "Evening Crochet Circle",
+                _ => "Live session"
+            };
         var (subject, html, text) = LiveBookingConfirmationEmail.Render(customer, order, booking, booking.Week, slotName);
         await SendIdempotentAsync(
             $"{LiveBookingConfirmationKeyPrefix}{booking.Id}",

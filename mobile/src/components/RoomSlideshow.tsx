@@ -17,13 +17,15 @@ type Props = {
   /** Shown until real items load (or if there are none). */
   fallback: ImageSourcePropType;
   intervalMs?: number;
+  /** Full-bleed mode for cards that draw their own text over the photo. */
+  bare?: boolean;
 };
 
 /**
  * Crossfading slideshow of real products / courses for a Home room card.
  * Falls back to a static illustration when nothing has loaded yet.
  */
-export function RoomSlideshow({ items, fallback, intervalMs = 3600 }: Props) {
+export function RoomSlideshow({ items, fallback, intervalMs = 3600, bare = false }: Props) {
   const [index, setIndex] = useState(0);
   const count = items.length;
 
@@ -42,12 +44,19 @@ export function RoomSlideshow({ items, fallback, intervalMs = 3600 }: Props) {
   );
 
   if (count === 0) {
-    return <Image source={fallback} style={styles.fill} resizeMode="contain" accessibilityIgnoresInvertColors />;
+    return (
+      <Image
+        source={fallback}
+        style={styles.fill}
+        resizeMode={bare ? 'cover' : 'contain'}
+        accessibilityIgnoresInvertColors
+      />
+    );
   }
 
   const item = items[index % count];
   return (
-    <View style={styles.frame}>
+    <View style={[styles.frame, bare && styles.frameBare]}>
       <AppImage
         uri={item.imageUrl}
         style={styles.fill}
@@ -56,6 +65,7 @@ export function RoomSlideshow({ items, fallback, intervalMs = 3600 }: Props) {
         priority="high"
         accessibilityLabel={item.label}
       />
+      {bare ? null : (
       <View style={styles.caption} pointerEvents="none">
         <Text style={styles.captionText} numberOfLines={1}>
           {item.label}
@@ -64,6 +74,7 @@ export function RoomSlideshow({ items, fallback, intervalMs = 3600 }: Props) {
           <Text style={styles.captionPrice}>{formatInr(item.price)}</Text>
         ) : null}
       </View>
+      )}
     </View>
   );
 }
@@ -78,6 +89,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: colors.mediaWash,
+  },
+  frameBare: {
+    borderRadius: 0,
+    backgroundColor: 'transparent',
   },
   caption: {
     position: 'absolute',

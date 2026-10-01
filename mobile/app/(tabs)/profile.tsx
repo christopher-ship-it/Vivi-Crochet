@@ -19,9 +19,11 @@ import { ApiClientError } from '../../src/api/client';
 import { listMyEnrollments, type Enrollment } from '../../src/api/enrollments';
 import { listMyLiveBookings, type LiveBooking } from '../../src/api/live';
 import { getMyProfile, type SavedShippingAddress } from '../../src/api/me';
+import { getMyMembership } from '../../src/api/offers';
 import { listMyOrders } from '../../src/api/orders';
 import { useLearningCustomer, useShoppingSession } from '../../src/auth/SessionContext';
 import { useCart } from '../../src/cart/CartContext';
+import { CountrySelector } from '../../src/components/CountrySelector';
 import { LanguageSelector } from '../../src/components/LanguageSelector';
 import { LearnerJourney } from '../../src/components/LearnerJourney';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
@@ -151,6 +153,8 @@ export default function ProfileScreen() {
   const [profileEmail, setProfileEmail] = useState<string | null>(null);
   const [profilePhone, setProfilePhone] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
+  const [customerCode, setCustomerCode] = useState<string | null>(null);
+  const [memberCode, setMemberCode] = useState<string | null>(null);
   const [buyAgainLoading, setBuyAgainLoading] = useState(false);
 
   const resolvedName = realCustomerName(
@@ -260,7 +264,7 @@ export default function ProfileScreen() {
         icon: 'cube-outline',
         onPress: () =>
           requireAuth(() =>
-            router.push({ pathname: '/(tabs)/shop', params: { shopTab: 'orders' } }),
+            router.push({ pathname: '/(tabs)/shop', params: { shopTab: 'orders', at: String(Date.now()) } }),
           ),
       },
       {
@@ -329,6 +333,8 @@ export default function ProfileScreen() {
         setProfileEmail(null);
         setProfilePhone(null);
         setProfileName(null);
+        setCustomerCode(null);
+        setMemberCode(null);
         return;
       }
 
@@ -337,12 +343,15 @@ export default function ProfileScreen() {
         setAddressLoading(true);
         setLiveLoading(true);
         try {
-          const [profile, bookings, mine] = await Promise.all([
+          const [profile, bookings, mine, membership] = await Promise.all([
             getMyProfile(),
             listMyLiveBookings().catch(() => [] as LiveBooking[]),
             listMyEnrollments().catch(() => [] as Enrollment[]),
+            getMyMembership().catch(() => null),
           ]);
           if (!cancelled) {
+            setCustomerCode(profile.customerCode ?? null);
+            setMemberCode(membership?.isMember ? (membership.memberCode ?? null) : null);
             setAddress(profile.shippingAddress ?? null);
             setProfileEmail(isSyntheticEmail(profile.email) ? null : profile.email ?? null);
             setProfilePhone(profile.phoneNumber ?? null);
@@ -448,6 +457,13 @@ export default function ProfileScreen() {
           <View style={styles.greetingRow}>
             <View style={styles.greetingCopy}>
               <Text style={styles.heyText}>{t('profile.hey', { name: heyName })}</Text>
+              {isAuthenticated && customerCode ? (
+                // selectable: customers long-press to copy the ID when they contact support.
+                <Text style={styles.idText} selectable>
+                  {t('profile.customerId', { id: customerCode })}
+                  {memberCode ? `  ·  ${t('profile.foundingId', { id: memberCode })}` : ''}
+                </Text>
+              ) : null}
               {!isAuthenticated ? (
                 <Pressable onPress={() => router.push('/login')} hitSlop={6}>
                   <Text style={styles.signInHint}>{t('profile.signInHint')}</Text>
@@ -525,6 +541,7 @@ export default function ProfileScreen() {
                   <Text style={styles.menuGroupLabel}>{t(group.labelKey).toUpperCase()}</Text>
                   <View style={styles.menuGroup}>
                     {group.id === 'preferences' ? <LanguageSelector variant="menu" /> : null}
+                    {group.id === 'preferences' ? <CountrySelector /> : null}
                     {rows.map((item, index) => (
                       <MenuRow
                         key={item.key}
@@ -714,6 +731,13 @@ function createStyles(fonts: UiFonts) {
     lineHeight: 40,
     color: colors.ink,
     letterSpacing: -0.4,
+  },
+  idText: {
+    marginTop: 4,
+    fontFamily: fonts.nunitoBold,
+    fontSize: 12,
+    letterSpacing: 0.4,
+    color: colors.pinkDark,
   },
   signInHint: {
     marginTop: 6,

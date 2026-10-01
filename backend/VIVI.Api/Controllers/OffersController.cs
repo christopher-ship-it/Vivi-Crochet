@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using VIVI.Api.DTOs.Offers;
 using VIVI.Api.Mapping;
 using VIVI.Api.Services;
+using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
 using VIVI.Core.Interfaces;
@@ -17,11 +18,13 @@ public sealed class OffersController : ControllerBase
 {
     private readonly ViviDbContext _db;
     private readonly IBlobStorageService _blob;
+    private readonly MarketResolver _markets;
     private readonly ILogger<OffersController> _logger;
 
-    public OffersController(ViviDbContext db, IBlobStorageService blob, ILogger<OffersController> logger)
+    public OffersController(ViviDbContext db, IBlobStorageService blob, MarketResolver markets, ILogger<OffersController> logger)
     {
         _db = db;
+        _markets = markets;
         _blob = blob;
         _logger = logger;
     }
@@ -72,6 +75,17 @@ public sealed class OffersController : ControllerBase
             }
         }
 
-        return Ok(offer.ToOfferDto(includedCourses, viralProjectThumbnail));
+        var market = await _markets.ResolveAsync(User, Request, cancellationToken);
+        IReadOnlyList<CoursePrice>? marketPrices = null;
+        if (!market.UsesBasePrices)
+        {
+            var ids = includedCourseIds.Append(offer.CourseId).ToList();
+            marketPrices = await _db.CoursePrices
+                .AsNoTracking()
+                .Where(p => p.CountryCode == market.CountryCode && ids.Contains(p.CourseId))
+                .ToListAsync(cancellationToken);
+        }
+
+        return Ok(offer.ToOfferDto(includedCourses, viralProjectThumbnail, market, marketPrices));
     }
 }

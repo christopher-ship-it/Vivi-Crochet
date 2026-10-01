@@ -13,6 +13,8 @@ export function formatInr(amount: number): string {
   }).format(amount);
 }
 
+export { formatCoursePrice, formatMoney } from '../preferences/market';
+
 export function formatAccessDays(days: number): string {
   if (days <= 0) return 'Access duration TBC';
   return `${days} day${days === 1 ? '' : 's'} access`;

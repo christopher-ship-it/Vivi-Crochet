@@ -21,6 +21,10 @@ export interface CoursePricing {
   mrp?: number | null;
   price?: number;
   applicablePrice: number;
+  /** INR or USD. */
+  currency?: string;
+  /** False when the course cannot be bought in the user's country. */
+  availableInMarket?: boolean;
   isLaunchOffer?: boolean;
   launchOfferActive: boolean;
   launchOfferRemaining?: number | null;

@@ -10,6 +10,7 @@ using VIVI.Api.DTOs.Enrollments;
 using VIVI.Api.DTOs.Offers;
 using VIVI.Api.Extensions;
 using VIVI.Api.Mapping;
+using VIVI.Core;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
@@ -102,6 +103,32 @@ public sealed class MeController : ControllerBase
             request.State,
             request.City,
             request.ShippingAddress?.Country);
+
+        return Ok(ToProfileDto(customer));
+    }
+
+    /// <summary>
+    /// Saves the language and/or country picked on first launch. Only the supported codes are accepted
+    /// (language en/ta/hi, country IN/US); fields left out of the request are not changed.
+    /// </summary>
+    [HttpPatch("preferences")]
+    [ProducesResponseType(typeof(CustomerProfileResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CustomerProfileResponse>> UpdatePreferences(
+        [FromBody] UpdatePreferencesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var language = SupportedPreferences.NormalizeLanguage(request.LanguageCode);
+        var country = SupportedPreferences.NormalizeCountry(request.CountryCode);
+        if (language is null && country is null)
+            throw new ViviException("NO_PREFERENCES", "Send a languageCode and/or a countryCode.");
+
+        var customer = await _customers.ResolveForUserAsync(User.GetUserId(), cancellationToken);
+        if (language is not null)
+            customer.LanguageCode = language;
+        if (country is not null)
+            customer.CountryCode = country;
+        customer.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(ToProfileDto(customer));
     }
@@ -344,6 +371,7 @@ public sealed class MeController : ControllerBase
         return new CustomerProfileResponse
         {
             Id = customer.Id,
+            CustomerCode = customer.CustomerCode,
             FullName = customer.FullName,
             PhoneNumber = customer.PhoneNumber ?? string.Empty,
             Email = synthetic ? string.Empty : email,
@@ -352,6 +380,8 @@ public sealed class MeController : ControllerBase
             Country = customer.Country,
             State = customer.State,
             City = customer.City,
+            LanguageCode = customer.LanguageCode,
+            CountryCode = customer.CountryCode,
             AuthMethod = customer.AuthMethod.ToString(),
             ShippingAddress = ToSavedShippingAddress(customer)
         };

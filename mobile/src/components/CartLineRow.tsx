@@ -6,7 +6,7 @@ import { isCourseLine, type CartLineItem } from '../cart/types';
 import { useI18n } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
 import { colors, radii } from '../theme';
-import { formatInr } from '../utils/format';
+import { usePreferences } from '../preferences/PreferencesContext';
 import { AppImage } from './AppImage';
 
 const PLACEHOLDER_COLORS = ['#ffe3ec', '#f3e8ff', '#fff6d6', '#f7f4f5'];
@@ -168,6 +168,7 @@ export function CartLineRow({
   onDecrease,
   onRemove,
 }: CartLineRowProps) {
+  const { formatPrice } = usePreferences();
   const { t, language } = useI18n();
   const digital = isCourseLine(item);
   const compact = compactProp ?? (!digital && item.productType === 'Resell');
@@ -208,7 +209,7 @@ export function CartLineRow({
           <Text style={styles.category}>{categoryLabel}</Text>
         ) : null}
         <Text style={styles.unitPrice}>
-          {formatInr(item.price)} {t('cart.eachSuffix')}
+          {formatPrice(item.price)} {t('cart.eachSuffix')}
         </Text>
 
         {unavailable ? (
@@ -218,7 +219,7 @@ export function CartLineRow({
             <Text style={styles.readOnlyQty}>
               {digital ? t('cart.digitalAccess') : t('cart.qtyShort', { count: item.quantity })}
             </Text>
-            <Text style={styles.lineTotal}>{formatInr(lineTotal(item))}</Text>
+            <Text style={styles.lineTotal}>{formatPrice(lineTotal(item))}</Text>
           </View>
         ) : (
           <>
@@ -243,7 +244,7 @@ export function CartLineRow({
                   <Text style={styles.qtyBtnText}>+</Text>
                 </Pressable>
               </View>
-              <Text style={styles.lineTotal}>{formatInr(lineTotal(item))}</Text>
+              <Text style={styles.lineTotal}>{formatPrice(lineTotal(item))}</Text>
             </View>
             {atMax && typeof stock === 'number' && stock > 0 ? (
               <Text style={styles.stockCap}>{t('cart.maxStockReached')}</Text>

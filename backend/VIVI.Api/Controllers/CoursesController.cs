@@ -25,6 +25,7 @@ public sealed class CoursesController : ControllerBase
     private readonly ViviDbContext _db;
     private readonly PricingService _pricing;
     private readonly CustomerResolver _customers;
+    private readonly MarketResolver _markets;
     private readonly IBlobStorageService _blob;
     private readonly ILogger<CoursesController> _logger;
 
@@ -32,12 +33,14 @@ public sealed class CoursesController : ControllerBase
         ViviDbContext db,
         PricingService pricing,
         CustomerResolver customers,
+        MarketResolver markets,
         IBlobStorageService blob,
         ILogger<CoursesController> logger)
     {
         _db = db;
         _pricing = pricing;
         _customers = customers;
+        _markets = markets;
         _blob = blob;
         _logger = logger;
     }
@@ -54,6 +57,7 @@ public sealed class CoursesController : ControllerBase
             .Include(c => c.Category)
             .Include(c => c.Videos)
             .Include(c => c.LaunchOffer)
+            .Include(c => c.MarketPrices)
             .Include(c => c.BundleItems)
             .ThenInclude(b => b.IncludedCourse!)
             .ThenInclude(ic => ic.Videos)
@@ -70,7 +74,8 @@ public sealed class CoursesController : ControllerBase
             .ThenBy(c => c.Name)
             .ToListAsync(cancellationToken);
 
-        var dtos = items.Select(c => c.ToDto(includeLessons: false, adminView: admin)).ToList();
+        var market = admin ? null : await _markets.ResolveAsync(User, Request, cancellationToken);
+        var dtos = items.Select(c => c.ToDto(includeLessons: false, adminView: admin, market: market)).ToList();
         await ResolveThumbnailsAsync(dtos, cancellationToken);
         return Ok(dtos);
     }
@@ -87,6 +92,7 @@ public sealed class CoursesController : ControllerBase
             .Include(c => c.Category)
             .Include(c => c.Videos)
             .Include(c => c.LaunchOffer)
+            .Include(c => c.MarketPrices)
             .Include(c => c.BundleItems)
             .ThenInclude(b => b.IncludedCourse!)
             .ThenInclude(ic => ic.Videos)
@@ -95,7 +101,8 @@ public sealed class CoursesController : ControllerBase
         if (course is null || (!admin && course.Status != CourseStatus.Published))
             throw ViviException.NotFound("COURSE_NOT_FOUND", "Course was not found.");
 
-        var dto = course.ToDto(includeLessons: true, adminView: admin);
+        var market = admin ? null : await _markets.ResolveAsync(User, Request, cancellationToken);
+        var dto = course.ToDto(includeLessons: true, adminView: admin, market: market);
         await ResolveThumbnailAsync(dto, cancellationToken);
         return Ok(dto);
     }
@@ -118,7 +125,8 @@ public sealed class CoursesController : ControllerBase
                 customerId = customer.Id;
             }
 
-            var pricing = await _pricing.GetCoursePricingAsync(id, cancellationToken, customerId);
+            var market = await _markets.ResolveAsync(User, Request, cancellationToken);
+            var pricing = await _pricing.GetCoursePricingAsync(id, cancellationToken, customerId, market);
             return Ok(pricing.ToDto());
         }
         catch (KeyNotFoundException)
@@ -145,6 +153,7 @@ public sealed class CoursesController : ControllerBase
 
         _db.Courses.Add(course);
         await SyncBundleAndLaunchAsync(course, request, now, cancellationToken);
+        SyncMarketPrices(course, request, now);
         await _db.SaveChangesAsync(cancellationToken);
         course = await Load(course.Id, cancellationToken);
         var dto = course.ToDto(true, true);
@@ -162,6 +171,7 @@ public sealed class CoursesController : ControllerBase
         await EnsureCategory(request.CategoryId, cancellationToken);
         Apply(course, request, DateTime.UtcNow);
         await SyncBundleAndLaunchAsync(course, request, DateTime.UtcNow, cancellationToken);
+        SyncMarketPrices(course, request, DateTime.UtcNow);
         await _db.SaveChangesAsync(cancellationToken);
         course = await Load(id, cancellationToken);
         var dto = course.ToDto(true, true);
@@ -409,6 +419,7 @@ public sealed class CoursesController : ControllerBase
                .Include(c => c.Category)
                .Include(c => c.Videos)
                .Include(c => c.LaunchOffer)
+               .Include(c => c.MarketPrices)
                .Include(c => c.BundleItems)
                .ThenInclude(b => b.IncludedCourse)
                .SingleOrDefaultAsync(c => c.Id == id, cancellationToken)
@@ -440,6 +451,60 @@ public sealed class CoursesController : ControllerBase
         course.SortOrder = request.SortOrder;
         course.UpdatedAt = now;
         return course;
+    }
+
+    /// <summary>
+    /// Saves the per-country prices from the admin form: adds/updates the countries listed and removes
+    /// the ones left out (a course with no price in a country cannot be bought there). Null = no change.
+    /// </summary>
+    private void SyncMarketPrices(Course course, CourseRequest request, DateTime now)
+    {
+        if (request.MarketPrices is null)
+            return;
+
+        var wanted = new Dictionary<string, CoursePriceDto>(StringComparer.Ordinal);
+        foreach (var input in request.MarketPrices)
+        {
+            var country = (input.CountryCode ?? string.Empty).Trim().ToUpperInvariant();
+            if (!Markets.PricedCountries.Contains(country))
+                throw new ViviException("INVALID_COUNTRY", $"Prices can only be set for: {string.Join(", ", Markets.PricedCountries)}.");
+            if (input.Price <= 0 || input.Price > 1_000_000m)
+                throw new ViviException("INVALID_PRICE", "Enter a price greater than zero.");
+            if (input.Mrp is <= 0 or > 1_000_000m || input.LaunchPrice is <= 0 or > 1_000_000m
+                || input.RegularPriceAfterLaunch is <= 0 or > 1_000_000m)
+                throw new ViviException("INVALID_PRICE", "Prices must be greater than zero.");
+            wanted[country] = input;
+        }
+
+        foreach (var existing in course.MarketPrices.Where(p => !wanted.ContainsKey(p.CountryCode)).ToList())
+        {
+            course.MarketPrices.Remove(existing);
+            _db.CoursePrices.Remove(existing);
+        }
+
+        foreach (var (country, input) in wanted)
+        {
+            var row = course.MarketPrices.SingleOrDefault(p => p.CountryCode == country);
+            var isNew = row is null;
+            row ??= new CoursePrice { Id = Guid.NewGuid(), CourseId = course.Id, CountryCode = country };
+
+            row.Currency = Markets.For(country).Currency;
+            row.Price = Math.Round(input.Price, 2, MidpointRounding.AwayFromZero);
+            row.Mrp = input.Mrp is decimal mrp ? Math.Round(mrp, 2, MidpointRounding.AwayFromZero) : null;
+            // The launch fields only mean something for a bundle with a founding-membership offer.
+            var isBundle = course.Type == CourseType.Bundle;
+            row.LaunchPrice = isBundle && input.LaunchPrice is decimal lp ? Math.Round(lp, 2, MidpointRounding.AwayFromZero) : null;
+            row.RegularPriceAfterLaunch = isBundle && input.RegularPriceAfterLaunch is decimal rp
+                ? Math.Round(rp, 2, MidpointRounding.AwayFromZero)
+                : null;
+            row.UpdatedAt = now;
+
+            if (isNew)
+            {
+                // Added through the set so it is INSERTed (its key is already set).
+                _db.CoursePrices.Add(row);
+            }
+        }
     }
 
     private async Task SyncBundleAndLaunchAsync(

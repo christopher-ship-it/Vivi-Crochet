@@ -6,6 +6,11 @@ public sealed class Customer
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
+    /// <summary>
+    /// Customer-facing ID like <c>VC-K7M2QX</c>. Assigned automatically when the customer is saved
+    /// (see <see cref="PublicIds"/>); never changes. Null only briefly for rows not yet backfilled.
+    /// </summary>
+    public string? CustomerCode { get; set; }
     public string FullName { get; set; } = string.Empty;
     /// <summary>10-digit Indian mobile for OTP accounts; E.164 digits for international email accounts.</summary>
     public string? PhoneNumber { get; set; }
@@ -17,6 +22,10 @@ public sealed class Customer
     public string? Country { get; set; }
     public string? State { get; set; }
     public string? City { get; set; }
+    /// <summary>App language picked on first launch: en, ta or hi. Null until chosen.</summary>
+    public string? LanguageCode { get; set; }
+    /// <summary>Country picked on first launch (ISO code: IN or US). Chosen by the user, never inferred.</summary>
+    public string? CountryCode { get; set; }
     public CustomerAuthMethod AuthMethod { get; set; } = CustomerAuthMethod.PhoneOtp;
     public bool IsActive { get; set; } = true;
 

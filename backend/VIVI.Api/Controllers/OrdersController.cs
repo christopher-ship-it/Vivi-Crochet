@@ -44,7 +44,12 @@ public sealed class OrdersController : ControllerBase
         var lines = request.Items
             .Select(i => new CheckoutLineInput(i.ItemType, i.ProductId, i.CourseId, i.Quantity))
             .ToList();
-        var quote = await _checkout.QuoteDeliveryAsync(lines, request.ShippingAddress.ToInput(), cancellationToken);
+        var customer = await _customers.ResolveForUserAsync(User.GetUserId(), cancellationToken);
+        var quote = await _checkout.QuoteDeliveryAsync(
+            lines,
+            request.ShippingAddress.ToInput(),
+            cancellationToken,
+            customer.Id);
         return Ok(quote.ToDto());
     }
 

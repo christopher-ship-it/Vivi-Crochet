@@ -54,11 +54,11 @@ const TAB_ITEMS: TabItem[] = [
 
 const HAIRLINE = 'rgba(34, 26, 30, 0.12)';
 const STROKE = 1.9;
-const ICON = 26;
+const ICON = 22;
 
-const DOCK_HEIGHT = 62;
-const DOCK_TOP_GAP = 8;
-const DOCK_MIN_BOTTOM = 12;
+const DOCK_HEIGHT = 52;
+const DOCK_TOP_GAP = 6;
+const DOCK_MIN_BOTTOM = 8;
 
 /**
  * The dock floats above the screen, so scrollable content has to reserve this
@@ -77,6 +77,12 @@ interface IconProps {
   animateOffers?: boolean;
 }
 
+const OFFER_SIZE = 34;
+
+/**
+ * Raised gradient % badge that breaks out above the dock. While Offers isn't selected it
+ * pulses a halo, hops now and then and twinkles a yellow spark, so it's hard to miss.
+ */
 function OffersTabIcon({
   filled,
   animate,
@@ -84,66 +90,85 @@ function OffersTabIcon({
   filled: boolean;
   animate: boolean;
 }) {
-  const color = colors.pinkDark;
-  const fill = filled ? color : 'transparent';
-  const spin = useRef(new Animated.Value(0)).current;
+  const halo = useRef(new Animated.Value(0)).current;
+  const hop = useRef(new Animated.Value(0)).current;
+  const spark = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!animate) {
-      spin.stopAnimation();
-      spin.setValue(0);
+      halo.stopAnimation();
+      hop.stopAnimation();
+      spark.stopAnimation();
+      halo.setValue(0);
+      hop.setValue(0);
+      spark.setValue(0);
       return;
     }
 
-    spin.setValue(0);
-    const loop = Animated.loop(
-      Animated.timing(spin, {
+    const haloLoop = Animated.loop(
+      Animated.timing(halo, {
         toValue: 1,
-        duration: 2400,
-        easing: Easing.linear,
+        duration: 1500,
+        easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
     );
-    loop.start();
-    return () => loop.stop();
-  }, [animate, spin]);
+    const hopLoop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(900),
+        Animated.timing(hop, { toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(hop, { toValue: 0, duration: 260, easing: Easing.bounce, useNativeDriver: true }),
+        Animated.timing(hop, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(hop, { toValue: 0, duration: 220, easing: Easing.bounce, useNativeDriver: true }),
+        Animated.delay(1400),
+      ]),
+    );
+    const sparkLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(spark, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(spark, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.delay(700),
+      ]),
+    );
+    haloLoop.start();
+    hopLoop.start();
+    sparkLoop.start();
+    return () => {
+      haloLoop.stop();
+      hopLoop.stop();
+      sparkLoop.stop();
+    };
+  }, [animate, halo, hop, spark]);
 
-  const rotate = spin.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const haloScale = halo.interpolate({ inputRange: [0, 1], outputRange: [1, 1.75] });
+  const haloOpacity = halo.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0.55, 0] });
+  const lift = hop.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+  const sparkScale = spark.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.15] });
 
   return (
     <View style={iconStyles.box}>
-      <View style={iconStyles.offerBadgeWrap}>
-        <Animated.View
-          style={[
-            iconStyles.offerBadge,
-            animate
-              ? {
-                  borderTopColor: color,
-                  borderRightColor: color,
-                  borderBottomColor: color,
-                  borderLeftColor: 'transparent',
-                }
-              : { borderColor: color },
-            {
-              backgroundColor: fill,
-              transform: [{ rotate }],
-            },
-          ]}
-        />
-        <View style={iconStyles.offerPercentLayer} pointerEvents="none">
-          <Text
-            style={[
-              iconStyles.offerPercent,
-              { color: filled ? colors.white : color },
-            ]}
-          >
-            %
-          </Text>
-        </View>
-      </View>
+      <Animated.View style={[iconStyles.offerRaised, { transform: [{ translateY: lift }] }]}>
+        {animate ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[iconStyles.offerHalo, { opacity: haloOpacity, transform: [{ scale: haloScale }] }]}
+          />
+        ) : null}
+        <LinearGradient
+          colors={filled ? [colors.pinkDark, colors.pinkDark] : ['#ff6f9b', colors.pinkDark]}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.8, y: 1 }}
+          style={iconStyles.offerDisc}
+        >
+          <Text style={iconStyles.offerPercent}>%</Text>
+        </LinearGradient>
+        {animate ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[iconStyles.offerSpark, { opacity: spark, transform: [{ scale: sparkScale }] }]}
+          />
+        ) : null}
+      </Animated.View>
     </View>
   );
 }
@@ -428,8 +453,8 @@ export function PremiumTabBar({ state, descriptors, navigation }: PremiumTabBarP
                       fontFamily: focused
                         ? fontsUi.extraBold
                         : fontsUi.decorative,
-                      fontSize: compactLabels ? 9 : 11,
-                      lineHeight: compactLabels ? 12 : 14,
+                      fontSize: compactLabels ? 8 : 10,
+                      lineHeight: compactLabels ? 10 : 12,
                     },
                     focused && styles.labelActive,
                   ]}
@@ -457,35 +482,58 @@ const iconStyles = StyleSheet.create({
   },
   homeLogo: {
     fontFamily: fonts.heading,
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 24,
     includeFontPadding: false,
     textAlign: 'center',
   },
-  /** Circular % badge — reads as Offers / deals, not a price-tag. */
-  offerBadgeWrap: {
-    width: ICON * 0.82,
-    height: ICON * 0.82,
+  /** Raised % badge: sits above the dock so it reads as the call to action. */
+  offerRaised: {
+    width: OFFER_SIZE,
+    height: OFFER_SIZE,
+    marginTop: -12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  offerBadge: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 999,
-    borderWidth: STROKE,
-  },
-  offerPercentLayer: {
-    ...StyleSheet.absoluteFillObject,
+  offerDisc: {
+    width: OFFER_SIZE,
+    height: OFFER_SIZE,
+    borderRadius: OFFER_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.white,
+    shadowColor: colors.pink,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  offerHalo: {
+    position: 'absolute',
+    width: OFFER_SIZE,
+    height: OFFER_SIZE,
+    borderRadius: OFFER_SIZE / 2,
+    backgroundColor: colors.pink,
+  },
+  offerSpark: {
+    position: 'absolute',
+    top: -2,
+    right: -3,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.yellow,
+    borderWidth: 1.5,
+    borderColor: colors.white,
   },
   offerPercent: {
     fontFamily: fonts.extraBold,
-    fontSize: 11,
-    lineHeight: 12,
+    fontSize: 18,
+    lineHeight: 20,
+    color: colors.white,
     includeFontPadding: false,
     textAlign: 'center',
-    textAlignVertical: 'center',
   },
   bagHandle: {
     borderWidth: STROKE,
@@ -566,7 +614,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     height: DOCK_HEIGHT,
     paddingHorizontal: 4,
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
     backgroundColor: colors.white,
@@ -623,8 +671,8 @@ const styles = StyleSheet.create({
     color: colors.pinkDark,
   },
   offersLabelSlot: {
-    marginTop: 2,
-    height: 16,
+    marginTop: 1,
+    height: 14,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
@@ -640,7 +688,7 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   grabNowLabelLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',

@@ -592,7 +592,7 @@ function createStyles(fonts: UiFonts) {
       backgroundColor: 'rgba(24,14,18,0.5)',
     },
     backdropTap: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
     },
     sheet: {
       backgroundColor: colors.white,

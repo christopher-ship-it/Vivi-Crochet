@@ -803,3 +803,118 @@
 .admin-nav::-webkit-scrollbar-button {
   display: none;
 }
+
+/* —— Collapsible sidebar —— */
+.admin-sidebar {
+  transition: width 0.2s var(--ease);
+}
+
+.admin-sidebar__brand-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-sidebar__collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: transparent;
+  color: #cfc2c7;
+  cursor: pointer;
+  transition: background 0.18s var(--ease), color 0.18s var(--ease);
+}
+
+.admin-sidebar__collapse:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* Icons shown instead of text when the sidebar is collapsed. */
+.admin-sidebar__icon-only {
+  display: none;
+}
+
+@media (min-width: 769px) {
+  .admin-sidebar--collapsed {
+    width: 76px;
+  }
+
+  .admin-sidebar--collapsed .admin-sidebar__brand {
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 0 14px;
+  }
+
+  .admin-sidebar--collapsed .admin-sidebar__brand-copy,
+  .admin-sidebar--collapsed .admin-nav__section,
+  .admin-sidebar--collapsed .admin-nav__text,
+  .admin-sidebar--collapsed .admin-nav__chevron,
+  .admin-sidebar--collapsed .admin-sidebar__user-copy {
+    display: none;
+  }
+
+  .admin-sidebar--collapsed .admin-sidebar__collapse {
+    margin-left: 0;
+  }
+
+  .admin-sidebar--collapsed .admin-nav {
+    padding: 12px 10px 16px;
+  }
+
+  .admin-sidebar--collapsed .admin-nav__link,
+  .admin-sidebar--collapsed .admin-nav__group-toggle {
+    position: relative;
+    justify-content: center;
+    padding: 8px 0;
+  }
+
+  .admin-sidebar--collapsed .admin-nav__link-label {
+    gap: 0;
+  }
+
+  /* The unread count becomes a small dot on the Support icon. */
+  .admin-sidebar--collapsed .admin-nav__badge {
+    position: absolute;
+    top: 6px;
+    right: 14px;
+    min-width: 0;
+    width: 9px;
+    height: 9px;
+    padding: 0;
+    font-size: 0;
+    border: 2px solid var(--vivi-rail);
+    box-sizing: content-box;
+  }
+
+  .admin-sidebar--collapsed .admin-sidebar__user {
+    padding: 14px 10px;
+  }
+
+  .admin-sidebar--collapsed .admin-sidebar__user-row {
+    justify-content: center;
+  }
+
+  .admin-sidebar--collapsed .admin-sidebar__account,
+  .admin-sidebar--collapsed .admin-sidebar__logout {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .admin-sidebar--collapsed .admin-sidebar__icon-only {
+    display: inline-flex;
+  }
+}
+
+/* On phones the sidebar is already a compact top bar, so there is nothing to collapse. */
+@media (max-width: 768px) {
+  .admin-sidebar__collapse {
+    display: none;
+  }
+}

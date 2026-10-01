@@ -48,7 +48,7 @@ import {
   type DiscoverFilter,
 } from '../../src/utils/mainCourses';
 import { applyStatusBar } from '../../src/utils/statusBar';
-import { formatInr } from '../../src/utils/format';
+import { formatCoursePrice } from '../../src/utils/format';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 /**
@@ -163,7 +163,7 @@ function MainCourseTile({
       style={({ pressed }) => [styles.tile, { width }, pressed && styles.pressed]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${course.name}, ${hasAccess ? `${pct}%` : formatInr(course.price)}`}
+      accessibilityLabel={`${course.name}, ${hasAccess ? `${pct}%` : formatCoursePrice(course, t('market.notAvailable'))}`}
     >
       <View style={[styles.tileMedia, { height: width - 12 }]}>
         {thumb ? (
@@ -192,7 +192,7 @@ function MainCourseTile({
       ) : (
         <>
           <Text style={styles.tilePrice} numberOfLines={1}>
-            {formatInr(course.price)}
+            {formatCoursePrice(course, t('market.notAvailable'))}
           </Text>
           <Text style={styles.tileMeta} numberOfLines={1}>
             {lessonMeta}

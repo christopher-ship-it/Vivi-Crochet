@@ -11,6 +11,7 @@ const SKIP_PREFIXES = [
   '/',
   '/login',
   '/language-onboarding',
+  '/country-onboarding',
   '/privacy-policy',
   '/terms',
   '/delete-account',
@@ -62,8 +63,10 @@ export async function loadLastHref(): Promise<string | null> {
     // Normalize home deep links. `/(tabs)/index` can show Unmatched Route on device;
     // bare `/(tabs)` + tabs `unstable_settings.initialRouteName` opens Home.
     const path = href.split('?')[0] ?? href;
-    if (path === '/(tabs)' || path === '/(tabs)/' || path === '/(tabs)/index') {
-      return '/(tabs)';
+    // Tab roots (Shop, My orders, Profile, …) are not resumed: reopening the app lands on Home.
+    // Only deeper screens (a product, course, video…) are restored.
+    if (path === '/(tabs)' || path.startsWith('/(tabs)/')) {
+      return null;
     }
     return href;
   } catch {

@@ -60,6 +60,8 @@ export interface Course {
   about?: string | null;
   price: number;
   mrp?: number | null;
+  /** Saved prices for other countries (admin view). */
+  marketPrices?: CoursePrice[] | null;
   accessDays: number;
   renewalPercentage: number;
   languages?: string | null;
@@ -90,6 +92,17 @@ export interface LaunchOfferAdmin {
   completedPurchaseCount?: number;
 }
 
+/** A course's price in a country other than India (US, in USD). */
+export interface CoursePrice {
+  countryCode: string;
+  currency?: string;
+  price: number;
+  mrp?: number | null;
+  /** Founding-membership launch price (bundles only). */
+  launchPrice?: number | null;
+  regularPriceAfterLaunch?: number | null;
+}
+
 export interface CourseRequest {
   name: string;
   categoryId?: string | null;
@@ -107,6 +120,8 @@ export interface CourseRequest {
   launchPrice?: number | null;
   launchLimit?: number | null;
   regularPriceAfterLaunch?: number | null;
+  /** Prices for other countries. Omit to leave unchanged; a list replaces the saved set. */
+  marketPrices?: CoursePrice[];
 }
 
 export interface Video {
@@ -209,6 +224,9 @@ export interface Product {
   ballWeight?: string | null;
   yarnLength?: string | null;
   crochetHookSize?: string | null;
+  fibreBlend?: string | null;
+  yarnWeight?: string | null;
+  needleSize?: string | null;
   colourName?: string | null;
   colourHex?: string | null;
   parentProductId?: string | null;
@@ -238,6 +256,9 @@ export interface ProductRequest {
   ballWeight?: string | null;
   yarnLength?: string | null;
   crochetHookSize?: string | null;
+  fibreBlend?: string | null;
+  yarnWeight?: string | null;
+  needleSize?: string | null;
   colourName?: string | null;
   colourHex?: string | null;
   parentProductId?: string | null;
@@ -281,12 +302,51 @@ export type OrderStatus =
 
 export type PaymentStatus = 'Created' | 'Authorized' | 'Captured' | 'Failed' | 'Refunded';
 
+export type PaymentSource = 'Product' | 'Course' | 'Live';
+
+export interface AdminPaymentListItem {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  source: PaymentSource;
+  titleSummary: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  provider: string;
+  providerOrderId: string;
+  providerPaymentId?: string | null;
+  signatureVerified: boolean;
+  createdAt: string;
+  completedAt?: string | null;
+}
+
+export interface AdminPaymentSourceTotals {
+  source: PaymentSource;
+  currency: string;
+  collected: number;
+  capturedCount: number;
+  pendingCount: number;
+  failedCount: number;
+  refunded: number;
+}
+
+export interface AdminPaymentsResponse {
+  payments: AdminPaymentListItem[];
+  totals: AdminPaymentSourceTotals[];
+}
+
 export interface AdminOrderListItem {
   id: string;
   orderNumber: string;
   status: OrderStatus;
   paymentStatus?: PaymentStatus | null;
   totalAmount: number;
+  /** Currency of totalAmount (INR or USD). */
+  currency?: string;
   customerName: string;
   customerEmail?: string | null;
   customerPhone: string;
@@ -363,6 +423,8 @@ export interface AdminOrderDetail {
   paymentStatus?: PaymentStatus | null;
   paymentMethod: string;
   totalAmount: number;
+  /** Currency of the amounts (INR or USD). */
+  currency?: string;
   createdAt: string;
   paidAt?: string | null;
   items: OrderItem[];
@@ -384,12 +446,14 @@ export interface UpdateDeliveryDateRequest {
 }
 
 export type LiveBookingStatus = 'PendingPayment' | 'Confirmed' | 'Cancelled' | 'Expired';
-export type LiveSlotType = 'Morning' | 'Evening';
+export type LiveSlotType = 'Morning' | 'Evening' | 'Extra1' | 'Extra2' | 'Extra3';
 
 export interface LiveSlotAvailability {
   slotType: string;
   name: string;
   hours?: string;
+  /** This week's own timing, when it differs from the session default. */
+  hoursOverride?: string | null;
   seatCapacity: number;
   seatsBooked: number;
   seatsRemaining: number;
@@ -442,12 +506,35 @@ export interface AdminLiveWeek {
   endDate: string;
   breakWeekday?: string | null;
   isBookable: boolean;
+  /** Price customers pay for this week (the studio price unless overridden). */
   packagePrice: number;
+  priceOverride?: number | null;
+  language: string;
+  languageOverride?: string | null;
+  level: string;
+  levelOverride?: string | null;
   tutorName?: string | null;
   tutorPhotoUrl?: string | null;
   /** True when this week has its own tutor name/photo instead of the shared default. */
   hasCustomTutor: boolean;
   slots: LiveSlotAvailability[];
+}
+
+export interface AdminLiveSession {
+  slotType: LiveSlotType;
+  name: string;
+  hours: string;
+  isEnabled: boolean;
+  /** Morning and Evening are always on. */
+  isCore: boolean;
+}
+
+export interface AdminLiveSettings {
+  packagePrice: number;
+  hoursPerClassDay: number;
+  language: string;
+  level: string;
+  sessions: AdminLiveSession[];
 }
 
 /** The shared tutor name/photo shown for every Live week without its own override. */
@@ -458,6 +545,10 @@ export interface AdminLiveTutorDefault {
 
 export interface AdminCustomerListItem {
   id: string;
+  /** Customer-facing ID, e.g. VC-K7M2QX. */
+  customerCode?: string | null;
+  /** Founding-member ID, e.g. VV-KQTD-007. Null unless the customer is a founding member. */
+  memberCode?: string | null;
   fullName: string;
   phoneNumber: string;
   email: string;
@@ -493,9 +584,19 @@ export interface AdminSpecialOffer {
   completedPurchaseCount: number;
   remaining: number;
   revenue: number;
+  /** Revenue from orders paid in US dollars. */
+  revenueUsd?: number;
+  /** The membership's US prices in USD, or null when it is not sold in the US. */
+  usPrice?: AdminSpecialOfferMarketPrice | null;
   viralProjectCourseId?: string | null;
   viralProjectCourseName?: string | null;
   includedCourses: AdminSpecialOfferCourse[];
+}
+
+export interface AdminSpecialOfferMarketPrice {
+  launchPrice: number;
+  regularPriceAfterLaunch: number;
+  mrp: number;
 }
 
 export interface AdminSpecialOfferRequest {
@@ -510,17 +611,27 @@ export interface AdminSpecialOfferRequest {
   mrp: number;
   accessDurationDays: number;
   viralProjectCourseId?: string | null;
+  /** US prices in USD. Omit to leave unchanged. */
+  usPrice?: AdminSpecialOfferMarketPrice | null;
+  /** Stop selling the membership in the US. */
+  removeUsPrice?: boolean;
 }
 
 export interface FoundingMember {
   id: string;
   memberNumber: number;
+  /** Founding-member ID, e.g. VV-KQTD-007. */
+  memberCode?: string | null;
+  /** The member's customer ID, e.g. VC-K7M2QX. */
+  customerCode?: string | null;
   customerName: string;
   customerEmail: string;
   customerPhone?: string | null;
   joinedDate: string;
   expiryDate: string;
   amountPaid: number;
+  /** Currency the member paid in (INR or USD). */
+  currency?: string;
   orderNumber: string;
   isActive: boolean;
   viralProjectCourseName?: string | null;

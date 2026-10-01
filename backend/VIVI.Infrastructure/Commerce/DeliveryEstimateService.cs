@@ -49,22 +49,32 @@ public sealed class DeliveryEstimateService : IDeliveryEstimateService
             "VIVI Crochet accepts online payment only.");
     }
 
+    /// <summary>Location is decided by the shipping CITY only (not state or address lines).</summary>
     public bool IsCoimbatore(ShippingAddressInput address)
-    {
-        return ContainsCoimbatoreToken(address.City)
-               || ContainsCoimbatoreToken(address.AddressLine1)
-               || ContainsCoimbatoreToken(address.AddressLine2)
-               || ContainsCoimbatoreToken(address.Landmark);
-    }
+        => ContainsCoimbatoreToken(address.City);
 
+    /// <summary>
+    /// Standard window. Handmade: Coimbatore 1–2 days, elsewhere 2–3 days.
+    /// Crochet Essentials (Resell): 1–2 days everywhere (unchanged).
+    /// </summary>
     public DeliveryWindow WindowFor(ProductType productType, bool isCoimbatore)
         => productType switch
         {
-            ProductType.Handmade when isCoimbatore => new DeliveryWindow(1, 1),
+            ProductType.Handmade when isCoimbatore => new DeliveryWindow(1, 2),
             ProductType.Handmade => new DeliveryWindow(2, 3),
-            ProductType.Resell => new DeliveryWindow(1, 2),
             _ => new DeliveryWindow(1, 2)
         };
+
+    public DateTime IstDate(DateTime utcAnchor) => ToIstDate(utcAnchor);
+
+    public void ApplyEstimate(Order order, DeliveryDateRange dates, DeliveryWindow window, bool isCoimbatore)
+    {
+        order.IsCoimbatoreDelivery = isCoimbatore;
+        order.DeliveryEstimateMinDays = window.MinDays;
+        order.DeliveryEstimateMaxDays = window.MaxDays;
+        order.EstimatedDeliveryDateFrom = dates.From;
+        order.EstimatedDeliveryDateTo = dates.To;
+    }
 
     public DeliveryWindow Combine(IEnumerable<DeliveryWindow> windows)
     {

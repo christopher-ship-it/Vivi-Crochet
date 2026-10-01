@@ -16,8 +16,11 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import type { ErrorBoundaryProps } from 'expo-router';
 import { SessionProvider } from '../src/auth/SessionContext';
+import { PreferenceSync } from '../src/preferences/PreferenceSync';
+import { PreferencesProvider } from '../src/preferences/PreferencesContext';
 import { CartProvider } from '../src/cart/CartContext';
 import { WishlistProvider } from '../src/wishlist/WishlistContext';
 import { AppUpdateCard } from '../src/components/AppUpdateCard';
@@ -28,6 +31,9 @@ import { I18nProvider, useI18n } from '../src/i18n';
 import { uiFonts } from '../src/i18n/uiFonts';
 import { RememberRoute } from '../src/navigation/RememberRoute';
 import { addNotificationResponseListener } from '../src/notifications/push';
+import { TapCapture } from '../src/telemetry/TapCapture';
+import { TelemetryHost } from '../src/telemetry/TelemetryHost';
+import { errorToPayload, reportIssue } from '../src/telemetry/telemetry';
 import { colors } from '../src/theme';
 import { applyStatusBar } from '../src/utils/statusBar';
 
@@ -44,6 +50,30 @@ setTimeout(() => {
 export const unstable_settings = {
   initialRouteName: 'index',
 };
+
+/** Catches render errors in any screen: reports them to the admin App health page. */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => {
+    void reportIssue(errorToPayload(error, false));
+  }, [error]);
+
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: colors.canvas }}>
+      <Text style={{ fontSize: 18, fontWeight: '700', color: colors.ink, marginBottom: 8 }}>
+        Something went wrong
+      </Text>
+      <Text style={{ color: colors.ink, textAlign: 'center', marginBottom: 20 }}>
+        We have been notified. Please try again.
+      </Text>
+      <Pressable
+        onPress={retry}
+        style={{ backgroundColor: colors.pink, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 999 }}
+      >
+        <Text style={{ color: '#fff', fontWeight: '700' }}>Try again</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 function PushNotificationNavigator() {
   const router = useRouter();
@@ -101,6 +131,7 @@ function AppStack() {
       <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="+not-found" options={{ headerShown: false }} />
       <Stack.Screen name="language-onboarding" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="country-onboarding" options={{ headerShown: false, animation: 'slide_from_right' }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="edit-address" options={{ title: t('headers.address') }} />
@@ -165,19 +196,25 @@ export default function RootLayout() {
 
   return (
     <I18nProvider>
+      <PreferencesProvider>
       <SessionProvider>
         <CartProvider>
           <WishlistProvider>
             <GradientBackground>
-              <StatusBar style="dark" translucent backgroundColor="transparent" />
-              <PushNotificationNavigator />
-              <RememberRoute />
-              <AppStack />
-              <AppUpdateCard />
+              <TapCapture>
+                <StatusBar style="dark" translucent backgroundColor="transparent" />
+                <PushNotificationNavigator />
+                <PreferenceSync />
+                <RememberRoute />
+                <TelemetryHost />
+                <AppStack />
+                <AppUpdateCard />
+              </TapCapture>
             </GradientBackground>
           </WishlistProvider>
         </CartProvider>
       </SessionProvider>
+      </PreferencesProvider>
     </I18nProvider>
   );
 }

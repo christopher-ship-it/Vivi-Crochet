@@ -18,6 +18,8 @@ export interface SavedShippingAddress {
 
 export interface CustomerProfile {
   id: string;
+  /** Customer-facing ID, e.g. VC-K7M2QX. Shown in the profile so support can find the account. */
+  customerCode?: string | null;
   fullName: string;
   phoneNumber: string;
   email: string;
@@ -27,6 +29,10 @@ export interface CustomerProfile {
   state?: string | null;
   city?: string | null;
   authMethod?: string | null;
+  /** App language picked on first launch: en, ta or hi. */
+  languageCode?: string | null;
+  /** Country picked on first launch: IN or US. */
+  countryCode?: string | null;
   shippingAddress?: SavedShippingAddress | null;
 }
 
@@ -56,6 +62,17 @@ export async function updateMyProfile(input: {
 }): Promise<CustomerProfile> {
   return apiRequest<CustomerProfile>('/api/me/profile', {
     method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Saves the language / country picked on first launch. Send only what changed. */
+export async function updateMyPreferences(input: {
+  languageCode?: 'en' | 'ta' | 'hi';
+  countryCode?: 'IN' | 'US';
+}): Promise<CustomerProfile> {
+  return apiRequest<CustomerProfile>('/api/me/preferences', {
+    method: 'PATCH',
     body: JSON.stringify(input),
   });
 }

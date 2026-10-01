@@ -38,7 +38,7 @@ import { useI18n } from '../src/i18n';
 import { uiFonts, type UiFonts } from '../src/i18n/uiFonts';
 import { colors, spacing } from '../src/theme';
 import type { Course, Product, RecommendedEssentialSummary } from '../src/types';
-import { formatInr } from '../src/utils/format';
+import { usePreferences } from '../src/preferences/PreferencesContext';
 
 function createStyles(fonts: UiFonts) {
   return StyleSheet.create({
@@ -171,6 +171,7 @@ function createStyles(fonts: UiFonts) {
 }
 
 export default function CartScreen() {
+  const { formatPrice } = usePreferences();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t, language } = useI18n();
@@ -521,7 +522,7 @@ export default function CartScreen() {
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <View style={styles.subtotalRow}>
           <Text style={styles.subtotalLabel}>{t('cart.subtotal')}</Text>
-          <Text style={styles.subtotalValue}>{formatInr(subtotal)}</Text>
+          <Text style={styles.subtotalValue}>{formatPrice(subtotal)}</Text>
         </View>
         <Text style={styles.footerHint}>
           {items.some(isCourseLine) && items.some(isProductLine)

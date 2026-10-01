@@ -379,6 +379,76 @@ public sealed class AdminLiveController : ControllerBase
         return Ok(await MapWeekAsync(week, tutorDefault, cancellationToken));
     }
 
+    [HttpGet("settings")]
+    [ProducesResponseType(typeof(AdminLiveSettingsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveSettingsResponse>> GetSettings(CancellationToken cancellationToken)
+        => Ok(MapSettings(await _calendar.GetSettingsAsync(cancellationToken)));
+
+    [HttpPut("settings")]
+    [ProducesResponseType(typeof(AdminLiveSettingsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminLiveSettingsResponse>> UpdateSettings(
+        [FromBody] UpdateLiveSettingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = await _calendar.UpdateSettingsAsync(
+            request.PackagePrice,
+            request.HoursPerClassDay,
+            request.Language,
+            request.Level,
+            request.Sessions
+                .Select(s => new LiveSessionUpdate(s.SlotType, s.Name, s.Hours, s.IsEnabled))
+                .ToList(),
+            cancellationToken);
+        return Ok(MapSettings(snapshot));
+    }
+
+    [HttpPut("weeks/{weekId:guid}/overrides")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SetWeekOverrides(
+        Guid weekId,
+        [FromBody] SetLiveWeekOverridesRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _calendar.SetWeekOverridesAsync(
+            weekId,
+            request.PriceOverride,
+            request.LanguageOverride,
+            request.LevelOverride,
+            cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPut("weeks/{weekId:guid}/slots/{slotType}/hours")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SetSlotHours(
+        Guid weekId,
+        LiveSlotType slotType,
+        [FromBody] SetLiveSlotHoursRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _calendar.SetSlotHoursOverrideAsync(weekId, slotType, request.Hours, cancellationToken);
+        return NoContent();
+    }
+
+    private static AdminLiveSettingsResponse MapSettings(LiveSettingsSnapshot settings) => new()
+    {
+        PackagePrice = settings.PackagePrice,
+        HoursPerClassDay = settings.HoursPerClassDay,
+        Language = settings.Language,
+        Level = settings.Level,
+        Sessions = settings.Sessions.Values
+            .OrderBy(s => s.SlotType)
+            .Select(s => new AdminLiveSessionDto
+            {
+                SlotType = s.SlotType,
+                Name = s.Name,
+                Hours = s.Hours,
+                IsEnabled = s.IsEnabled,
+                IsCore = LiveCalendarService.IsCoreSession(s.SlotType)
+            })
+            .ToList()
+    };
+
     [HttpPut("weeks/{weekId:guid}/break")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SetBreak(
@@ -521,11 +591,20 @@ public sealed class AdminLiveController : ControllerBase
             EndDate = week.EndDate,
             BreakWeekday = week.BreakWeekday?.ToString(),
             IsBookable = week.IsBookable,
-            PackagePrice = _calendar.PackagePrice,
+            PackagePrice = _calendar.PriceFor(week),
+            PriceOverride = week.PriceOverride,
+            Language = _calendar.LanguageFor(week),
+            LanguageOverride = week.LanguageOverride,
+            Level = _calendar.LevelFor(week),
+            LevelOverride = week.LevelOverride,
             TutorName = tutorName,
             TutorPhotoUrl = tutorPhotoUrl,
             HasCustomTutor = week.HasCustomTutor,
-            Slots = week.Slots.OrderBy(s => s.SlotType).Select(MapSlot).ToList()
+            Slots = week.Slots
+                .Where(s => _calendar.IsSlotEnabled(s.SlotType))
+                .OrderBy(s => s.SlotType)
+                .Select(MapSlot)
+                .ToList()
         };
     }
 
@@ -556,7 +635,8 @@ public sealed class AdminLiveController : ControllerBase
         {
             SlotType = slot.SlotType.ToString(),
             Name = _calendar.SlotName(slot.SlotType),
-            Hours = _calendar.SlotHours(slot.SlotType),
+            Hours = _calendar.SlotHoursFor(slot),
+            HoursOverride = slot.HoursOverride,
             SeatCapacity = slot.SeatCapacity,
             SeatsBooked = slot.SeatsBooked,
             SeatsRemaining = slot.IsBlocked ? 0 : remaining,
@@ -584,7 +664,8 @@ public sealed class AdminLiveController : ControllerBase
             SlotName = _calendar.SlotName(booking.SlotType),
             OrderId = booking.OrderId,
             OrderNumber = booking.Order?.OrderNumber ?? string.Empty,
-            TotalAmount = booking.Order?.TotalAmount ?? _calendar.PackagePrice,
+            TotalAmount = booking.Order?.TotalAmount
+                ?? (booking.Week is { } bookedWeek ? _calendar.PriceFor(bookedWeek) : _calendar.PackagePrice),
             PaymentStatus = payment?.Status.ToString(),
             CreatedAt = booking.CreatedAt,
             ConfirmedAt = booking.ConfirmedAt

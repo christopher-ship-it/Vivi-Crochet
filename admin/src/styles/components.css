@@ -604,6 +604,34 @@ label.btn {
   font-weight: 700;
 }
 
+.photo-card__edit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--vivi-ink, #221a1e);
+  cursor: pointer;
+}
+
+.photo-card__edit:hover:not(:disabled) {
+  background: #fff;
+  border-color: var(--vivi-pink);
+  color: var(--vivi-pink);
+}
+
+.photo-card__edit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .photo-card__actions {
   display: flex;
   flex-direction: column;
@@ -950,7 +978,12 @@ label.btn {
 }
 
 .data-table--customers {
-  min-width: 1320px;
+  min-width: 1440px;
+}
+
+.data-table--customers .col-code {
+  width: 124px;
+  white-space: nowrap;
 }
 
 .data-table--customers .col-name {

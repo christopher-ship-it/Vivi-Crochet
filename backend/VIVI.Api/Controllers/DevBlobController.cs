@@ -23,7 +23,7 @@ public sealed class DevBlobController : ControllerBase
     }
 
     [HttpPut("{**blobPath}")]
-    [RequestSizeLimit(2_147_483_648)]
+    [RequestSizeLimit(10_737_418_240)]
     public async Task<IActionResult> Put(string blobPath, CancellationToken cancellationToken)
     {
         if (!_env.IsDevelopment())

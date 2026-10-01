@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Offers;
 using VIVI.Api.Mapping;
+using VIVI.Core;
+using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
 using VIVI.Infrastructure.Data;
@@ -84,6 +86,7 @@ public sealed class AdminSpecialOffersController : ControllerBase
         offer.ViralProjectCourseId = request.ViralProjectCourseId;
         offer.UpdatedAt = DateTime.UtcNow;
 
+        await SaveUsPriceAsync(offer, request, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         offer = await LoadAsync(courseId, cancellationToken);
         return Ok(await BuildDtoAsync(offer, cancellationToken));
@@ -148,6 +151,41 @@ public sealed class AdminSpecialOffersController : ControllerBase
         });
     }
 
+    /// <summary>Adds, updates or removes the membership's US price (stored on the bundle course's US price row).</summary>
+    private async Task SaveUsPriceAsync(LaunchOfferCounter offer, AdminSpecialOfferRequest request, CancellationToken cancellationToken)
+    {
+        var existing = await _db.CoursePrices
+            .SingleOrDefaultAsync(p => p.CourseId == offer.CourseId && p.CountryCode == "US", cancellationToken);
+
+        if (request.RemoveUsPrice)
+        {
+            if (existing is not null)
+                _db.CoursePrices.Remove(existing);
+            return;
+        }
+
+        if (request.UsPrice is null)
+            return;
+
+        var input = request.UsPrice;
+        if (input.LaunchPrice <= 0 || input.RegularPriceAfterLaunch <= 0 || input.Mrp < 0
+            || input.LaunchPrice > 1_000_000m || input.RegularPriceAfterLaunch > 1_000_000m || input.Mrp > 1_000_000m)
+            throw new ViviException("INVALID_PRICE", "Enter US prices greater than zero.");
+
+        if (existing is null)
+        {
+            existing = new CoursePrice { Id = Guid.NewGuid(), CourseId = offer.CourseId, CountryCode = "US" };
+            _db.CoursePrices.Add(existing);
+        }
+
+        existing.Currency = Markets.UnitedStates.Currency;
+        existing.LaunchPrice = Math.Round(input.LaunchPrice, 2, MidpointRounding.AwayFromZero);
+        existing.RegularPriceAfterLaunch = Math.Round(input.RegularPriceAfterLaunch, 2, MidpointRounding.AwayFromZero);
+        existing.Price = existing.RegularPriceAfterLaunch.Value;
+        existing.Mrp = input.Mrp > 0 ? Math.Round(input.Mrp, 2, MidpointRounding.AwayFromZero) : null;
+        existing.UpdatedAt = DateTime.UtcNow;
+    }
+
     private async Task<Core.Entities.LaunchOfferCounter> LoadAsync(Guid courseId, CancellationToken cancellationToken)
         => await _db.LaunchOfferCounters
                .Include(o => o.ViralProjectCourse)
@@ -168,12 +206,20 @@ public sealed class AdminSpecialOffersController : ControllerBase
             .Where(c => includedCourseIds.Contains(c.Id))
             .ToListAsync(cancellationToken);
 
-        var revenue = await _db.LaunchMemberships
+        // Rupee and dollar sales are added up separately.
+        var sales = await _db.LaunchMemberships
             .AsNoTracking()
             .Where(m => m.CourseId == offer.CourseId)
-            .Join(_db.OrderItems, m => m.OrderItemId, i => i.Id, (m, i) => i.TotalAmount)
-            .SumAsync(cancellationToken);
+            .Join(_db.OrderItems, m => m.OrderItemId, i => i.Id, (m, i) => new { i.TotalAmount, i.OrderId })
+            .Join(_db.Orders, x => x.OrderId, o => o.Id, (x, o) => new { x.TotalAmount, o.Currency })
+            .ToListAsync(cancellationToken);
+        var revenue = sales.Where(s => s.Currency == "INR").Sum(s => s.TotalAmount);
+        var revenueUsd = sales.Where(s => s.Currency == "USD").Sum(s => s.TotalAmount);
 
-        return offer.ToAdminDto(includedCourses, revenue);
+        var usPrice = await _db.CoursePrices
+            .AsNoTracking()
+            .SingleOrDefaultAsync(p => p.CourseId == offer.CourseId && p.CountryCode == "US", cancellationToken);
+
+        return offer.ToAdminDto(includedCourses, revenue, revenueUsd, usPrice);
     }
 }

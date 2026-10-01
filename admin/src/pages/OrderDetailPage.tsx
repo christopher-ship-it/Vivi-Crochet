@@ -3,11 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { deleteAdminOrder, getAdminOrder, updateOrderDeliveryDate, updateOrderStatus } from '../api/orders';
 import { ApiClientError } from '../api/client';
 import type { AdminOrderDetail, OrderStatus } from '../types';
-import { formatDate, formatDay, formatInr } from '../utils/format';
+import { formatDate, formatDay, formatMoney, parseApiDate } from '../utils/format';
 import { confirmDialog } from '../components/AppDialog';
 
 function toDateInput(iso: string): string {
-  const date = new Date(iso);
+  const date = parseApiDate(iso);
   if (Number.isNaN(date.getTime())) return '';
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -239,7 +239,7 @@ export function OrderDetailPage() {
       <div className="order-stats">
         <div className="order-stat">
           <span className="order-stat__label">Amount</span>
-          <span className="order-stat__value">{formatInr(order.totalAmount)}</span>
+          <span className="order-stat__value">{formatMoney(order.totalAmount, order.currency)}</span>
         </div>
         <div className="order-stat">
           <span className="order-stat__label">Payment</span>
@@ -278,15 +278,15 @@ export function OrderDetailPage() {
                       <span className="order-items__type">{item.itemType}</span>
                     </td>
                     <td className="num">{item.quantity}</td>
-                    <td className="num">{formatInr(item.unitPrice)}</td>
-                    <td className="num cell-strong">{formatInr(item.totalAmount)}</td>
+                    <td className="num">{formatMoney(item.unitPrice, order.currency)}</td>
+                    <td className="num cell-strong">{formatMoney(item.totalAmount, order.currency)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr>
                   <td colSpan={3}>Order total</td>
-                  <td className="num">{formatInr(order.totalAmount)}</td>
+                  <td className="num">{formatMoney(order.totalAmount, order.currency)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -304,7 +304,7 @@ export function OrderDetailPage() {
               </div>
               <div className="order-dates">
                 <div className="order-date">
-                  <span className="order-stat__label">Default system estimate</span>
+                  <span className="order-stat__label">Calculated delivery</span>
                   <strong>
                     {formatDay(delivery.systemFrom)}
                     {delivery.systemFrom !== delivery.systemTo ? ` – ${formatDay(delivery.systemTo)}` : ''}
@@ -313,7 +313,7 @@ export function OrderDetailPage() {
                 </div>
                 <div className={`order-date order-date--current${delivery.isOverridden ? ' order-date--override' : ''}`}>
                   <span className="order-stat__label">
-                    Current customer-facing date
+                    Effective delivery
                     {delivery.isOverridden ? <span className="badge badge--yes">Manually overridden</span> : null}
                   </span>
                   <strong>

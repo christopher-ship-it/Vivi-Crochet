@@ -6,7 +6,7 @@ import { useI18n } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
 import { colors, radii } from '../theme';
 import type { Product, RecommendedEssentialSummary } from '../types';
-import { formatInr } from '../utils/format';
+import { usePreferences } from '../preferences/PreferencesContext';
 import { AppImage } from './AppImage';
 
 function createStyles(fonts: UiFonts) {
@@ -181,7 +181,10 @@ export function CartRecommendBlock({
   const styles = useMemo(() => createStyles(fonts), [language]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const { course, essentials, priority } = recommendation;
+  const { market, formatPrice } = usePreferences();
+  const { course, priority } = recommendation;
+  // Shop products can only be ordered in India: outside it only the course suggestion is shown.
+  const essentials = market.canOrderProducts ? recommendation.essentials : [];
   if (!course && essentials.length === 0) return null;
 
   async function handleAdd(essential: RecommendedEssentialSummary) {
@@ -233,7 +236,7 @@ export function CartRecommendBlock({
               {courseName}
             </Text>
             {coursePrice != null ? (
-              <Text style={styles.courseMeta}>{formatInr(coursePrice)}</Text>
+              <Text style={styles.courseMeta}>{formatPrice(coursePrice)}</Text>
             ) : null}
           </View>
         </View>
@@ -282,7 +285,7 @@ export function CartRecommendBlock({
                 <Text style={styles.essentialName} numberOfLines={2}>
                   {essential.name}
                 </Text>
-                <Text style={styles.essentialPrice}>{formatInr(essential.price)}</Text>
+                <Text style={styles.essentialPrice}>{formatPrice(essential.price)}</Text>
                 {out ? (
                   <Text style={styles.stockHint}>{t('product.outOfStockBadge')}</Text>
                 ) : atMax ? (

@@ -52,7 +52,7 @@ import {
   COURSE_TYPE_LABELS,
   formatCourseMeta,
   formatDuration,
-  formatInr,
+  formatMoney,
 } from '../../src/utils/format';
 import { getCoursePathCursor, setCoursePathCursor } from '../../src/utils/coursePathProgress';
 import { isLastLessonInCourse } from '../../src/utils/learnerJourney';
@@ -457,9 +457,15 @@ export default function CourseDetailScreen() {
 
   const displayPrice = pricing?.applicablePrice ?? course.price;
   const displayMrp = pricing?.mrp ?? course.mrp;
+  // Prices come from the server in the user's currency (INR or USD).
+  const currency = pricing?.currency ?? course.currency ?? 'INR';
+  const money = (amount: number) => formatMoney(amount, currency);
+  // No price for the user's country: the course cannot be bought there.
+  const unavailableInCountry = pricing?.availableInMarket === false || course.availableInMarket === false;
   const isRenewalOffer = Boolean(pricing?.isRenewalOffer);
   const renewalPercent = pricing?.renewalPercentage ?? course.renewalPercentage ?? 50;
-  const showPurchaseFooter = (!hasAccess || isRenewalOffer) && !(isBundle && collectionOwned && !isRenewalOffer);
+  const showPurchaseFooter =
+    (!hasAccess || isRenewalOffer) && !(isBundle && collectionOwned && !isRenewalOffer) && !unavailableInCountry;
   // Prefer admin "What you get" (About), then Description, then catalog package copy.
   const packageWhatYouGetKey = getMainCourseWhatYouGetKey(course);
   const whatYouGetLine =
@@ -476,20 +482,20 @@ export default function CourseDetailScreen() {
     ? 'Starting checkout…'
     : isRenewalOffer
       ? t('learn.renewCtaWithDiscount', {
-          price: formatInr(displayPrice),
+          price: money(displayPrice),
           percent: renewalPercent,
         })
-      : t('learn.buyNowPrice', { price: formatInr(displayPrice) });
+      : t('learn.buyNowPrice', { price: money(displayPrice) });
   const addCartLabel = addingToCart
     ? t('common.loading')
     : alreadyInCart
       ? t('learn.viewCart')
       : isRenewalOffer
         ? t('learn.addRenewalToCart', {
-            price: formatInr(displayPrice),
+            price: money(displayPrice),
             percent: renewalPercent,
           })
-        : t('learn.addToCartPrice', { price: formatInr(displayPrice) });
+        : t('learn.addToCartPrice', { price: money(displayPrice) });
   const pathCurrentIndex = Math.max(
     0,
     lessons.findIndex((lesson) => lesson.id === pathCursorId),
@@ -620,12 +626,16 @@ export default function CourseDetailScreen() {
                       accessDays: pricing?.accessDays ?? course.accessDays,
                     })}
                   </Text>
-                  <View style={styles.priceRow}>
-                    <Text style={styles.price}>{formatInr(displayPrice)}</Text>
-                    {displayMrp && displayMrp > displayPrice && (
-                      <Text style={styles.mrp}>{formatInr(displayMrp)}</Text>
-                    )}
-                  </View>
+                  {unavailableInCountry ? (
+                    <Text style={styles.launch}>{t('market.courseUnavailable')}</Text>
+                  ) : (
+                    <View style={styles.priceRow}>
+                      <Text style={styles.price}>{money(displayPrice)}</Text>
+                      {displayMrp && displayMrp > displayPrice && (
+                        <Text style={styles.mrp}>{money(displayMrp)}</Text>
+                      )}
+                    </View>
+                  )}
                   {pricing?.launchOfferActive && !isRenewalOffer && (
                     <Text style={styles.launch}>
                       {t('offers.launchBanner')}
@@ -634,7 +644,7 @@ export default function CourseDetailScreen() {
                   {isRenewalOffer ? (
                     <Text style={styles.launch}>
                       {t('learn.renewCtaWithDiscount', {
-                        price: formatInr(displayPrice),
+                        price: money(displayPrice),
                         percent: renewalPercent,
                       })}
                     </Text>

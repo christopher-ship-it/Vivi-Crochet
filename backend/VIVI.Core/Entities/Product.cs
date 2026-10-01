@@ -21,6 +21,12 @@ public sealed class Product
     public string? YarnLength { get; set; }
     /// <summary>Crochet Essentials specification, e.g. "4 mm".</summary>
     public string? CrochetHookSize { get; set; }
+    /// <summary>Crochet Essentials specification, e.g. "100% Acrylic".</summary>
+    public string? FibreBlend { get; set; }
+    /// <summary>Crochet Essentials specification, e.g. "4 Medium".</summary>
+    public string? YarnWeight { get; set; }
+    /// <summary>Crochet Essentials specification, e.g. "UK 5 (5.5 mm)".</summary>
+    public string? NeedleSize { get; set; }
     /// <summary>Variant option value (e.g. colour name "Cream").</summary>
     public string? ColourName { get; set; }
     /// <summary>Swatch colour as #RRGGBB for the colour picker in the app.</summary>

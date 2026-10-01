@@ -19,10 +19,14 @@ public sealed class CoursePricingResponse
     public Guid CourseId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string CourseName { get; set; } = string.Empty;
-    public int ListPrice { get; set; }
-    public int? Mrp { get; set; }
-    public int Price { get; set; }
-    public int ApplicablePrice { get; set; }
+    public decimal ListPrice { get; set; }
+    public decimal? Mrp { get; set; }
+    public decimal Price { get; set; }
+    public decimal ApplicablePrice { get; set; }
+    /// <summary>ISO currency of the prices (INR or USD).</summary>
+    public string Currency { get; set; } = "INR";
+    /// <summary>False when the course is not sold in the caller's country.</summary>
+    public bool AvailableInMarket { get; set; } = true;
     public bool IsLaunchOffer { get; set; }
     public bool LaunchOfferActive { get; set; }
     public int? LaunchOfferRemaining { get; set; }

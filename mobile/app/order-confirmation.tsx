@@ -9,7 +9,7 @@ import { HeroGradient } from '../src/components/HeroGradient';
 import { useI18n } from '../src/i18n';
 import { uiFonts, type UiFonts } from '../src/i18n/uiFonts';
 import { colors, radii, spacing } from '../src/theme';
-import { formatInr } from '../src/utils/format';
+import { formatMoney } from '../src/utils/format';
 
 export default function OrderConfirmationScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
@@ -110,12 +110,12 @@ export default function OrderConfirmationScreen() {
                 <Text style={styles.itemName} numberOfLines={2}>{item.itemNameSnapshot}</Text>
                 <Text style={styles.itemMeta}>{t('orderConfirmation.qty', { count: item.quantity })}</Text>
               </View>
-              <Text style={styles.itemPrice}>{formatInr(item.totalAmount)}</Text>
+              <Text style={styles.itemPrice}>{formatMoney(item.totalAmount, order.currency)}</Text>
             </View>
           ))}
           <View style={styles.totalStrip}>
             <Text style={styles.totalLabel}>{t('orderConfirmation.totalPaid')}</Text>
-            <Text style={styles.totalValue}>{formatInr(order.totalAmount)}</Text>
+            <Text style={styles.totalValue}>{formatMoney(order.totalAmount, order.currency)}</Text>
           </View>
         </View>
 

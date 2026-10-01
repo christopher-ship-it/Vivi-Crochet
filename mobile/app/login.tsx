@@ -1030,7 +1030,7 @@ export default function LoginScreen() {
                   autoCorrect={false}
                   placeholder={t('auth.emailPlaceholder')}
                   placeholderTextColor={colors.muted}
-                  onFocus={scrollFieldIntoView}
+                  onFocus={() => scrollFieldIntoView("end")}
                 />
                 <Pressable
                   style={[styles.button, loading && styles.buttonDisabled]}
@@ -1055,7 +1055,7 @@ export default function LoginScreen() {
                   maxLength={6}
                   placeholder={t('auth.sixDigit')}
                   placeholderTextColor={colors.muted}
-                  onFocus={scrollFieldIntoView}
+                  onFocus={() => scrollFieldIntoView("end")}
                 />
                 <Text style={styles.label}>{t('auth.newPassword')}</Text>
                 <View style={styles.passwordFieldWrap}>
@@ -1069,7 +1069,7 @@ export default function LoginScreen() {
                     placeholder={t('auth.passwordHint')}
                     placeholderTextColor={colors.muted}
                     textContentType="newPassword"
-                    onFocus={scrollFieldIntoView}
+                    onFocus={() => scrollFieldIntoView("end")}
                   />
                   <Pressable
                     style={styles.passwordEyeBtn}

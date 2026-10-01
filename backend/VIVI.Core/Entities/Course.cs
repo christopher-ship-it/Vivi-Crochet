@@ -31,5 +31,7 @@ public sealed class Course
     public ICollection<Video> Videos { get; set; } = new List<Video>();
     public ICollection<CourseBundleItem> BundleItems { get; set; } = new List<CourseBundleItem>();
     public ICollection<CourseBundleItem> IncludedInBundles { get; set; } = new List<CourseBundleItem>();
+    /// <summary>Prices for countries other than India.</summary>
+    public ICollection<CoursePrice> MarketPrices { get; set; } = new List<CoursePrice>();
     public LaunchOfferCounter? LaunchOffer { get; set; }
 }

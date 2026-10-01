@@ -21,8 +21,16 @@ import {
   LiveBookingsCalendar,
 } from '../components/LiveBookingsCalendar';
 import { RowActionsMenu } from '../components/RowActionsMenu';
-import type { AdminLiveBookingListItem, AdminLiveWeek, LiveBookingStatus } from '../types';
+import { Link } from 'react-router-dom';
+import { LiveWeekOverrides } from '../components/LiveWeekOverrides';
+import type {
+  AdminLiveBookingListItem,
+  AdminLiveWeek,
+  LiveBookingStatus,
+  LiveSlotType,
+} from '../types';
 import { formatDate, formatInr, validateImageFile } from '../utils/format';
+import { prepareUploadImage } from '../utils/imageUploadPrepare';
 import { uploadToBlob } from '../utils/videoUpload';
 import { confirmDialog } from '../components/AppDialog';
 
@@ -35,7 +43,7 @@ const STATUS_OPTIONS: Array<LiveBookingStatus | ''> = [
 ];
 
 type ViewMode = 'table' | 'calendar';
-type SlotType = 'Morning' | 'Evening';
+type SlotType = LiveSlotType;
 
 type ModifyDialog = {
   slotType: SlotType;
@@ -291,16 +299,14 @@ export function LiveBookingsPage() {
 
   async function handleTutorPhotoSelect(fileList: FileList | null) {
     if (!selectedWeek || !fileList?.length) return;
-    const file = fileList[0];
-    const validation = validateImageFile(file);
-    if (!validation.valid) {
-      setTutorUploadError(validation.error ?? 'Invalid image');
-      return;
-    }
-
     setTutorUploading(true);
     setTutorUploadError(null);
     try {
+      const file = await prepareUploadImage(fileList[0]);
+      const validation = validateImageFile(file);
+      if (!validation.valid) {
+        throw new Error(validation.error ?? 'Invalid image');
+      }
       if (usingSharedDefault) {
         const ticket = await requestLiveTutorDefaultPhotoUploadUrl({
           fileName: file.name,
@@ -433,7 +439,8 @@ export function LiveBookingsPage() {
         <div>
           <h1 className="page-header__title">Live classes</h1>
           <p className="page-header__subtitle">
-            Track Morning and Evening Crochet Circle bookings from the app.
+            Track Live class bookings from the app.{' '}
+            <Link to="/live/settings">Change price, timings, language, level and sessions</Link>
           </p>
           <div className="toolbar live-bookings-toolbar">
             <div className="live-view-switch" role="tablist" aria-label="Live classes view">
@@ -529,7 +536,7 @@ export function LiveBookingsPage() {
                   ? 'Applies to every week — replace it here only when you want to change all weeks at once.'
                   : selectedWeek.hasCustomTutor
                     ? 'Only this week — every other week keeps the default photo.'
-                    : <>Per week · <strong>1200×1500</strong> (4:5), JPG/WebP, max 5 MB</>}
+                    : <>Per week · <strong>1200×1500</strong> (4:5), JPG/WebP/iPhone HEIC, max 5 MB</>}
               </p>
               {tutorUploadError ? <p className="form-error">{tutorUploadError}</p> : null}
               <div className="live-cal__tutor-actions">
@@ -541,7 +548,7 @@ export function LiveBookingsPage() {
                       : 'Upload photo'}
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
                     hidden
                     disabled={tutorUploading}
                     onChange={(e) => {
@@ -583,6 +590,9 @@ export function LiveBookingsPage() {
               <h3>Could not update slot</h3>
               <p>{actionError}</p>
             </div>
+          ) : null}
+          {selectedWeek ? (
+            <LiveWeekOverrides week={selectedWeek} onSaved={() => reloadWeeks(true)} />
           ) : null}
           <LiveBookingsCalendar
             week={selectedWeek}

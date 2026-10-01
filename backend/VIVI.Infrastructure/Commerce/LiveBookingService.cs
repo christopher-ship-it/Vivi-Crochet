@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using VIVI.Core;
 using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
@@ -162,6 +163,13 @@ public sealed class LiveBookingService
                 .SingleOrDefaultAsync(c => c.Id == customerId, cancellationToken)
                 ?? throw ViviException.NotFound("CUSTOMER_NOT_FOUND", "Customer was not found.");
 
+            if (!Markets.For(customer.CountryCode).CanBookLiveClasses)
+            {
+                throw ViviException.Conflict(
+                    "LIVE_NOT_AVAILABLE_IN_COUNTRY",
+                    "Live classes are available in India only.");
+            }
+
             var email = CustomerAccountService.NormalizeEmail(customer.Email);
             if (string.IsNullOrWhiteSpace(email)
                 || email.EndsWith("@vivicrochet.dev", StringComparison.OrdinalIgnoreCase)
@@ -198,8 +206,12 @@ public sealed class LiveBookingService
             if (duplicate)
                 throw ViviException.Conflict("ALREADY_BOOKED", "You already booked this week and slot.");
 
+            await _calendar.GetSettingsAsync(cancellationToken);
             var slot = week.Slots.SingleOrDefault(s => s.SlotType == slotType)
                 ?? throw ViviException.NotFound("LIVE_SLOT_NOT_FOUND", "Live slot was not found.");
+
+            if (!_calendar.IsSlotEnabled(slotType))
+                throw ViviException.Conflict("SLOT_NOT_AVAILABLE", "This session is not available.");
 
             if (slot.IsBlocked)
                 throw ViviException.Conflict("SLOT_BLOCKED", "This slot is blocked by the studio.");
@@ -211,7 +223,8 @@ public sealed class LiveBookingService
             slot.SeatsBooked += 1;
             slot.UpdatedAt = now;
 
-            var price = _options.PackagePrice;
+            // Price is read now and stored on the order, so later price changes never touch it.
+            var price = _calendar.PriceFor(week);
             var slotName = _calendar.SlotName(slotType);
             var order = new Order
             {

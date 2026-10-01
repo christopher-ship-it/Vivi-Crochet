@@ -1,4 +1,5 @@
 using VIVI.Api.DTOs.Offers;
+using VIVI.Core;
 using VIVI.Core.Entities;
 
 namespace VIVI.Api.Mapping;
@@ -18,10 +19,12 @@ public static class OffersMapper
     public static FoundingMembershipOfferResponse ToOfferDto(
         this LaunchOfferCounter offer,
         IReadOnlyList<Course> includedCourses,
-        string? viralProjectThumbnailUrl)
+        string? viralProjectThumbnailUrl,
+        Market? market = null,
+        IReadOnlyList<CoursePrice>? marketPrices = null)
     {
         var remaining = Math.Max(0, offer.LaunchLimit - offer.CompletedPurchaseCount);
-        return new FoundingMembershipOfferResponse
+        var dto = new FoundingMembershipOfferResponse
         {
             CourseId = offer.CourseId,
             OfferName = offer.OfferName,
@@ -49,6 +52,25 @@ public static class OffersMapper
                 },
             Benefits = BenefitLines
         };
+
+        if (market is { UsesBasePrices: false })
+        {
+            // Another country: show that country's prices. No price row = not sold there.
+            var rows = marketPrices ?? [];
+            var bundleRow = rows.SingleOrDefault(p => p.CourseId == offer.CourseId);
+            dto.Currency = market.Currency;
+            dto.AvailableInMarket = bundleRow is not null;
+            dto.LaunchPrice = bundleRow?.LaunchPrice ?? 0;
+            dto.RegularPriceAfterLaunch = bundleRow?.RegularPriceAfterLaunch ?? bundleRow?.Price ?? 0;
+            dto.Mrp = bundleRow?.Mrp ?? 0;
+            // Without a launch price for this country the launch offer is not on for them.
+            if (bundleRow?.LaunchPrice is null)
+                dto.Remaining = 0;
+            foreach (var included in dto.IncludedCourses)
+                included.RegularPrice = rows.SingleOrDefault(p => p.CourseId == included.Id)?.Price ?? 0;
+        }
+
+        return dto;
     }
 
     public static MyMembershipResponse ToMembershipDto(this LaunchMembership membership, LaunchOfferCounter? offer, DateTime utcNow)
@@ -57,6 +79,7 @@ public static class OffersMapper
         {
             IsMember = true,
             MemberNumber = membership.MemberNumber,
+            MemberCode = membership.MemberCode,
             OfferName = offer?.OfferName,
             BadgeGrantedAt = membership.BadgeGrantedAt,
             AccessExpiryDate = membership.AccessExpiryDate,
@@ -74,7 +97,9 @@ public static class OffersMapper
     public static AdminSpecialOfferResponse ToAdminDto(
         this LaunchOfferCounter offer,
         IReadOnlyList<Course> includedCourses,
-        decimal revenue)
+        decimal revenue,
+        decimal revenueUsd = 0,
+        CoursePrice? usPrice = null)
     {
         var remaining = Math.Max(0, offer.LaunchLimit - offer.CompletedPurchaseCount);
         return new AdminSpecialOfferResponse
@@ -93,6 +118,15 @@ public static class OffersMapper
             CompletedPurchaseCount = offer.CompletedPurchaseCount,
             Remaining = remaining,
             Revenue = revenue,
+            RevenueUsd = revenueUsd,
+            UsPrice = usPrice is null
+                ? null
+                : new AdminSpecialOfferMarketPrice
+                {
+                    LaunchPrice = usPrice.LaunchPrice ?? 0,
+                    RegularPriceAfterLaunch = usPrice.RegularPriceAfterLaunch ?? usPrice.Price,
+                    Mrp = usPrice.Mrp ?? 0
+                },
             ViralProjectCourseId = offer.ViralProjectCourseId,
             ViralProjectCourseName = offer.ViralProjectCourse?.Name,
             IncludedCourses = includedCourses
@@ -105,6 +139,8 @@ public static class OffersMapper
     {
         Id = membership.Id,
         MemberNumber = membership.MemberNumber,
+        MemberCode = membership.MemberCode,
+        CustomerCode = membership.Customer?.CustomerCode,
         CustomerName = membership.Customer?.FullName ?? string.Empty,
         CustomerEmail = membership.Customer?.Email ?? string.Empty,
         CustomerPhone = membership.Customer?.PhoneNumber,
@@ -112,8 +148,9 @@ public static class OffersMapper
         ExpiryDate = membership.AccessExpiryDate,
         AmountPaid = membership.Order?.Items
             .Where(i => i.Id == membership.OrderItemId)
-            .Select(i => (int)i.TotalAmount)
+            .Select(i => i.TotalAmount)
             .FirstOrDefault() ?? 0,
+        Currency = membership.Order?.Currency ?? "INR",
         OrderNumber = membership.Order?.OrderNumber ?? string.Empty,
         IsActive = membership.AccessExpiryDate > utcNow,
         ViralProjectCourseName = membership.ViralProjectCourse?.Name

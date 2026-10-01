@@ -5,7 +5,7 @@ import { listVideos } from '../api/videos';
 import { listSpecialOffers } from '../api/specialOffers';
 import { ApiClientError } from '../api/client';
 import type { AdminSpecialOffer, Course, Video } from '../types';
-import { formatDate, formatInr } from '../utils/format';
+import { formatDate, formatInr, formatMoney, parseApiDate } from '../utils/format';
 
 export function DashboardPage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -47,7 +47,7 @@ export function DashboardPage() {
   const publishedVideos = videos.filter((v) => v.status === 'Published').length;
 
   const recentCourses = [...courses]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .sort((a, b) => parseApiDate(b.updatedAt).getTime() - parseApiDate(a.updatedAt).getTime())
     .slice(0, 5);
 
   if (loading) {
@@ -173,7 +173,10 @@ export function DashboardPage() {
             </div>
             <div className="card card--stat">
               <span className="card__label">Revenue</span>
-              <span className="card__value">{formatInr(specialOffer.revenue)}</span>
+              <span className="card__value">
+                {formatInr(specialOffer.revenue)}
+                {specialOffer.revenueUsd ? ` + ${formatMoney(specialOffer.revenueUsd, 'USD')}` : ''}
+              </span>
             </div>
           </div>
         </section>

@@ -102,6 +102,7 @@ export function ProductsPage() {
           <p className="page-header__subtitle">{activeRoom.subtitle}</p>
         </div>
         <div className="page-header__actions">
+          <Link to="/products/import" className="btn btn--secondary">Upload from Excel</Link>
           <Link to={newProductHref} className="btn btn--primary">New product</Link>
         </div>
       </header>
