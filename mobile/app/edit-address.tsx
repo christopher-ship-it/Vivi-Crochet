@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +14,7 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiClientError } from '../src/api/client';
@@ -70,6 +72,43 @@ export default function EditAddressScreen() {
   const [accountCountry, setAccountCountry] = useState('India');
   const [indiaAccount, setIndiaAccount] = useState(true);
   const [locating, setLocating] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Top of each field inside the scroll content, and which one is being edited.
+  const fieldY = useRef<Record<string, number>>({});
+  const focusedField = useRef<string | null>(null);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates?.height ?? 0));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    };
+  }, []);
+
+  /** Scrolls the field being edited near the top, so the keyboard cannot cover it. */
+  const scrollFieldIntoView = useCallback((key: string) => {
+    focusedField.current = key;
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => {
+      const y = fieldY.current[key];
+      if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true });
+    }, 80);
+  }, []);
+
+  const trackFieldY = (key: string) => (e: LayoutChangeEvent) => {
+    fieldY.current[key] = e.nativeEvent.layout.y;
+  };
+
+  // The keyboard finishes opening after the field gets focus, so scroll again once its height is known.
+  useEffect(() => {
+    if (keyboardHeight > 0 && focusedField.current) scrollFieldIntoView(focusedField.current);
+  }, [keyboardHeight, scrollFieldIntoView]);
 
   const clearFieldError = useCallback((key: ShippingFieldKey) => {
     setFieldErrors((prev) => {
@@ -306,8 +345,10 @@ export default function EditAddressScreen() {
           </View>
         ) : (
           <ScrollView
+            ref={scrollRef}
             style={styles.flex}
-            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]}
+            // Room under the form so the last fields can scroll up above the keyboard.
+            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 + keyboardHeight }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -344,8 +385,11 @@ export default function EditAddressScreen() {
               }}
               autoCapitalize="words"
               error={fieldErrors.fullName}
+              onLayoutRoot={trackFieldY('name')}
+              onFocus={() => scrollFieldIntoView('name')}
             />
 
+            <View onLayout={trackFieldY('phone')}>
             <PhoneInputField
               indiaMode={indiaAccount}
               dialCode={dialCode}
@@ -360,7 +404,9 @@ export default function EditAddressScreen() {
               }}
               error={fieldErrors.phone}
               required
+              onFocus={() => scrollFieldIntoView('phone')}
             />
+            </View>
 
             <Field
               label="Address line 1"
@@ -372,6 +418,8 @@ export default function EditAddressScreen() {
               }}
               placeholder="House / street"
               error={fieldErrors.address1}
+              onLayoutRoot={trackFieldY('address1')}
+              onFocus={() => scrollFieldIntoView('address1')}
             />
             <Field
               label="Address line 2"
@@ -379,6 +427,8 @@ export default function EditAddressScreen() {
               value={address2}
               onChangeText={setAddress2}
               placeholder="Apartment, floor"
+              onLayoutRoot={trackFieldY('address2')}
+              onFocus={() => scrollFieldIntoView('address2')}
             />
             <Field
               label="Landmark"
@@ -386,6 +436,8 @@ export default function EditAddressScreen() {
               value={landmark}
               onChangeText={setLandmark}
               placeholder="Near…"
+              onLayoutRoot={trackFieldY('landmark')}
+              onFocus={() => scrollFieldIntoView('landmark')}
             />
 
             <View style={styles.tagBlock}>
@@ -417,7 +469,7 @@ export default function EditAddressScreen() {
               </View>
             ) : null}
 
-            <View style={styles.row}>
+            <View style={styles.row} onLayout={trackFieldY('cityRow')}>
               <Field
                 label="City"
                 required
@@ -430,6 +482,7 @@ export default function EditAddressScreen() {
                 autoCapitalize="words"
                 placeholder={cityPlaceholder}
                 error={fieldErrors.city}
+                onFocus={() => scrollFieldIntoView('cityRow')}
               />
               <Field
                 label={pinLabel}
@@ -444,6 +497,7 @@ export default function EditAddressScreen() {
                 maxLength={indiaAccount ? 6 : 12}
                 placeholder={pinPlaceholder}
                 error={fieldErrors.pinCode}
+                onFocus={() => scrollFieldIntoView('cityRow')}
               />
             </View>
             <Field
@@ -457,6 +511,8 @@ export default function EditAddressScreen() {
               autoCapitalize="words"
               placeholder={statePlaceholder}
               error={fieldErrors.state}
+              onLayoutRoot={trackFieldY('state')}
+              onFocus={() => scrollFieldIntoView('state')}
             />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -481,6 +537,7 @@ function Field({
   required,
   error,
   style,
+  onLayoutRoot,
   ...inputProps
 }: {
   label: string;
@@ -488,9 +545,10 @@ function Field({
   required?: boolean;
   error?: string;
   style?: object;
+  onLayoutRoot?: (e: LayoutChangeEvent) => void;
 } & ComponentProps<typeof TextInput>) {
   return (
-    <View style={[styles.field, style]}>
+    <View style={[styles.field, style]} onLayout={onLayoutRoot}>
       <Text style={styles.fieldLabel}>
         {label}
         {required ? <Text style={styles.requiredStar}> *</Text> : null}
