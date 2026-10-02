@@ -16,6 +16,7 @@ import {
   TextInput,
   View,
   type KeyboardEvent,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getMyProfile } from '../src/api/me';
@@ -81,6 +82,9 @@ export default function AddDeliveryAddressScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const mountedRef = useRef(true);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Top of each lower field inside the scroll content, and which one is being edited.
+  const fieldY = useRef<Record<string, number>>({});
+  const focusedField = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -102,18 +106,28 @@ export default function AddDeliveryAddressScreen() {
     };
   }, []);
 
-  /** Scroll only the focused region — never measureLayout (crashes on unmount/nav). */
-  const scrollFieldIntoView = useCallback((edge: 'start' | 'end') => {
+  /**
+   * Scrolls the focused field near the top of the visible area, so the keyboard cannot cover it.
+   * Uses positions recorded from layout events — never measureLayout (crashes on unmount/nav).
+   */
+  const scrollFieldIntoView = useCallback((key: string) => {
+    focusedField.current = key === 'start' ? null : key;
     if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
     scrollTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
-      if (edge === 'start') {
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-      } else {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }
+      const y = fieldY.current[key];
+      scrollRef.current?.scrollTo({ y: y === undefined ? 0 : Math.max(0, y - 120), animated: true });
     }, 80);
   }, []);
+
+  const trackFieldY = (key: string) => (e: LayoutChangeEvent) => {
+    fieldY.current[key] = e.nativeEvent.layout.y;
+  };
+
+  // The keyboard finishes opening after the field gets focus, so scroll again once its height is known.
+  useEffect(() => {
+    if (keyboardHeight > 0 && focusedField.current) scrollFieldIntoView(focusedField.current);
+  }, [keyboardHeight, scrollFieldIntoView]);
 
   const clearFieldError = useCallback((key: ShippingFieldKey) => {
     setFieldErrors((prev) => {
@@ -476,7 +490,7 @@ export default function AddDeliveryAddressScreen() {
             </View>
           ) : null}
 
-          <View style={styles.fieldRow}>
+          <View style={styles.fieldRow} onLayout={trackFieldY('cityRow')}>
             <LabeledField
               label={cityLabel}
               required
@@ -489,7 +503,7 @@ export default function AddDeliveryAddressScreen() {
               placeholder={indiaAccount ? 'Coimbatore' : 'City'}
               autoCapitalize="words"
               error={fieldErrors.city}
-              onFocus={() => scrollFieldIntoView('end')}
+              onFocus={() => scrollFieldIntoView('cityRow')}
             />
             <LabeledField
               label={stateLabel}
@@ -503,7 +517,7 @@ export default function AddDeliveryAddressScreen() {
               placeholder={indiaAccount ? 'Tamil Nadu' : 'State / Region'}
               autoCapitalize="words"
               error={fieldErrors.state}
-              onFocus={() => scrollFieldIntoView('end')}
+              onFocus={() => scrollFieldIntoView('cityRow')}
             />
           </View>
 
@@ -519,20 +533,23 @@ export default function AddDeliveryAddressScreen() {
 
           <Text style={[styles.sectionTitle, styles.contactTitle]}>Contact</Text>
 
-          <LabeledField
-            label="Name"
-            required
-            value={fullName}
-            onChangeText={(value) => {
-              setFullName(value);
-              clearFieldError('fullName');
-            }}
-            placeholder="Recipient full name"
-            autoCapitalize="words"
-            error={fieldErrors.fullName}
-            onFocus={() => scrollFieldIntoView('end')}
-          />
+          <View onLayout={trackFieldY('name')}>
+            <LabeledField
+              label="Name"
+              required
+              value={fullName}
+              onChangeText={(value) => {
+                setFullName(value);
+                clearFieldError('fullName');
+              }}
+              placeholder="Recipient full name"
+              autoCapitalize="words"
+              error={fieldErrors.fullName}
+              onFocus={() => scrollFieldIntoView('name')}
+            />
+          </View>
 
+          <View onLayout={trackFieldY('phone')}>
           <PhoneInputField
             indiaMode={indiaAccount}
             dialCode={dialCode}
@@ -545,11 +562,12 @@ export default function AddDeliveryAddressScreen() {
               setPhone(value);
               clearFieldError('phone');
             }}
-            onFocus={() => scrollFieldIntoView('end')}
+            onFocus={() => scrollFieldIntoView('phone')}
             error={fieldErrors.phone}
             required
             compact
           />
+          </View>
 
           {formError ? <Text style={styles.formError}>{formError}</Text> : null}
 
