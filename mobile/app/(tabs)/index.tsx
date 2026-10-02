@@ -331,7 +331,12 @@ export default function HomeScreen() {
             accessibilityLabel={`${course.name}, ${formatCoursePrice(course, t('market.notAvailable'))}`}
           >
             <Ionicons name={LEARN_CHIP_ICONS[i] ?? 'ribbon-outline'} size={14} color={room.accent} />
-            <Text style={[styles.slotLabel, styles.chipName]} numberOfLines={1}>
+            <Text
+              style={[styles.slotLabel, styles.chipName]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+            >
               {course.name.split(' ')[0]}
             </Text>
             <Text style={styles.slotSeats} numberOfLines={1}>
@@ -949,6 +954,8 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     slotChipTight: {
       paddingVertical: 2.5,
+      paddingHorizontal: 6,
+      gap: 4,
     },
     chipName: {
       flex: 1,
