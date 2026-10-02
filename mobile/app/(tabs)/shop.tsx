@@ -303,6 +303,14 @@ export default function ShopScreen() {
     displayedProducts = [...displayedProducts].sort((a, b) => a.price - b.price);
   }
 
+  // A last row with fewer cards than columns must keep each card in its own column slot,
+  // so it is topped up with invisible spacers (otherwise the cards drift to the row's ends).
+  const gridColumns = room === 'essentials' ? 3 : 2;
+  const gridData: (Product | { id: string; spacer: true })[] = [...displayedProducts];
+  while (gridData.length % gridColumns !== 0 && gridData.length > 0) {
+    gridData.push({ id: `spacer-${gridData.length}`, spacer: true });
+  }
+
   const roomHero =
     room === 'essentials'
       ? { title: t('shop.essentialsHeroTitle'), subtitle: t('shop.essentialsHeroSubtitle') }
@@ -664,9 +672,9 @@ export default function ShopScreen() {
         ) : (
           <FlatList
             key={`shop-products-${room}`}
-            data={displayedProducts}
+            data={gridData}
             keyExtractor={(item) => item.id}
-            numColumns={room === 'essentials' ? 3 : 2}
+            numColumns={gridColumns}
             columnWrapperStyle={styles.row}
             contentContainerStyle={[
               styles.list,
@@ -706,7 +714,10 @@ export default function ShopScreen() {
                 }
               />
             }
-            renderItem={({ item, index }) => (
+            renderItem={({ item, index }) =>
+              'spacer' in item ? (
+                <View style={{ flex: 1, maxWidth: gridColumns === 3 ? '33.333%' : '50%' }} />
+              ) : (
               <ProductCard
                 product={item}
                 index={index}
@@ -715,7 +726,8 @@ export default function ShopScreen() {
                 dense={room === 'essentials'}
                 onPress={() => router.push(`/product/${item.id}`)}
               />
-            )}
+              )
+            }
             initialNumToRender={6}
             maxToRenderPerBatch={6}
             windowSize={7}
