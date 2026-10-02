@@ -137,28 +137,35 @@ export function CategoriesPage() {
 
       {!loading && !error && categories.length > 0 && (
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table data-table--categories">
+            <colgroup>
+              <col className="col-name" />
+              <col className="col-description" />
+              <col className="col-sort" />
+              <col className="col-status" />
+              <col className="col-actions" />
+            </colgroup>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Sort</th>
-                <th>Status</th>
-                <th aria-label="Actions" />
+                <th className="col-name">Name</th>
+                <th className="col-description">Description</th>
+                <th className="col-sort">Sort</th>
+                <th className="col-status">Status</th>
+                <th className="col-actions" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
               {categories.map((cat) => (
                 <tr key={cat.id}>
-                  <td style={{ fontWeight: 600 }}>{cat.name}</td>
-                  <td>{cat.description || '—'}</td>
-                  <td>{cat.sortOrder}</td>
-                  <td>
+                  <td className="col-name" style={{ fontWeight: 600 }}>{cat.name}</td>
+                  <td className="col-description">{cat.description || '—'}</td>
+                  <td className="col-sort">{cat.sortOrder}</td>
+                  <td className="col-status">
                     <span className={`badge badge--${cat.isActive ? 'published' : 'inactive'}`}>
                       {cat.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td>
+                  <td className="col-actions">
                     <div className="data-table__actions">
                       <RowActionsMenu
                         label={`Actions for ${cat.name}`}

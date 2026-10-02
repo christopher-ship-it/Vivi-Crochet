@@ -101,7 +101,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <section className="section-block">
+      <section className="section-block dashboard-section">
         <div className="section-block__head">
           <h2 className="section-title" style={{ marginBottom: 0 }}>Recent courses</h2>
           <Link to="/courses" className="btn btn--ghost btn--sm">View all</Link>
@@ -147,8 +147,8 @@ export function DashboardPage() {
       </section>
 
       {specialOffer && (
-        <section className="section-block card">
-          <div className="card__header" style={{ marginBottom: 12 }}>
+        <section className="section-block card dashboard-section">
+          <div className="card__header">
             <div>
               <h2 className="card__title">{specialOffer.offerName}</h2>
               <p className="card__subtitle">
@@ -183,8 +183,8 @@ export function DashboardPage() {
       )}
 
       {videos.length > 0 && (
-        <section className="section-block card">
-          <div className="card__header" style={{ marginBottom: 12 }}>
+        <section className="section-block card dashboard-section">
+          <div className="card__header">
             <div>
               <h2 className="card__title">Published videos</h2>
               <p className="card__subtitle">

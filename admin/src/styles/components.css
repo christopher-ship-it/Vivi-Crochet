@@ -757,6 +757,23 @@ label.btn {
   min-width: 0;
 }
 
+/* Plain tables (no per-column widths): size columns to their content so
+   headers and cells line up, instead of equal-width fixed columns. */
+.data-table:not([class*="data-table--"]) {
+  table-layout: auto;
+}
+
+.data-table:not([class*="data-table--"]) th:last-child:empty {
+  width: 1%;
+  padding-left: 8px;
+}
+
+.data-table:not([class*="data-table--"]) td:last-child:has(.data-table__actions) {
+  width: 1%;
+  white-space: nowrap;
+  padding-left: 8px;
+}
+
 .data-table th,
 .data-table td {
   padding: 13px 16px;
@@ -818,6 +835,30 @@ label.btn {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.data-table--categories {
+  min-width: 720px;
+}
+
+.data-table--categories .col-name {
+  width: 24%;
+}
+
+.data-table--categories .col-description {
+  width: auto;
+}
+
+.data-table--categories .col-sort {
+  width: 90px;
+}
+
+.data-table--categories .col-status {
+  width: 140px;
+}
+
+.data-table--categories .col-actions {
+  width: 72px;
 }
 
 .data-table--orders {
@@ -978,20 +1019,20 @@ label.btn {
 }
 
 .data-table--customers {
-  min-width: 1440px;
+  min-width: 1240px;
 }
 
 .data-table--customers .col-code {
-  width: 124px;
+  width: 112px;
   white-space: nowrap;
 }
 
 .data-table--customers .col-name {
-  width: 120px;
+  width: 110px;
 }
 
 .data-table--customers .col-track {
-  width: 96px;
+  width: 88px;
 }
 
 .data-table--customers .col-age {
@@ -1003,19 +1044,19 @@ label.btn {
 }
 
 .data-table--customers .col-state {
-  width: 108px;
+  width: 96px;
 }
 
 .data-table--customers .col-city {
-  width: 108px;
+  width: 96px;
 }
 
 .data-table--customers .col-phone {
-  width: 116px;
+  width: 108px;
 }
 
 .data-table--customers .col-email {
-  width: 240px;
+  width: 190px;
 }
 
 .data-table--customers .col-orders {
@@ -1024,7 +1065,7 @@ label.btn {
 }
 
 .data-table--customers .col-date {
-  width: 128px;
+  width: 116px;
 }
 
 .data-table--customers .col-status {
@@ -1041,6 +1082,31 @@ label.btn {
   white-space: nowrap;
 }
 
+.data-table--customers th.col-status,
+.data-table--customers td.col-status,
+.data-table--customers th.col-actions,
+.data-table--customers td.col-actions {
+  position: sticky;
+  background: #fff;
+  z-index: 1;
+}
+
+.data-table--customers th.col-status,
+.data-table--customers th.col-actions {
+  background: var(--vivi-cream);
+}
+
+.data-table--customers th.col-status,
+.data-table--customers td.col-status {
+  right: 60px;
+}
+
+.data-table--customers th.col-actions,
+.data-table--customers td.col-actions {
+  right: 0;
+  box-shadow: -1px 0 0 rgba(0, 0, 0, 0.06);
+}
+
 .data-table--customers th.col-orders,
 .data-table--customers td.col-orders {
   text-align: center;
@@ -1050,6 +1116,12 @@ label.btn {
 
 .data-table--videos {
   min-width: 1040px;
+  table-layout: fixed;
+}
+
+.data-table--videos th,
+.data-table--videos td {
+  vertical-align: middle;
 }
 
 .data-table--videos th,
@@ -1090,7 +1162,13 @@ label.btn {
 }
 
 .data-table--videos .col-actions {
-  width: 148px;
+  width: 132px;
+  padding-left: 8px;
+  padding-right: 16px;
+}
+
+.data-table--videos td.col-actions .data-table__actions {
+  justify-content: flex-end;
 }
 
 .video-title {
@@ -1157,7 +1235,7 @@ label.btn {
 }
 
 .data-table--courses {
-  min-width: 920px;
+  min-width: 1000px;
 }
 
 .data-table--courses th,
@@ -1195,7 +1273,7 @@ label.btn {
 }
 
 .data-table--courses .col-updated {
-  width: 120px;
+  width: 170px;
   white-space: nowrap;
 }
 
@@ -2713,7 +2791,7 @@ label.btn {
 
 /* —— Live class bookings table —— */
 .data-table--live-bookings {
-  min-width: 1340px;
+  min-width: 1420px;
 }
 
 .data-table--live-bookings th,
@@ -2759,11 +2837,11 @@ label.btn {
 }
 
 .data-table--live-bookings .col-payment {
-  width: 96px;
+  width: 110px;
 }
 
 .data-table--live-bookings .col-status {
-  width: 118px;
+  width: 160px;
 }
 
 .data-table--live-bookings .col-actions {
@@ -3721,5 +3799,235 @@ label.btn {
 }
 
 .data-table--orders .col-nowrap {
+  white-space: nowrap;
+}
+
+/* —— Special offers: compact layout —— */
+.special-offer-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.special-offer-stats .card--stat {
+  padding: 10px 14px;
+  gap: 2px;
+}
+
+.special-offer-stats .card__value {
+  font-size: 18px;
+}
+
+.special-offer-form {
+  padding: 14px 18px 0;
+}
+
+.special-offer-form .form-grid-6 {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.special-offer-form .form-grid-6 > .span-2 {
+  grid-column: span 3;
+}
+
+.special-offer-form .form-grid-6 > .span-3 {
+  grid-column: span 6;
+}
+
+.special-offer-form .form-grid-6 > .span-6 {
+  grid-column: 1 / -1;
+}
+
+.special-offer-form .form-field {
+  gap: 4px;
+}
+
+.special-offer-form .form-field--checkbox {
+  align-self: end;
+  min-height: var(--field-height);
+}
+
+.special-offer-form .form-actions--sticky {
+  margin: 10px -18px 0;
+  padding: 10px 18px;
+}
+
+.special-offer-members .data-table th,
+.special-offer-members .data-table td {
+  padding: 9px 12px;
+}
+
+@media (max-width: 1100px) {
+  .special-offer-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .special-offer-form .form-grid-6 > .span-2 {
+    grid-column: span 6;
+  }
+
+  .special-offer-form .form-grid-6 > .span-3 {
+    grid-column: 1 / -1;
+  }
+}
+
+/* —— Compact stat cards (all pages) —— */
+.stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.card--stat {
+  padding: 10px 14px 10px 16px;
+  gap: 3px;
+}
+
+.card--stat:hover {
+  transform: none;
+}
+
+.card--stat .card__label {
+  font-size: 12px;
+}
+
+.card--stat .card__value {
+  font-size: 22px;
+}
+
+.card--stat::before {
+  width: 3px;
+}
+
+/* —— Compact dashboard —— */
+.dashboard-section.section-block + .dashboard-section.section-block {
+  margin-top: 14px;
+}
+
+.dashboard-section.card {
+  padding: 12px 16px;
+}
+
+.dashboard-section.card .card__header {
+  margin-bottom: 8px;
+}
+
+.dashboard-section.card .stat-grid {
+  margin-bottom: 0;
+}
+
+.dashboard-section.card .card--stat {
+  background: var(--vivi-cream);
+  box-shadow: none;
+}
+
+.dashboard-section .section-block__head {
+  margin-bottom: 8px;
+}
+
+.dashboard-section .data-table th,
+.dashboard-section .data-table td {
+  padding: 8px 12px;
+}
+
+.dashboard-section .card__subtitle {
+  margin-top: 2px;
+}
+
+/* US dollar pricing: visually separate panel */
+.special-offer-form .usd-panel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  border: 1px solid #c9d8ee;
+  border-left: 4px solid #3b6fb6;
+  border-radius: var(--radius-md, 10px);
+  background: #f3f7fd;
+}
+
+.special-offer-form .usd-panel .choice {
+  background: transparent;
+  border-color: transparent;
+  min-height: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+.special-offer-form .usd-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.special-offer-form .usd-fields .form-field > label {
+  color: #274b80;
+}
+
+.special-offer-form .usd-fields .input-affix__prefix {
+  color: #3b6fb6;
+  font-weight: 700;
+}
+
+.special-offer-form .usd-fields input {
+  background: #fff;
+  border-color: #c9d8ee;
+}
+
+@media (max-width: 800px) {
+  .special-offer-form .usd-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* —— No clipped or overlapping cells: long text wraps inside its column —— */
+.data-table th,
+.data-table td {
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+.data-table th {
+  overflow-wrap: normal;
+}
+
+.data-table .col-clip,
+.data-table .cell-clip,
+.data-table--courses td,
+.data-table--videos td,
+.data-table--live-bookings td {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.data-table .video-title,
+.data-table .file-cell__name,
+.data-table .file-cell__size,
+.data-table .upload-status__detail {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Codes, prices, phones and dates stay on one line, so their columns are sized to fit. */
+.data-table--customers .col-code,
+.data-table--customers .col-phone,
+.data-table--courses .col-price,
+.data-table--courses .col-updated,
+.data-table--orders .col-amount,
+.data-table--orders .col-payment,
+.data-table--live-bookings .col-phone,
+.data-table--live-bookings .col-amount {
+  white-space: nowrap;
+}
+
+.data-table--customers .col-status,
+.data-table--orders .col-status,
+.data-table--live-bookings .col-status {
   white-space: nowrap;
 }

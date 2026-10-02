@@ -45,24 +45,24 @@ type ColumnDef = {
 
 const COLUMNS: ColumnDef[] = [
   {
-    id: 'order', label: 'Order', width: 168, locked: true, clip: true,
+    id: 'order', label: 'Order', width: 190, locked: true, clip: true,
     render: (o) => <span style={{ fontWeight: 600 }}>{o.orderNumber}</span>,
     title: (o) => o.orderNumber,
   },
-  { id: 'customer', label: 'Customer', width: 110, clip: true, render: (o) => displayOrDash(o.customerName), title: (o) => displayOrDash(o.customerName) },
-  { id: 'email', label: 'Email', width: 200, clip: true, render: (o) => displayOrDash(o.customerEmail), title: (o) => displayOrDash(o.customerEmail) },
-  { id: 'phone', label: 'Phone', width: 120, clip: true, render: (o) => displayOrDash(o.customerPhone), title: (o) => displayOrDash(o.customerPhone) },
-  { id: 'title', label: 'Title', width: 170, clip: true, render: (o) => displayOrDash(o.titleSummary), title: (o) => displayOrDash(o.titleSummary) },
-  { id: 'productId', label: 'Product ID', width: 130, shopOnly: true, clip: true, render: (o) => displayOrDash(o.productCodes), title: (o) => displayOrDash(o.productCodes) },
+  { id: 'customer', label: 'Customer', width: 130, clip: true, render: (o) => displayOrDash(o.customerName), title: (o) => displayOrDash(o.customerName) },
+  { id: 'email', label: 'Email', width: 230, clip: true, render: (o) => displayOrDash(o.customerEmail), title: (o) => displayOrDash(o.customerEmail) },
+  { id: 'phone', label: 'Phone', width: 130, clip: true, render: (o) => displayOrDash(o.customerPhone), title: (o) => displayOrDash(o.customerPhone) },
+  { id: 'title', label: 'Title', width: 190, clip: true, render: (o) => displayOrDash(o.titleSummary), title: (o) => displayOrDash(o.titleSummary) },
+  { id: 'productId', label: 'Product ID', width: 140, shopOnly: true, clip: true, render: (o) => displayOrDash(o.productCodes), title: (o) => displayOrDash(o.productCodes) },
   { id: 'quantity', label: 'Qty', width: 60, shopOnly: true, render: (o) => (o.hasPhysicalItems && o.productQuantity !== undefined ? o.productQuantity : '—') },
   {
-    id: 'category', label: 'Category', width: 140, shopOnly: true, clip: true,
+    id: 'category', label: 'Category', width: 170, shopOnly: true, clip: true,
     render: (o) => (o.productRoom ? ROOM_LABEL[o.productRoom] ?? o.productRoom : '—'),
   },
-  { id: 'amount', label: 'Amount', width: 96, render: (o) => formatMoney(o.totalAmount, o.currency) },
-  { id: 'payment', label: 'Payment', width: 96, render: (o) => o.paymentStatus ?? '—' },
+  { id: 'amount', label: 'Amount', width: 104, render: (o) => formatMoney(o.totalAmount, o.currency) },
+  { id: 'payment', label: 'Payment', width: 110, render: (o) => o.paymentStatus ?? '—' },
   {
-    id: 'status', label: 'Status', width: 120,
+    id: 'status', label: 'Status', width: 160,
     render: (o) => (
       <span className={`badge badge--${o.status.toLowerCase()}`}>
         {o.status === 'Shipped' ? 'Dispatched' : o.status === 'InProduction' ? 'In production' : o.status}
@@ -70,7 +70,7 @@ const COLUMNS: ColumnDef[] = [
     ),
   },
   {
-    id: 'delivery', label: 'Delivery', width: 140, clip: true,
+    id: 'delivery', label: 'Delivery', width: 210, clip: true,
     render: (o) =>
       o.hasPhysicalItems
         ? o.deliveryDateOverridden

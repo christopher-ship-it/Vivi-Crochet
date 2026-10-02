@@ -210,7 +210,7 @@ export function SpecialOffersPage() {
         </div>
       </header>
 
-      <div className="stat-grid">
+      <div className="stat-grid special-offer-stats">
         <div className="card card--stat">
           <span className="card__label">Founding members</span>
           <span className="card__value">{offer.completedPurchaseCount} / {offer.launchLimit}</span>
@@ -236,7 +236,7 @@ export function SpecialOffersPage() {
         </div>
       </div>
 
-      <form className="card form-dense" onSubmit={handleSave}>
+      <form className="card form-dense special-offer-form" onSubmit={handleSave}>
         {saveError && <div className="form-error">{saveError}</div>}
         {saved && <div className="alert alert--success">Special offer saved.</div>}
 
@@ -361,7 +361,22 @@ export function SpecialOffersPage() {
             </div>
           </div>
 
-          <div className="form-field span-6">
+          <div className="form-field span-2">
+            <label htmlFor="viralProject">Free viral project</label>
+            <select
+              id="viralProject"
+              value={form.viralProjectCourseId}
+              onChange={(e) => setForm({ ...form, viralProjectCourseId: e.target.value })}
+            >
+              <option value="">— None —</option>
+              {viralProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className={`usd-panel span-6${form.usEnabled ? ' usd-panel--on' : ''}`}>
+          <div className="form-field">
             <label className="choice" htmlFor="usEnabled">
               <input
                 id="usEnabled"
@@ -377,7 +392,7 @@ export function SpecialOffersPage() {
           </div>
 
           {form.usEnabled ? (
-            <>
+            <div className="usd-fields">
               <div className="form-field span-2">
                 <label htmlFor="usLaunchPrice">US launch price</label>
                 <div className="input-affix">
@@ -421,21 +436,9 @@ export function SpecialOffersPage() {
                   />
                 </div>
               </div>
-            </>
+            </div>
           ) : null}
 
-          <div className="form-field span-2">
-            <label htmlFor="viralProject">Free viral project</label>
-            <select
-              id="viralProject"
-              value={form.viralProjectCourseId}
-              onChange={(e) => setForm({ ...form, viralProjectCourseId: e.target.value })}
-            >
-              <option value="">— None —</option>
-              {viralProjects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
           </div>
 
           <div className="form-field span-6">
@@ -460,7 +463,7 @@ export function SpecialOffersPage() {
         </div>
       </form>
 
-      <section className="section-block">
+      <section className="section-block special-offer-members">
         <div className="section-block__head">
           <h2 className="section-title" style={{ marginBottom: 0 }}>Founding members</h2>
         </div>

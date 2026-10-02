@@ -520,7 +520,7 @@ export function CourseDetailPage() {
                     <th className="col-upload">Upload</th>
                     <th className="col-status">Status</th>
                     <th className="col-file">File</th>
-                    <th className="col-actions">Actions</th>
+                    <th className="col-actions" aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
