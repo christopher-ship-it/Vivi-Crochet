@@ -648,7 +648,7 @@ export default function ShopScreen() {
             key={`shop-products-${room}`}
             data={displayedProducts}
             keyExtractor={(item) => item.id}
-            numColumns={2}
+            numColumns={room === 'essentials' ? 3 : 2}
             columnWrapperStyle={styles.row}
             contentContainerStyle={[
               styles.list,
@@ -694,6 +694,7 @@ export default function ShopScreen() {
                 index={index}
                 showStock={room === 'essentials'}
                 compact={room === 'essentials'}
+                dense={room === 'essentials'}
                 onPress={() => router.push(`/product/${item.id}`)}
               />
             )}

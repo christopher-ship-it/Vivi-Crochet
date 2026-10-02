@@ -37,6 +37,8 @@ interface ProductCardProps {
   showStock?: boolean;
   /** Shorter grid card — used for crochet essentials. */
   compact?: boolean;
+  /** Three-per-row grid (crochet essentials): tighter text, no discount badge or detail line. */
+  dense?: boolean;
 }
 
 export function ProductCard({
@@ -46,6 +48,7 @@ export function ProductCard({
   variant = 'grid',
   showStock = false,
   compact = false,
+  dense = false,
 }: ProductCardProps) {
   const router = useRouter();
   const { t, language } = useI18n();
@@ -98,9 +101,11 @@ export function ProductCard({
         styles.imageWell,
         isRail
           ? { width: RAIL_CARD_WIDTH, height: imageHeight ?? undefined }
-          : compact
-            ? styles.imageWellCompact
-            : styles.imageWellGrid,
+          : dense
+            ? styles.imageWellGrid
+            : compact
+              ? styles.imageWellCompact
+              : styles.imageWellGrid,
       ]}
       imageStyle={styles.imageFill}
       contentFit="contain"
@@ -147,19 +152,19 @@ export function ProductCard({
   );
 
   const infoBlock = (
-    <View style={[styles.body, isRail && styles.bodyRail, compact && styles.bodyCompact]}>
+    <View style={[styles.body, isRail && styles.bodyRail, compact && styles.bodyCompact, dense && styles.bodyDense]}>
       {!isRail && !compact && (
         <Text style={styles.category} numberOfLines={1}>
           {product.category.toUpperCase()}
         </Text>
       )}
       <Text
-        style={[styles.name, isRail && styles.nameRail, compact && styles.nameCompact]}
+        style={[styles.name, isRail && styles.nameRail, compact && styles.nameCompact, dense && styles.nameDense]}
         numberOfLines={isRail || compact ? 2 : 3}
       >
         {product.name}
       </Text>
-      {!isRail && metaLine ? (
+      {!isRail && !dense && metaLine ? (
         <Text style={styles.metaLine} numberOfLines={1}>
           {metaLine}
         </Text>
@@ -169,21 +174,22 @@ export function ProductCard({
           styles.priceRow,
           isRail && styles.priceRowRail,
           compact && styles.priceRowCompact,
+          dense && styles.priceRowDense,
         ]}
       >
-        <Text style={[styles.price, isRail && styles.priceRail, compact && styles.priceCompact]}>
+        <Text style={[styles.price, isRail && styles.priceRail, compact && styles.priceCompact, dense && styles.priceDense]}>
           {formatInr(product.price)}
         </Text>
         {product.mrp && product.mrp > product.price ? (
-          <Text style={[styles.mrp, isRail && styles.mrpRail]}>{formatInr(product.mrp)}</Text>
+          <Text style={[styles.mrp, (isRail || dense) && styles.mrpRail]}>{formatInr(product.mrp)}</Text>
         ) : null}
-        {!isRail && discount !== null ? (
+        {!isRail && !dense && discount !== null ? (
           <Text style={styles.discountInline}>
             {t('productCard.percentOff', { percent: discount })}
           </Text>
         ) : null}
       </View>
-      {showInStock && !isRail ? <InStockLabel style={compact ? styles.inStockCompact : undefined} /> : null}
+      {showInStock && !isRail ? <InStockLabel dense={dense} style={compact && !dense ? styles.inStockCompact : undefined} /> : null}
     </View>
   );
 
@@ -221,7 +227,7 @@ export function ProductCard({
     );
 
   return (
-    <View style={isRail ? styles.cardRailOuter : styles.cardGridOuter}>{glassCard}</View>
+    <View style={isRail ? styles.cardRailOuter : [styles.cardGridOuter, dense && styles.cardGridOuterDense]}>{glassCard}</View>
   );
 }
 
@@ -240,6 +246,9 @@ function createStyles(fonts: UiFonts) {
       shadowOpacity: 0.12,
       shadowRadius: 16,
       elevation: 3,
+    },
+    cardGridOuterDense: {
+      maxWidth: '33.333%',
     },
     cardGridFill: {
       flex: 1,
@@ -361,6 +370,11 @@ function createStyles(fonts: UiFonts) {
       paddingBottom: 8,
       paddingHorizontal: 8,
     },
+    bodyDense: {
+      paddingTop: 5,
+      paddingBottom: 7,
+      paddingHorizontal: 6,
+    },
     metaLine: {
       fontFamily: fonts.regular,
       fontSize: 11,
@@ -388,6 +402,17 @@ function createStyles(fonts: UiFonts) {
     nameCompact: {
       fontSize: 13,
       lineHeight: 17,
+    },
+    nameDense: {
+      fontSize: 11.5,
+      lineHeight: 15,
+    },
+    priceRowDense: {
+      marginTop: 3,
+      gap: 4,
+    },
+    priceDense: {
+      fontSize: 13,
     },
     priceRow: {
       flexDirection: 'row',

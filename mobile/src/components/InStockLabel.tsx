@@ -16,10 +16,12 @@ import { colors } from '../theme';
 type Props = {
   style?: StyleProp<ViewStyle>;
   compact?: boolean;
+  /** Smaller still, for 3-column grids. */
+  dense?: boolean;
 };
 
 /** Soft glowing status dot + “In stock” — used for crochet essentials. */
-export function InStockLabel({ style, compact = false }: Props) {
+export function InStockLabel({ style, compact = false, dense = false }: Props) {
   const { t, language } = useI18n();
   const fonts = uiFonts(language);
   const pulse = useRef(new Animated.Value(0)).current;
@@ -54,12 +56,12 @@ export function InStockLabel({ style, compact = false }: Props) {
     outputRange: [0.55, 0.2],
   });
 
-  const size = compact ? 20 : 18;
-  const mid = compact ? 12 : 11;
-  const core = compact ? 7 : 6;
+  const size = dense ? 14 : compact ? 20 : 18;
+  const mid = dense ? 9 : compact ? 12 : 11;
+  const core = dense ? 5 : compact ? 7 : 6;
 
   return (
-    <View style={[styles.row, compact && styles.rowCompact, style]}>
+    <View style={[styles.row, compact && styles.rowCompact, dense && styles.rowDense, style]}>
       <View style={[styles.dotWrap, { width: size, height: size }]}>
         {/* Soft outer bloom */}
         <Animated.View
@@ -101,6 +103,7 @@ export function InStockLabel({ style, compact = false }: Props) {
         style={[
           styles.label,
           compact && styles.labelCompact,
+          dense && styles.labelDense,
           { fontFamily: fonts.regular },
         ]}
       >
@@ -120,6 +123,10 @@ const styles = StyleSheet.create({
   rowCompact: {
     marginTop: 8,
     gap: 9,
+  },
+  rowDense: {
+    marginTop: 4,
+    gap: 4,
   },
   dotWrap: {
     alignItems: 'center',
@@ -165,5 +172,9 @@ const styles = StyleSheet.create({
   labelCompact: {
     fontSize: 13,
     lineHeight: 16,
+  },
+  labelDense: {
+    fontSize: 11,
+    lineHeight: 14,
   },
 });
