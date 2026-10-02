@@ -154,6 +154,8 @@ export default function ShopScreen() {
   const [room, setRoom] = useState<ShopRoom | null>(() => parseShopRoom(shopRoomParam));
   const [categories, setCategories] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState('All');
+  // Wishlist is a switch of its own, so it can be combined with a category.
+  const [wishlistOnly, setWishlistOnly] = useState(false);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -225,9 +227,7 @@ export default function ShopScreen() {
         const [cats, data] = await Promise.all([
           listProductCategories(productType),
           listProducts(
-            activeCategory === 'All' || activeCategory === WISHLIST_FILTER
-              ? undefined
-              : activeCategory,
+            activeCategory === 'All' ? undefined : activeCategory,
             debouncedQuery || undefined,
             productType,
           ),
@@ -288,11 +288,11 @@ export default function ShopScreen() {
   }, [loadOrders, tab]);
 
   const tabs = ['All', WISHLIST_FILTER, ...categories.filter((c) => c !== 'All')];
-  const filterActive = activeCategory !== 'All' || availability !== 'all' || priceLowToHigh;
-  let displayedProducts =
-    activeCategory === WISHLIST_FILTER
-      ? products.filter((p) => wishlistIds.includes(p.id))
-      : products;
+  const filterActive =
+    activeCategory !== 'All' || wishlistOnly || availability !== 'all' || priceLowToHigh;
+  let displayedProducts = wishlistOnly
+    ? products.filter((p) => wishlistIds.includes(p.id))
+    : products;
   if (availability !== 'all') {
     displayedProducts = displayedProducts.filter(
       (p) => isOutOfStock(p.availableStock ?? 0) === (availability === 'out'),
@@ -309,14 +309,27 @@ export default function ShopScreen() {
         ? { title: t('shop.handmadeHeroTitle'), subtitle: t('shop.handmadeHeroSubtitle') }
         : { title: t('shop.heroTitle'), subtitle: t('shop.heroSubtitle') };
 
+  function isTabActive(cat: string): boolean {
+    if (cat === WISHLIST_FILTER) return wishlistOnly;
+    if (cat === 'All') return activeCategory === 'All' && !wishlistOnly;
+    return activeCategory === cat;
+  }
+
   function selectCategory(cat: string) {
+    if (cat === WISHLIST_FILTER) {
+      // Switch it on or off and leave the list open, so a category can be picked next.
+      setWishlistOnly((on) => !on);
+      return;
+    }
     setActiveCategory(cat);
+    if (cat === 'All') setWishlistOnly(false);
     setFilterOpen(false);
   }
 
   function enterRoom(next: ShopRoom) {
     hasLoadedOnce.current = false;
     setActiveCategory('All');
+    setWishlistOnly(false);
     setAvailability('all');
     setPriceLowToHigh(false);
     setQuery('');
@@ -332,6 +345,7 @@ export default function ShopScreen() {
     hasLoadedOnce.current = false;
     setRoom(null);
     setActiveCategory('All');
+    setWishlistOnly(false);
     setAvailability('all');
     setPriceLowToHigh(false);
     setQuery('');
@@ -378,7 +392,7 @@ export default function ShopScreen() {
   const showingChooser = tab === 'products' && !room;
   // Inside a room the title/subtitle scroll away with the list, so products get the screen.
   const introInList = tab === 'products' && room !== null;
-  const emptyIsWishlist = activeCategory === WISHLIST_FILTER;
+  const emptyIsWishlist = wishlistOnly && activeCategory === 'All';
   const emptyIsSearch =
     Boolean(debouncedQuery) || activeCategory !== 'All' || availability !== 'all';
 
@@ -515,7 +529,7 @@ export default function ShopScreen() {
               style={styles.categoryScroll}
             >
               {tabs.map((cat) => {
-                const active = activeCategory === cat;
+                const active = isTabActive(cat);
                 return (
                   <Pressable
                     key={cat}
@@ -822,7 +836,7 @@ export default function ShopScreen() {
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               {tabs.map((cat) => {
-                const selected = activeCategory === cat;
+                const selected = isTabActive(cat);
                 return (
                   <Pressable
                     key={cat}
