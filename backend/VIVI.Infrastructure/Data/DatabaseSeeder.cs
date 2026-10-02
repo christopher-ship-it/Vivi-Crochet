@@ -79,7 +79,6 @@ public sealed class DatabaseSeeder
             throw;
         }
         await SeedProductsAsync(cancellationToken);
-        await ClearBlanketProductCourseLinksAsync(cancellationToken);
         await SeedTestAccountAsync(cancellationToken);
     }
 
@@ -187,28 +186,7 @@ public sealed class DatabaseSeeder
             return;
         }
 
-        var changed = false;
-        if (!string.Equals(existing.Name, name, StringComparison.Ordinal))
-        {
-            existing.Name = name;
-            changed = true;
-        }
-        if (!existing.IsActive)
-        {
-            existing.IsActive = true;
-            changed = true;
-        }
-        if (existing.SortOrder != sortOrder)
-        {
-            existing.SortOrder = sortOrder;
-            changed = true;
-        }
-        if (changed)
-        {
-            existing.UpdatedAt = now;
-            await _db.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Updated category {Name}", name);
-        }
+        // Already there: leave it exactly as the admin left it (name, order, active flag).
     }
 
     /// <summary>
@@ -289,7 +267,7 @@ public sealed class DatabaseSeeder
             now,
             cancellationToken);
 
-        await UpsertCatalogCourseAsync(
+        var bundleCreated = await UpsertCatalogCourseAsync(
             Catalog.BundleId,
             "The Complete Crochet Collection / All-Access Crochet Pass",
             "All 27 recorded lessons. FIRST 100 USERS · LAUNCH OFFER · ₹999 · SAVE ₹998",
@@ -306,13 +284,16 @@ public sealed class DatabaseSeeder
         // Persist courses before bundle membership / launch-offer FKs.
         await _db.SaveChangesAsync(cancellationToken);
 
-        await SyncBundleMembershipAsync(cancellationToken);
+        // Which courses the bundle includes is edited in admin, so it is only filled in for a brand-new bundle.
+        if (bundleCreated)
+            await SyncBundleMembershipAsync(cancellationToken);
         await SyncBundleLaunchOfferAsync(now, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Catalog courses upserted (Foundation, Signature, Master, Complete Collection).");
     }
 
-    private async Task UpsertCatalogCourseAsync(
+    /// <summary>Creates the course if it is missing. Returns true when it was created.</summary>
+    private async Task<bool> UpsertCatalogCourseAsync(
         Guid id,
         string name,
         string about,
@@ -346,19 +327,12 @@ public sealed class DatabaseSeeder
                 UpdatedAt = now,
                 CreatedBy = adminId
             });
-            return;
+            return true;
         }
 
-        // Preserve admin-edited name, marketing copy, pricing, and access window.
-        // AutoSeed runs on every API start in production — never wipe admin prices.
-        if (string.IsNullOrWhiteSpace(existing.About))
-            existing.About = about;
-        if (string.IsNullOrWhiteSpace(existing.Level) || existing.Level.Trim() == "Beginner")
-            existing.Level = level;
-        existing.Type = type;
-        if (categoryId.HasValue)
-            existing.CategoryId = categoryId;
-        // Do not bump UpdatedAt for no-op re-seeds (keeps admin "Updated" truthful).
+        // AutoSeed runs on every API start in production. An existing course belongs to the admin now:
+        // name, copy, level, price, category and access window stay as last saved.
+        return false;
     }
 
     private async Task SyncBundleMembershipAsync(CancellationToken cancellationToken)
@@ -534,56 +508,6 @@ public sealed class DatabaseSeeder
         _db.Products.AddRange(products);
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Seeded {Count} shop products", products.Length);
-    }
-
-    /// <summary>
-    /// Undo the old startup behavior that attached every product to a course
-    /// (which made every shop card show a Learn badge).
-    /// </summary>
-    private async Task ClearBlanketProductCourseLinksAsync(CancellationToken cancellationToken)
-    {
-        var linked = await _db.Products
-            .Where(p => p.CourseId != null)
-            .ToListAsync(cancellationToken);
-
-        if (linked.Count < 3)
-            return;
-
-        var total = await _db.Products.CountAsync(cancellationToken);
-
-        // If (almost) the whole catalog is course-linked, treat it as the old
-        // blanket auto-link and clear every CourseId. Admins can re-link
-        // individual products that should show Learn.
-        var nearlyAllLinked = linked.Count >= total - 1;
-        List<Product> toClear;
-        if (nearlyAllLinked)
-        {
-            toClear = linked;
-        }
-        else
-        {
-            var dominantId = linked
-                .GroupBy(p => p.CourseId!.Value)
-                .OrderByDescending(g => g.Count())
-                .Select(g => g.Key)
-                .First();
-            var dominantCount = linked.Count(p => p.CourseId == dominantId);
-            if (dominantCount < 3 || dominantCount * 2 < total)
-                return;
-            toClear = linked.Where(p => p.CourseId == dominantId).ToList();
-        }
-
-        var now = DateTime.UtcNow;
-        foreach (var product in toClear)
-        {
-            product.CourseId = null;
-            product.UpdatedAt = now;
-        }
-
-        await _db.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation(
-            "Cleared blanket Learn course link from {Count} products",
-            toClear.Count);
     }
 
     /// <summary>
