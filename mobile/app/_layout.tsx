@@ -29,7 +29,6 @@ import { GradientBackground } from '../src/components/GradientBackground';
 import { HeaderBackground } from '../src/components/HeaderBackground';
 import { I18nProvider, useI18n } from '../src/i18n';
 import { uiFonts } from '../src/i18n/uiFonts';
-import { RememberRoute } from '../src/navigation/RememberRoute';
 import { addNotificationResponseListener } from '../src/notifications/push';
 import { TapCapture } from '../src/telemetry/TapCapture';
 import { TelemetryHost } from '../src/telemetry/TelemetryHost';
@@ -205,7 +204,6 @@ export default function RootLayout() {
                 <StatusBar style="dark" translucent backgroundColor="transparent" />
                 <PushNotificationNavigator />
                 <PreferenceSync />
-                <RememberRoute />
                 <TelemetryHost />
                 <AppStack />
                 <AppUpdateCard />

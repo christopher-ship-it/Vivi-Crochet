@@ -1,4 +1,4 @@
-import { useRouter, type Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -7,7 +7,6 @@ import { AnimatedSplash, SPLASH_STAGE_COLOR } from '../src/components/AnimatedSp
 import { loadStoredLanguage } from '../src/i18n/storage';
 import { routeAfterSplash } from '../src/preferences/onboardingFlow';
 import { loadStoredCountry } from '../src/preferences/storage';
-import { loadLastHref, wasRecentlyBackgrounded } from '../src/navigation/lastRoute';
 import { wakeApi } from '../src/utils/wakeApi';
 
 async function hideNativeSplash() {
@@ -21,7 +20,6 @@ async function hideNativeSplash() {
 export default function SplashRoute() {
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
-  const resumeHref = useRef<string | null>(null);
   const finishedRef = useRef(false);
 
   const leaveSplash = useCallback(() => {
@@ -30,10 +28,6 @@ export default function SplashRoute() {
     setShowSplash(false);
     void hideNativeSplash();
 
-    if (resumeHref.current) {
-      router.replace(resumeHref.current as Href);
-      return;
-    }
     void (async () => {
       try {
         // New user: Language -> Country -> app. Returning user with both saved: straight in.
@@ -49,22 +43,11 @@ export default function SplashRoute() {
   useEffect(() => {
     wakeApi();
 
-    let cancelled = false;
-    (async () => {
-      try {
-        const [lastHref, resume] = await Promise.all([loadLastHref(), wasRecentlyBackgrounded()]);
-        if (!cancelled) resumeHref.current = resume && lastHref ? lastHref : null;
-      } catch {
-        // Ignore — still leave splash via animation / failsafe.
-      }
-    })();
-
     // Hide native splash early; give yarn sequence time to finish before forcing exit.
     const hideId = setTimeout(() => void hideNativeSplash(), 1200);
     const leaveId = setTimeout(() => leaveSplash(), 7000);
 
     return () => {
-      cancelled = true;
       clearTimeout(hideId);
       clearTimeout(leaveId);
     };
