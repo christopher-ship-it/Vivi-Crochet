@@ -6,6 +6,13 @@ namespace VIVI.Api.Mapping;
 
 public static class OffersMapper
 {
+    /// <summary>
+    /// Courses in a bundle read in learning order: by Display order, then cheapest first
+    /// (Foundation, Signature, Master), then by name. The order the admin ticked them in does not matter.
+    /// </summary>
+    public static IReadOnlyList<Course> InBundleOrder(this IEnumerable<Course> courses) =>
+        courses.OrderBy(c => c.SortOrder).ThenBy(c => c.Price).ThenBy(c => c.Name).ToList();
+
     private static readonly string[] BenefitLines =
     [
         "1-year access",
@@ -40,6 +47,7 @@ public static class OffersMapper
             Remaining = offer.IsActive ? remaining : 0,
             AccessDurationDays = offer.AccessDurationDays,
             IncludedCourses = includedCourses
+                .InBundleOrder()
                 .Select(c => new FoundingMembershipCourseResponse { Id = c.Id, Name = c.Name, RegularPrice = c.Price })
                 .ToList(),
             ViralProject = offer.ViralProjectCourse is null
@@ -130,6 +138,7 @@ public static class OffersMapper
             ViralProjectCourseId = offer.ViralProjectCourseId,
             ViralProjectCourseName = offer.ViralProjectCourse?.Name,
             IncludedCourses = includedCourses
+                .InBundleOrder()
                 .Select(c => new AdminSpecialOfferCourseResponse { Id = c.Id, Name = c.Name, Price = c.Price })
                 .ToList()
         };

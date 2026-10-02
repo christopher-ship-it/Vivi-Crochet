@@ -47,8 +47,11 @@ public static class DtoMapper
     public static CourseResponse ToDto(this Course course, bool includeLessons, bool adminView, Market? market = null)
     {
         var ownVideos = course.Videos ?? [];
+        // Same learning order as the offer card: Display order, then cheapest first, then the saved order.
         var included = (course.BundleItems ?? Array.Empty<CourseBundleItem>())
-            .OrderBy(b => b.SortOrder)
+            .OrderBy(b => b.IncludedCourse?.SortOrder ?? 0)
+            .ThenBy(b => b.IncludedCourse?.Price ?? 0)
+            .ThenBy(b => b.SortOrder)
             .ToList();
 
         IEnumerable<Video> lessonSource;
