@@ -32,7 +32,6 @@ public sealed class AuthController : ControllerBase
     private readonly IOtpService _otp;
     private readonly CustomerAccountService _customers;
     private readonly TwoFactorOptions _twoFactor;
-    private readonly TestAccountSettings _testAccount;
     private readonly IEmailService _email;
     private readonly ILogger<AuthController> _logger;
     private readonly bool _allowDevCustomerLogin;
@@ -48,7 +47,6 @@ public sealed class AuthController : ControllerBase
         IOtpService otp,
         CustomerAccountService customers,
         IOptions<TwoFactorOptions> twoFactor,
-        SeedSettings seed,
         IEmailService email,
         ILogger<AuthController> logger,
         IConfiguration config)
@@ -60,7 +58,6 @@ public sealed class AuthController : ControllerBase
         _otp = otp;
         _customers = customers;
         _twoFactor = twoFactor.Value;
-        _testAccount = seed.TestAccount;
         _email = email;
         _logger = logger;
         _allowDevCustomerLogin = env.IsDevelopment()
@@ -129,62 +126,6 @@ public sealed class AuthController : ControllerBase
             ExpiresAt = token.ExpiresAtUtc,
             User = user.ToDto()
         });
-    }
-
-    /// <summary>
-    /// Signs in the complimentary test account with a shared secret instead of an OTP.
-    /// Available only when Seed:TestAccount is enabled with a phone and a secret of at
-    /// least <see cref="TestAccountSettings.MinimumSecretLength"/> characters.
-    /// </summary>
-    [HttpPost("test-login")]
-    [AllowAnonymous]
-    [EnableRateLimiting("login")]
-    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<LoginResponse>> TestAccountLogin(
-        [FromBody] TestAccountLoginRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (!_testAccount.Enabled
-            || string.IsNullOrWhiteSpace(_testAccount.Phone)
-            || !_testAccount.HasUsableSecret)
-            throw ViviException.NotFound("NOT_FOUND", "Endpoint is not available.");
-
-        if (!SecretsMatch(request.Secret, _testAccount.LoginSecret))
-        {
-            _logger.LogWarning("Rejected test-account sign-in with an incorrect secret.");
-            throw ViviException.Unauthorized("INVALID_TEST_CODE", "That test access code is incorrect.");
-        }
-
-        string phone;
-        try
-        {
-            phone = CustomerAccountService.NormalizePhone(_testAccount.Phone);
-        }
-        catch (ArgumentException)
-        {
-            throw ViviException.NotFound("NOT_FOUND", "Endpoint is not available.");
-        }
-
-        var user = await _customers.GetOrCreateAsync(phone, _testAccount.Name, cancellationToken);
-        _logger.LogInformation("Test account {Email} signed in via shared secret.", user.Email);
-
-        var token = _jwt.CreateAccessToken(user);
-        return Ok(new LoginResponse
-        {
-            AccessToken = token.AccessToken,
-            ExpiresAt = token.ExpiresAtUtc,
-            User = user.ToDto()
-        });
-    }
-
-    /// <summary>Compares secrets in fixed time, hashing first so the length is not observable.</summary>
-    private static bool SecretsMatch(string? provided, string expected)
-    {
-        var providedHash = SHA256.HashData(Encoding.UTF8.GetBytes(provided?.Trim() ?? string.Empty));
-        var expectedHash = SHA256.HashData(Encoding.UTF8.GetBytes(expected.Trim()));
-        return CryptographicOperations.FixedTimeEquals(providedHash, expectedHash);
     }
 
     /// <summary>Sends a phone OTP via 2Factor for shopping checkout / account sign-in.</summary>

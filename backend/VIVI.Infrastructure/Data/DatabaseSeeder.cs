@@ -18,22 +18,19 @@ public sealed class SeedSettings
 /// <summary>
 /// A complimentary customer used for testing the shop and course playback without paying.
 /// Access is granted through a zero-value order so nothing downstream needs to special-case it.
+/// With <see cref="Enabled"/> on, this phone signs in through the normal OTP screens using the
+/// fixed code <see cref="TestOtpService.Code"/> (no SMS is sent); every other phone gets a real OTP.
 /// </summary>
 public sealed class TestAccountSettings
 {
-    /// <summary>Shortest secret accepted for <see cref="LoginSecret"/>.</summary>
-    public const int MinimumSecretLength = 16;
+    /// <summary>The test phone unless <c>Seed:TestAccount:Phone</c> says otherwise.</summary>
+    public const string DefaultPhone = "9999999999";
 
+    /// <summary>Switches the whole test account (seeding and the fixed OTP) on or off.</summary>
     public bool Enabled { get; set; }
-    public string Phone { get; set; } = string.Empty;
+    public string Phone { get; set; } = DefaultPhone;
     public string Name { get; set; } = "VIVI Test Account";
     public int AccessDays { get; set; } = 3650;
-
-    /// <summary>Shared secret for the passwordless test sign-in. Empty disables that endpoint.</summary>
-    public string LoginSecret { get; set; } = string.Empty;
-
-    public bool HasUsableSecret =>
-        !string.IsNullOrWhiteSpace(LoginSecret) && LoginSecret.Trim().Length >= MinimumSecretLength;
 }
 
 public sealed class DatabaseSeeder
@@ -623,6 +620,30 @@ public sealed class DatabaseSeeder
         {
             _logger.LogWarning("Test account user {Email} has no customer profile. Skipping.", user.Email);
             return;
+        }
+
+        // Signing in through the OTP screens asks for age, state and city when they are missing.
+        // Fill them in so the test account goes straight into the app (real details are never overwritten).
+        var profileChanged = false;
+        if (customer.Age is null or <= 0)
+        {
+            customer.Age = 30;
+            profileChanged = true;
+        }
+        if (string.IsNullOrWhiteSpace(customer.State))
+        {
+            customer.State = "Tamil Nadu";
+            profileChanged = true;
+        }
+        if (string.IsNullOrWhiteSpace(customer.City))
+        {
+            customer.City = "Chennai";
+            profileChanged = true;
+        }
+        if (profileChanged)
+        {
+            customer.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
         var publishedCourses = await _db.Courses

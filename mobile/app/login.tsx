@@ -43,8 +43,7 @@ type Step =
   | 'intl_register'
   | 'intl_login'
   | 'intl_forgot'
-  | 'intl_reset'
-  | 'testCode';
+  | 'intl_reset';
 
 const AGE_OPTIONS = Array.from({ length: 71 }, (_, i) => String(i + 10));
 
@@ -57,7 +56,7 @@ export default function LoginScreen() {
   const styles = useMemo(() => createStyles(fonts), [language]);
   const router = useRouter();
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
-  const { completeSignIn, signInWithTestCode } = useShoppingSession();
+  const { completeSignIn } = useShoppingSession();
   const { saveProfile: saveLearningProfile } = useLearningCustomer();
   const insets = useSafeAreaInsets();
 
@@ -78,7 +77,6 @@ export default function LoginScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [otp, setOtp] = useState('');
-  const [testCode, setTestCode] = useState('');
   const [challengeId, setChallengeId] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
@@ -172,10 +170,6 @@ export default function LoginScreen() {
         break;
       case 'india_complete_profile':
         // Profile is required after OTP for new/incomplete accounts — stay here.
-        break;
-      case 'testCode':
-        setStep('entry');
-        setTestCode('');
         break;
       default:
         if (router.canGoBack()) router.back();
@@ -334,32 +328,6 @@ export default function LoginScreen() {
       finishLogin();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : t('auth.saveDetailsFailed'));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleTestSignIn() {
-    const code = testCode.trim();
-    if (!code) {
-      setError(t('auth.enterTestCode'));
-      return;
-    }
-    setError(null);
-    setLoading(true);
-    try {
-      await signInWithTestCode(code);
-      finishLogin();
-    } catch (err) {
-      if (err instanceof ApiClientError) {
-        setError(
-          err.status === 404
-            ? t('auth.testAccessDisabled')
-            : err.message,
-        );
-      } else {
-        setError(t('auth.testSignInFailed'));
-      }
     } finally {
       setLoading(false);
     }
@@ -544,8 +512,6 @@ export default function LoginScreen() {
         return t('auth.resetPassword');
       case 'intl_reset':
         return t('auth.chooseNewPassword');
-      case 'testCode':
-        return t('auth.testAccess');
       default:
         return t('auth.signIn');
     }
@@ -573,8 +539,6 @@ export default function LoginScreen() {
         return t('auth.forgotSub');
       case 'intl_reset':
         return t('auth.resetSub', { email: email.trim().toLowerCase() });
-      case 'testCode':
-        return t('auth.testAccessSub');
       default:
         return '';
     }
@@ -637,15 +601,6 @@ export default function LoginScreen() {
                 </Pressable>
                 <Pressable style={styles.secondaryOutline} onPress={() => startIntent('login')}>
                   <Text style={styles.secondaryOutlineText}>{t('auth.signIn')}</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.secondaryBtn}
-                  onPress={() => {
-                    setStep('testCode');
-                    setError(null);
-                  }}
-                >
-                  <Text style={styles.secondaryText}>{t('auth.haveTestAccessCode')}</Text>
                 </Pressable>
               </>
             ) : null}
@@ -1102,31 +1057,6 @@ export default function LoginScreen() {
                   disabled={loading}
                 >
                   <Text style={styles.secondaryText}>{t('auth.resendCode')}</Text>
-                </Pressable>
-              </>
-            ) : null}
-
-            {step === 'testCode' ? (
-              <>
-                <Text style={styles.label}>{t('auth.testAccessCode')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={testCode}
-                  onChangeText={setTestCode}
-                  placeholder={t('auth.pasteCode')}
-                  placeholderTextColor={colors.muted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry
-                />
-                <Pressable
-                  style={[styles.button, loading && styles.buttonDisabled]}
-                  onPress={handleTestSignIn}
-                  disabled={loading}
-                >
-                  <Text style={styles.buttonText}>
-                    {loading ? t('auth.signingIn') : t('auth.signInWithCode')}
-                  </Text>
                 </Pressable>
               </>
             ) : null}

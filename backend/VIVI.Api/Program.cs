@@ -155,10 +155,19 @@ else
     builder.Services.AddSingleton<IEmailService, ResendEmailService>();
 }
 
+// The configured test phone signs in with a fixed OTP; everyone else goes to the real provider.
 if (builder.Environment.IsEnvironment("Testing"))
-    builder.Services.AddSingleton<IOtpService, FakeOtpService>();
+    builder.Services.AddSingleton<FakeOtpService>();
 else
-    builder.Services.AddHttpClient<IOtpService, TwoFactorOtpService>(client => client.Timeout = TimeSpan.FromSeconds(30));
+    builder.Services.AddHttpClient<TwoFactorOtpService>(client => client.Timeout = TimeSpan.FromSeconds(30));
+
+builder.Services.AddScoped<IOtpService>(sp =>
+{
+    IOtpService inner = builder.Environment.IsEnvironment("Testing")
+        ? sp.GetRequiredService<FakeOtpService>()
+        : sp.GetRequiredService<TwoFactorOtpService>();
+    return new TestOtpService(inner, sp.GetRequiredService<SeedSettings>().TestAccount);
+});
 
 var blobOptions = builder.Configuration.GetSection(BlobStorageOptions.SectionName).Get<BlobStorageOptions>()
                   ?? new BlobStorageOptions();
@@ -179,10 +188,9 @@ builder.Services.AddScoped(sp =>
         TestAccount = new TestAccountSettings
         {
             Enabled = testAccount.GetValue("Enabled", false),
-            Phone = testAccount["Phone"] ?? string.Empty,
+            Phone = testAccount["Phone"] ?? TestAccountSettings.DefaultPhone,
             Name = testAccount["Name"] ?? "VIVI Test Account",
-            AccessDays = testAccount.GetValue("AccessDays", 3650),
-            LoginSecret = testAccount["LoginSecret"] ?? string.Empty
+            AccessDays = testAccount.GetValue("AccessDays", 3650)
         }
     };
 });

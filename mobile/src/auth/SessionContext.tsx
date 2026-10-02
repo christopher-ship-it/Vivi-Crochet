@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { devCustomerLogin, testAccountLogin } from '../api/auth';
+import { devCustomerLogin } from '../api/auth';
 import { setMemoryAccessToken, setUnauthorizedHandler } from '../api/client';
 import {
   registerForPushNotificationsAsync,
@@ -31,7 +31,6 @@ interface ShoppingSessionValue {
   isAuthenticated: boolean;
   completeSignIn: (response: LoginResponse) => Promise<void>;
   signInDev: (phone: string, name?: string) => Promise<void>;
-  signInWithTestCode: (secret: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -97,14 +96,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [completeSignIn],
   );
 
-  const signInWithTestCode = useCallback(
-    async (secret: string) => {
-      const response = await testAccountLogin(secret);
-      await completeSignIn(response);
-    },
-    [completeSignIn],
-  );
-
   const signOut = useCallback(async () => {
     await unregisterPushNotificationsAsync();
     setMemoryAccessToken(null);
@@ -135,7 +126,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!shoppingUser,
         completeSignIn,
         signInDev,
-        signInWithTestCode,
         signOut,
       },
       learning: {
@@ -150,7 +140,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       learningProfile,
       completeSignIn,
       signInDev,
-      signInWithTestCode,
       signOut,
       saveProfile,
       clearProfile,

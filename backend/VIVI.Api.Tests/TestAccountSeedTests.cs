@@ -26,8 +26,7 @@ public class TestAccountSeedTests
             Enabled = true,
             Phone = Phone,
             Name = "VIVI Test Account",
-            AccessDays = 3650,
-            LoginSecret = new string('x', TestAccountSettings.MinimumSecretLength)
+            AccessDays = 3650
         }
     };
 
@@ -292,15 +291,5 @@ public class TestAccountSeedTests
 
         Assert.Equal(2, await db.Orders.CountAsync(o => o.OrderNumber.StartsWith("VIVI-TEST-") && !o.OrderNumber.Contains("SHOP")));
         Assert.Single(await db.CourseEnrollments.Where(e => e.CustomerId == second.Id).ToListAsync());
-    }
-
-    [Fact]
-    public void SecretShorterThanTheMinimumIsRejected()
-    {
-        var settings = new TestAccountSettings { LoginSecret = "short" };
-        Assert.False(settings.HasUsableSecret);
-
-        settings.LoginSecret = new string('a', TestAccountSettings.MinimumSecretLength);
-        Assert.True(settings.HasUsableSecret);
     }
 }

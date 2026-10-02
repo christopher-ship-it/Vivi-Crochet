@@ -117,21 +117,6 @@ export async function confirmCustomerPasswordReset(input: {
   );
 }
 
-/**
- * Signs in the complimentary test account. The phone lives in server config, so the
- * access code is the only thing the app sends.
- */
-export async function testAccountLogin(secret: string): Promise<LoginResponse> {
-  return apiRequest<LoginResponse>(
-    '/api/auth/test-login',
-    {
-      method: 'POST',
-      body: JSON.stringify({ secret }),
-    },
-    false,
-  );
-}
-
 export async function devCustomerLogin(phone: string, name?: string): Promise<LoginResponse> {
   return apiRequest<LoginResponse>(
     '/api/auth/dev/customer-login',
