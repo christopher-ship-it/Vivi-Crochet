@@ -38,6 +38,8 @@ export interface DeliveryQuote {
   summary: string;
   estimatedDeliveryDateFrom: string;
   estimatedDeliveryDateTo: string;
+  /** Delivery charge for the order in its currency; 0 when none applies. */
+  shippingAmount: number;
   paymentMethod: string;
 }
 

@@ -91,6 +91,12 @@ export default function OrderDetailScreen() {
               </View>
             </View>
           ))}
+          {order.shippingAmount > 0 ? (
+            <View style={styles.deliveryRow}>
+              <Text style={styles.deliveryRowLabel}>Delivery</Text>
+              <Text style={styles.deliveryRowValue}>{formatMoney(order.shippingAmount, order.currency)}</Text>
+            </View>
+          ) : null}
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total paid</Text>
             <Text style={styles.totalValue}>{formatMoney(order.totalAmount, order.currency)}</Text>

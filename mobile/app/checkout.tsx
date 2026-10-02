@@ -558,6 +558,8 @@ export default function CheckoutScreen() {
   const emailReady = isUsableCheckoutEmail(email) && !emailNeedsVerification;
   const checkoutReady = shippingReady && emailReady;
   const hasDeliveryAddress = address1.trim().length > 0;
+  // Flat delivery charge worked out by the server once the address is known (Tamil Nadu vs elsewhere).
+  const deliveryCharge = hasPhysicalItems && quote ? quote.shippingAmount : 0;
 
   const addressLines = buildAddressDisplayLines({
     address1,
@@ -1062,7 +1064,11 @@ export default function CheckoutScreen() {
                   {hasPhysicalItems ? (
                     <View style={styles.orderSummaryRow}>
                       <Text style={styles.orderSummaryKey}>{t('cart.delivery')}</Text>
-                      <Text style={styles.orderSummaryMuted}>{t('checkout.deliveryCalcNext')}</Text>
+                      {deliveryCharge > 0 ? (
+                        <Text style={styles.orderSummaryVal}>{formatPrice(deliveryCharge)}</Text>
+                      ) : (
+                        <Text style={styles.orderSummaryMuted}>{t('checkout.deliveryCalcNext')}</Text>
+                      )}
                     </View>
                   ) : hasDigitalItems ? (
                     <View style={styles.orderSummaryRow}>
@@ -1072,7 +1078,7 @@ export default function CheckoutScreen() {
                   ) : null}
                   <View style={[styles.orderSummaryRow, styles.orderSummaryTotal]}>
                     <Text style={styles.orderSummaryTotalKey}>{t('checkout.totalAmount')}</Text>
-                    <Text style={styles.orderSummaryTotalVal}>{formatPrice(subtotal)}</Text>
+                    <Text style={styles.orderSummaryTotalVal}>{formatPrice(subtotal + deliveryCharge)}</Text>
                   </View>
                 </View>
               </View>
