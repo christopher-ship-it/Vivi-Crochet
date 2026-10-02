@@ -167,6 +167,7 @@ export default function ShopScreen() {
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [availability, setAvailability] = useState<'all' | 'in' | 'out'>('all');
   const [priceLowToHigh, setPriceLowToHigh] = useState(false);
   const hasLoadedOnce = useRef(false);
@@ -509,7 +510,10 @@ export default function ShopScreen() {
               />
               <Pressable
                 style={styles.filterBtn}
-                onPress={() => setFilterOpen(true)}
+                onPress={() => {
+                  setCategoriesOpen(false);
+                  setFilterOpen(true);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={t('shop.filterByCategory')}
                 hitSlop={6}
@@ -835,25 +839,61 @@ export default function ShopScreen() {
               </Pressable>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              {tabs.map((cat) => {
-                const selected = isTabActive(cat);
-                return (
-                  <Pressable
-                    key={cat}
-                    style={[styles.filterOption, selected && styles.filterOptionActive]}
-                    onPress={() => selectCategory(cat)}
-                  >
-                    <Text
-                      style={[styles.filterOptionText, selected && styles.filterOptionTextActive]}
-                    >
-                      {categoryLabel(cat, t)}
+              <Pressable
+                style={[styles.filterOption, wishlistOnly && styles.filterOptionActive]}
+                onPress={() => setWishlistOnly((on) => !on)}
+              >
+                <Text style={[styles.filterOptionText, wishlistOnly && styles.filterOptionTextActive]}>
+                  {t('shop.wishlist')}
+                </Text>
+                {wishlistOnly ? <Ionicons name="checkmark" size={18} color={colors.pink} /> : null}
+              </Pressable>
+              <Pressable
+                style={styles.filterOption}
+                onPress={() => setCategoriesOpen((open) => !open)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: categoriesOpen }}
+              >
+                <Text style={styles.filterOptionText}>{t('shop.filterByCategory')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {activeCategory !== 'All' ? (
+                    <Text style={[styles.filterOptionText, styles.filterOptionTextActive]}>
+                      {activeCategory}
                     </Text>
-                    {selected ? (
-                      <Ionicons name="checkmark" size={18} color={colors.pink} />
-                    ) : null}
-                  </Pressable>
-                );
-              })}
+                  ) : null}
+                  <Ionicons
+                    name={categoriesOpen ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={colors.ink}
+                  />
+                </View>
+              </Pressable>
+              {categoriesOpen
+                ? ['All', ...categories.filter((c) => c !== 'All')].map((cat) => {
+                    const selected = activeCategory === cat;
+                    return (
+                      <Pressable
+                        key={cat}
+                        style={[
+                          styles.filterOption,
+                          { paddingLeft: 24 },
+                          selected && styles.filterOptionActive,
+                        ]}
+                        onPress={() => {
+                          setActiveCategory(cat);
+                          setFilterOpen(false);
+                        }}
+                      >
+                        <Text
+                          style={[styles.filterOptionText, selected && styles.filterOptionTextActive]}
+                        >
+                          {categoryLabel(cat, t)}
+                        </Text>
+                        {selected ? <Ionicons name="checkmark" size={18} color={colors.pink} /> : null}
+                      </Pressable>
+                    );
+                  })
+                : null}
               <Text style={styles.filterSectionTitle}>{t('shop.availability')}</Text>
               {(
                 [
