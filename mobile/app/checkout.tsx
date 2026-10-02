@@ -274,6 +274,11 @@ export default function CheckoutScreen() {
   const [status, setStatus] = useState<string | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Some Android phones shrink the email sheet's container when the keyboard opens and some do not.
+  // Compare its height with the tallest it has been to see how much the keyboard still covers;
+  // adding the full keyboard height on top of a shrunk container squashed the sheet.
+  const [sheetRootHeight, setSheetRootHeight] = useState(0);
+  const sheetRootTallest = useRef(0);
   const [verifiedEmail, setVerifiedEmail] = useState('');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
@@ -300,6 +305,15 @@ export default function CheckoutScreen() {
       hideSub.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!editingEmail) {
+      sheetRootTallest.current = 0;
+      setSheetRootHeight(0);
+    }
+  }, [editingEmail]);
+
+  const keyboardOverlap = Math.max(0, keyboardHeight - Math.max(0, sheetRootTallest.current - sheetRootHeight));
 
   const allowLeaveRef = useRef(false);
 
@@ -1144,6 +1158,11 @@ export default function CheckoutScreen() {
         onRequestClose={() => setEditingEmail(false)}
       >
         <KeyboardAvoidingView
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            sheetRootTallest.current = Math.max(sheetRootTallest.current, h);
+            setSheetRootHeight(h);
+          }}
           style={[
             styles.sheetRoot,
             {
@@ -1158,7 +1177,7 @@ export default function CheckoutScreen() {
             style={[
               styles.sheet,
               {
-                marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+                marginBottom: Platform.OS === 'android' ? keyboardOverlap : 0,
                 paddingBottom: Math.max(insets.bottom, 12),
                 maxHeight: keyboardVisible ? '72%' : '88%',
               },
