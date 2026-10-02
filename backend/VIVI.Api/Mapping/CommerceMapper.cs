@@ -77,6 +77,7 @@ public static class CommerceMapper
         Summary = quote.Summary,
         EstimatedDeliveryDateFrom = quote.EstimatedDeliveryDateFrom,
         EstimatedDeliveryDateTo = quote.EstimatedDeliveryDateTo,
+        ShippingAmount = quote.ShippingAmount,
         PaymentMethod = "Online Payment"
     };
 

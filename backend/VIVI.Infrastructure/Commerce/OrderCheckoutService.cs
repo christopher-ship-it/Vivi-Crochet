@@ -27,7 +27,8 @@ public sealed record DeliveryQuoteSnapshot(
     int MaxDays,
     string Summary,
     DateTime EstimatedDeliveryDateFrom,
-    DateTime EstimatedDeliveryDateTo);
+    DateTime EstimatedDeliveryDateTo,
+    decimal ShippingAmount);
 
 public sealed class OrderCheckoutService
 {
@@ -38,6 +39,7 @@ public sealed class OrderCheckoutService
     private readonly IDeliveryEstimateService _delivery;
     private readonly InventoryService _inventory;
     private readonly DeliverySequenceService _sequence;
+    private readonly ShippingChargeCalculator _shippingCharges;
 
     public OrderCheckoutService(
         ViviDbContext db,
@@ -46,7 +48,8 @@ public sealed class OrderCheckoutService
         RazorpayOptionsAccessor razorpayOptions,
         IDeliveryEstimateService delivery,
         InventoryService inventory,
-        DeliverySequenceService sequence)
+        DeliverySequenceService sequence,
+        ShippingChargeCalculator shippingCharges)
     {
         _db = db;
         _pricing = pricing;
@@ -55,6 +58,7 @@ public sealed class OrderCheckoutService
         _delivery = delivery;
         _inventory = inventory;
         _sequence = sequence;
+        _shippingCharges = shippingCharges;
     }
 
     public async Task<DeliveryQuoteSnapshot> QuoteDeliveryAsync(
@@ -67,12 +71,18 @@ public sealed class OrderCheckoutService
         EnsureNotMixed(items);
         if (!items.Any(i => i.ItemType == OrderItemType.Product))
             throw ViviException.Conflict("NOT_A_PHYSICAL_ORDER", "Delivery estimates apply to physical products only.");
+        var currency = "INR";
         if (customerId is Guid quoteCustomerId)
-            EnsureProductsAllowed(await LoadMarketAsync(quoteCustomerId, cancellationToken));
+        {
+            var market = await LoadMarketAsync(quoteCustomerId, cancellationToken);
+            EnsureProductsAllowed(market);
+            currency = market.Currency;
+        }
 
         ValidateShipping(shipping);
         var types = await LoadProductTypesAsync(items, cancellationToken);
-        return await BuildQuoteAsync(types, shipping, DateTime.UtcNow, customerId, null, cancellationToken);
+        var shippingAmount = _shippingCharges.ForOrder(currency, types, shipping.State);
+        return await BuildQuoteAsync(types, shipping, DateTime.UtcNow, customerId, null, shippingAmount, cancellationToken);
     }
 
     public async Task<CheckoutResult> CreateCheckoutAsync(
@@ -134,7 +144,10 @@ public sealed class OrderCheckoutService
         order.Subtotal = subtotal;
         order.DiscountAmount = discountTotal;
         order.TaxAmount = 0;
-        order.ShippingAmount = 0;
+        // Flat delivery charge for Crochet Essentials (Tamil Nadu vs the rest of India).
+        order.ShippingAmount = hasPhysical && shipping is not null
+            ? _shippingCharges.ForOrder(order.Currency, productTypes, shipping.State)
+            : 0;
         order.TotalAmount = subtotal + order.TaxAmount + order.ShippingAmount;
 
         if (order.TotalAmount <= 0)
@@ -145,7 +158,7 @@ public sealed class OrderCheckoutService
         {
             ApplyShipping(order, shipping);
             // Provisional: the final sequence is fixed when payment is confirmed.
-            var quote = await BuildQuoteAsync(productTypes, shipping, now, customerId, null, cancellationToken);
+            var quote = await BuildQuoteAsync(productTypes, shipping, now, customerId, null, order.ShippingAmount, cancellationToken);
             _delivery.ApplyEstimate(
                 order,
                 new DeliveryDateRange(quote.EstimatedDeliveryDateFrom, quote.EstimatedDeliveryDateTo),
@@ -202,6 +215,7 @@ public sealed class OrderCheckoutService
         DateTime utcAnchor,
         Guid? customerId,
         Guid? excludeOrderId,
+        decimal shippingAmount,
         CancellationToken cancellationToken)
     {
         var isCoimbatore = _delivery.IsCoimbatore(shipping);
@@ -220,7 +234,8 @@ public sealed class OrderCheckoutService
             plan.Window.MaxDays,
             _delivery.FormatWindowSummary(plan.Window),
             plan.Dates.From,
-            plan.Dates.To);
+            plan.Dates.To,
+            shippingAmount);
     }
 
     private async Task<IReadOnlyList<ProductType>> LoadProductTypesAsync(

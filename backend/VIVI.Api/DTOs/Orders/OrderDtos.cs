@@ -51,6 +51,8 @@ public sealed class DeliveryQuoteResponse
     public string Summary { get; set; } = string.Empty;
     public DateTime EstimatedDeliveryDateFrom { get; set; }
     public DateTime EstimatedDeliveryDateTo { get; set; }
+    /// <summary>Delivery charge for this order in the order currency (0 when none applies).</summary>
+    public decimal ShippingAmount { get; set; }
     public string PaymentMethod { get; set; } = "Online Payment";
 }
 

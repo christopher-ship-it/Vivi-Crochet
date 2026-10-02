@@ -106,6 +106,12 @@ builder.Services.AddScoped<LiveCalendarService>();
 builder.Services.AddScoped<ProductImportService>();
 builder.Services.AddScoped<LiveBookingService>();
 builder.Services.AddScoped<DeliverySequenceService>();
+builder.Services.AddSingleton(new ShippingChargeSettings
+{
+    TamilNaduInr = builder.Configuration.GetValue("Shipping:TamilNaduInr", ShippingChargeSettings.DefaultTamilNaduInr),
+    OtherStatesInr = builder.Configuration.GetValue("Shipping:OtherStatesInr", ShippingChargeSettings.DefaultOtherStatesInr)
+});
+builder.Services.AddSingleton<ShippingChargeCalculator>();
 builder.Services.AddScoped<OrderCheckoutService>();
 builder.Services.AddScoped<PaymentFulfillmentService>();
 builder.Services.AddScoped<ICourseAccessService, CourseAccessService>();
