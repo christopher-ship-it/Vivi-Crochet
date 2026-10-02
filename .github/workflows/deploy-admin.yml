@@ -1,0 +1,56 @@
+name: Deploy Admin
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'admin/**'
+      - '.github/workflows/deploy-admin.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-admin
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy admin
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          VITE_API_BASE_URL: https://app-vivi-api-hwbmc3dzhkewa5hb.centralindia-01.azurewebsites.net
+        run: npm run build
+
+      # Mirrors deploy-admin-azure.ps1: built files plus the small Node server package.
+      - name: Package for App Service
+        run: |
+          mkdir -p ../publish/admin
+          cp -r dist/. ../publish/admin/
+          cp deploy/package.json ../publish/admin/
+          if [ -f deploy/.deployment ]; then cp deploy/.deployment ../publish/admin/; fi
+          cd ../publish/admin && npm install --omit=dev
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: vivi-admin
+          publish-profile: ${{ secrets.AZURE_ADMIN_PUBLISH_PROFILE }}
+          package: publish/admin

@@ -1,0 +1,58 @@
+name: Deploy API
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Test, publish and deploy API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      # A failing test stops the deploy, so a broken build never reaches production.
+      - name: Run tests
+        run: dotnet test backend/VIVI.Api.Tests/VIVI.Api.Tests.csproj -c Release
+
+      - name: Publish
+        run: dotnet publish backend/VIVI.Api/VIVI.Api.csproj -c Release -o publish/api --no-self-contained
+
+      # Same fix publish-api.ps1 applies: SqlClient must sit at the publish root on Linux.
+      - name: Copy Linux SqlClient to publish root
+        run: |
+          f=$(find publish/api/runtimes/unix/lib -name Microsoft.Data.SqlClient.dll | head -n 1)
+          if [ -n "$f" ]; then cp "$f" publish/api/Microsoft.Data.SqlClient.dll; fi
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: app-vivi-api
+          publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
+          package: publish/api
+
+      - name: Check the API is healthy
+        run: |
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://app-vivi-api-hwbmc3dzhkewa5hb.centralindia-01.azurewebsites.net/api/health || true)
+            echo "Attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "API did not become healthy after deploy."
+          exit 1
