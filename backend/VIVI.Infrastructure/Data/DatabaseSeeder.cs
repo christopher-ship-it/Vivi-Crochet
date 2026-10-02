@@ -349,8 +349,7 @@ public sealed class DatabaseSeeder
             return;
         }
 
-        existing.Name = name;
-        // Preserve admin-edited marketing copy, pricing, and access window.
+        // Preserve admin-edited name, marketing copy, pricing, and access window.
         // AutoSeed runs on every API start in production — never wipe admin prices.
         if (string.IsNullOrWhiteSpace(existing.About))
             existing.About = about;
