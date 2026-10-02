@@ -85,3 +85,18 @@ export function publishProductsWithPhotos(productCodes: string[]): Promise<Produ
     body: JSON.stringify({ productCodes }),
   });
 }
+
+export interface ProductDraftCount {
+  /** Draft products that would be deleted (listings and shades both count). */
+  total: number;
+  /** How many of those are listings that have shades. */
+  listings: number;
+}
+
+export function getProductDraftCount(): Promise<ProductDraftCount> {
+  return apiRequest<ProductDraftCount>(`${BASE}/drafts`);
+}
+
+export function deleteAllProductDrafts(): Promise<{ deleted: number }> {
+  return apiRequest<{ deleted: number }>(`${BASE}/drafts`, { method: 'DELETE' });
+}

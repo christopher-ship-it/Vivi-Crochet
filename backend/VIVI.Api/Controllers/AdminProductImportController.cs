@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VIVI.Api.Auth;
+using VIVI.Api.Services;
+using VIVI.Core.Interfaces;
 using VIVI.Infrastructure.Commerce;
 
 namespace VIVI.Api.Controllers;
@@ -13,7 +15,13 @@ public sealed class AdminProductImportController : ControllerBase
 {
     private readonly ProductImportService _import;
 
-    public AdminProductImportController(ProductImportService import) => _import = import;
+    private readonly IBlobStorageService _blob;
+
+    public AdminProductImportController(ProductImportService import, IBlobStorageService blob)
+    {
+        _import = import;
+        _blob = blob;
+    }
 
     /// <summary>The upload sheet's columns (names match the admin product form). The admin builds its sample file from this.</summary>
     [HttpGet("columns")]
@@ -43,4 +51,28 @@ public sealed class AdminProductImportController : ControllerBase
         [FromBody] PublishRequest request,
         CancellationToken cancellationToken) =>
         Ok(await _import.PublishWithPhotosAsync(request.ProductCodes, cancellationToken));
+
+    /// <summary>How many draft products "delete all drafts" would remove.</summary>
+    [HttpGet("drafts")]
+    [ProducesResponseType(typeof(ProductDraftCount), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductDraftCount>> CountDrafts(CancellationToken cancellationToken) =>
+        Ok(await _import.CountDraftsAsync(cancellationToken));
+
+    /// <summary>Deletes every draft product (and its photos). Published products are never touched.</summary>
+    [HttpDelete("drafts")]
+    [ProducesResponseType(typeof(ProductDraftDeleteResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductDraftDeleteResponse>> DeleteDrafts(CancellationToken cancellationToken)
+    {
+        var result = await _import.DeleteDraftsAsync(cancellationToken);
+
+        foreach (var path in result.BlobPaths.Where(ProductImageResolver.IsBlobPath))
+            await _blob.DeleteAsync(path, cancellationToken);
+
+        return Ok(new ProductDraftDeleteResponse { Deleted = result.Deleted });
+    }
+
+    public sealed class ProductDraftDeleteResponse
+    {
+        public int Deleted { get; set; }
+    }
 }

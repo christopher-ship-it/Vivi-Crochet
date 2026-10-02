@@ -320,6 +320,73 @@ public sealed class ProductImportTests
     }
 
     [Fact]
+    public async Task Delete_all_drafts_removes_drafts_and_their_listing_but_never_published_products()
+    {
+        await using var factory = new ApiFactory();
+        var admin = await AdminAsync(factory);
+        await PostAsync(admin, Request([YarnRow(2, "DSR001", "Lilac"), YarnRow(3, "DSR002", "Beige")]));
+
+        // Everything is a draft: the listing plus both shades.
+        var count = await admin.GetFromJsonAsync<ProductDraftCount>($"{Url}/drafts", Json);
+        Assert.Equal(3, count!.Total);
+        Assert.Equal(1, count.Listings);
+
+        // Publish one shade (it needs a photo), which also publishes the listing.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+            var lilac = await db.Products.SingleAsync(p => p.ProductCode == "DSR001");
+            db.ProductImages.Add(new ProductImage
+            {
+                Id = Guid.NewGuid(),
+                ProductId = lilac.Id,
+                BlobPath = "products/test/dsr001.jpg",
+                IsMain = true,
+                SortOrder = 0,
+                CreatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+        (await admin.PostAsJsonAsync($"{Url}/publish", new { productCodes = new[] { "DSR001" } }, Json)).EnsureSuccessStatusCode();
+
+        // Only the Beige draft is left to delete; the published listing and shade stay.
+        count = await admin.GetFromJsonAsync<ProductDraftCount>($"{Url}/drafts", Json);
+        Assert.Equal(1, count!.Total);
+
+        var deleted = await admin.DeleteAsync($"{Url}/drafts");
+        Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
+
+        var listing = (await ListingAsync(admin, "Desire Knitting Yarn"))!;
+        Assert.Equal(ProductStatus.Published, listing.Status);
+        Assert.Equal(new[] { "Lilac" }, listing.Variants.Select(v => v.ColourName).ToArray());
+
+        // Now a second upload that is all drafts goes entirely, listing included.
+        await PostAsync(admin, Request([new Sheet(2, new Dictionary<string, string?>
+        {
+            ["Product"] = "Plain Hook",
+            ["Product Code"] = "HK001",
+            ["Price (INR)"] = "99"
+        })], defaultCategory: "Yarn"));
+        Assert.Equal(1, (await admin.GetFromJsonAsync<ProductDraftCount>($"{Url}/drafts", Json))!.Total);
+
+        (await admin.DeleteAsync($"{Url}/drafts")).EnsureSuccessStatusCode();
+        Assert.Equal(0, (await admin.GetFromJsonAsync<ProductDraftCount>($"{Url}/drafts", Json))!.Total);
+        Assert.Null(await ListingAsync(admin, "Plain Hook"));
+        Assert.NotNull(await ListingAsync(admin, "Desire Knitting Yarn"));
+    }
+
+    [Fact]
+    public async Task Customers_cannot_delete_drafts()
+    {
+        await using var factory = new ApiFactory();
+        var customer = await AuthTests.LoginCustomerAsync(factory.CreateClient(), "7600000012");
+
+        var response = await customer.DeleteAsync($"{Url}/drafts");
+
+        Assert.True(response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task Customers_cannot_import()
     {
         await using var factory = new ApiFactory();

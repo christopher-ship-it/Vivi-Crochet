@@ -759,4 +759,94 @@ public sealed class ProductImportService
         await _db.SaveChangesAsync(cancellationToken);
         return result;
     }
+
+    // ---------------------------------------------------------------- delete drafts
+
+    /// <summary>
+    /// Draft products that can be deleted: every Draft product except a listing that still has a
+    /// published shade (deleting that listing would orphan the shade).
+    /// </summary>
+    private async Task<List<Product>> FindDeletableDraftsAsync(CancellationToken cancellationToken)
+    {
+        var drafts = await _db.Products
+            .Include(p => p.Images)
+            .Where(p => p.Status == ProductStatus.Draft)
+            .ToListAsync(cancellationToken);
+
+        var parentsWithKeptShades = await _db.Products
+            .Where(p => p.ParentProductId != null && p.Status != ProductStatus.Draft)
+            .Select(p => p.ParentProductId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var keep = parentsWithKeptShades.ToHashSet();
+
+        return drafts.Where(p => !keep.Contains(p.Id)).ToList();
+    }
+
+    public async Task<ProductDraftCount> CountDraftsAsync(CancellationToken cancellationToken)
+    {
+        var drafts = await FindDeletableDraftsAsync(cancellationToken);
+        return new ProductDraftCount
+        {
+            Total = drafts.Count,
+            Listings = drafts.Count(p => drafts.Any(d => d.ParentProductId == p.Id)),
+        };
+    }
+
+    /// <summary>
+    /// Deletes every draft product (shades first, then their listings). Published products are never
+    /// touched. Order lines keep their history (the product link is cleared), as with a single delete.
+    /// Returns the image blob paths so the caller can remove the files.
+    /// </summary>
+    public async Task<ProductDraftDeleteResult> DeleteDraftsAsync(CancellationToken cancellationToken)
+    {
+        var drafts = await FindDeletableDraftsAsync(cancellationToken);
+        var result = new ProductDraftDeleteResult { Deleted = drafts.Count };
+        if (drafts.Count == 0)
+            return result;
+
+        var ids = drafts.Select(p => p.Id).ToList();
+
+        result.BlobPaths = drafts
+            .SelectMany(p => p.Images.Select(i => i.BlobPath)
+                .Concat(string.IsNullOrWhiteSpace(p.ImageUrl) ? [] : [p.ImageUrl!]))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var orderItems = await _db.OrderItems
+            .Where(i => i.ProductId != null && ids.Contains(i.ProductId.Value))
+            .ToListAsync(cancellationToken);
+        foreach (var item in orderItems)
+            item.ProductId = null;
+
+        var links = await _db.ProductEssentialLinks
+            .Where(l => ids.Contains(l.SourceProductId) || ids.Contains(l.EssentialProductId))
+            .ToListAsync(cancellationToken);
+        _db.ProductEssentialLinks.RemoveRange(links);
+
+        // Shades go first so a listing is never deleted while one of its shades still exists.
+        var shades = drafts.Where(p => p.ParentProductId != null).ToList();
+        _db.Products.RemoveRange(shades);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _db.Products.RemoveRange(drafts.Where(p => p.ParentProductId == null));
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return result;
+    }
+}
+
+public sealed class ProductDraftCount
+{
+    /// <summary>Draft products that would be deleted (listings and shades both count).</summary>
+    public int Total { get; set; }
+    /// <summary>How many of those are listings that have shades.</summary>
+    public int Listings { get; set; }
+}
+
+public sealed class ProductDraftDeleteResult
+{
+    public int Deleted { get; set; }
+    public List<string> BlobPaths { get; set; } = new();
 }

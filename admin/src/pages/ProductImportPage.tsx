@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import {
+  deleteAllProductDrafts,
+  getProductDraftCount,
   getProductImportColumns,
   importProducts,
   publishProductsWithPhotos,
@@ -18,6 +20,7 @@ import {
 } from '../api/products';
 import { downloadSampleSheet, readProductSheet } from '../utils/productImportSheet';
 import { matchPhotoToCode } from '../utils/productPhotoMatch';
+import { alertDialog, confirmDialog } from '../components/AppDialog';
 import { formatFileSize, validateImageFile } from '../utils/format';
 import { convertHeicToJpeg, isHeicImage, renderProductImage } from '../utils/productImagePrepare';
 import { uploadToBlob } from '../utils/videoUpload';
@@ -83,6 +86,10 @@ export function ProductImportPage() {
   const [published, setPublished] = useState<ProductPublishResult | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
 
+  const [draftCount, setDraftCount] = useState<{ total: number; listings: number } | null>(null);
+  const [deletingDrafts, setDeletingDrafts] = useState(false);
+  const [draftsDeleted, setDraftsDeleted] = useState<number | null>(null);
+
   const fileInput = useRef<HTMLInputElement>(null);
   const checkRun = useRef(0);
 
@@ -128,6 +135,7 @@ export function ProductImportPage() {
       })
       .catch(() => setDefaultCategory((current) => current || 'Yarn'));
     void loadCatalog().catch(() => setCatalog([]));
+    getProductDraftCount().then(setDraftCount).catch(() => setDraftCount(null));
   }, [loadCatalog]);
 
   // ------------------------------------------------- step 2: read and check
@@ -344,6 +352,29 @@ export function ProductImportPage() {
       setPublishError(errorText(err, 'Could not publish.'));
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function handleDeleteDrafts() {
+    if (!draftCount || draftCount.total === 0) return;
+    const ok = await confirmDialog(
+      `Delete all ${draftCount.total} draft product${draftCount.total === 1 ? '' : 's'} and their photos? `
+        + 'Published products are not touched. This cannot be undone.',
+      { confirmLabel: 'Delete drafts' },
+    );
+    if (!ok) return;
+    setDeletingDrafts(true);
+    setPublishError(null);
+    try {
+      const result = await deleteAllProductDrafts();
+      setDraftsDeleted(result.deleted);
+      setPublished(null);
+      await loadCatalog();
+      setDraftCount(await getProductDraftCount());
+    } catch (err) {
+      void alertDialog(errorText(err, 'Could not delete the drafts.'), { title: 'Something went wrong' });
+    } finally {
+      setDeletingDrafts(false);
     }
   }
 
@@ -707,6 +738,28 @@ export function ProductImportPage() {
             {published.skippedNoPhoto.length > 0
               ? ` Still drafts (no photo yet): ${published.skippedNoPhoto.join(', ')}.`
               : ''}
+          </div>
+        ) : null}
+
+        {draftCount && draftCount.total > 0 ? (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border, #e5e7eb)' }}>
+            <p style={{ margin: '0 0 10px' }}>
+              Changed your mind about the upload? This removes every product that is still a draft
+              (<strong>{draftCount.total}</strong>), with its photos. Published products stay.
+            </p>
+            <button
+              type="button"
+              className="btn btn--danger"
+              disabled={deletingDrafts}
+              onClick={() => void handleDeleteDrafts()}
+            >
+              {deletingDrafts ? 'Deleting…' : `Delete all ${draftCount.total} draft${draftCount.total === 1 ? '' : 's'}`}
+            </button>
+          </div>
+        ) : null}
+        {draftsDeleted !== null ? (
+          <div className="alert alert--success" style={{ marginTop: 12 }}>
+            Deleted {draftsDeleted} draft product{draftsDeleted === 1 ? '' : 's'}.
           </div>
         ) : null}
       </section>
