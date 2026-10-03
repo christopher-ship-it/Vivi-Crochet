@@ -56,6 +56,8 @@ import {
 } from '../../src/utils/format';
 import { getCoursePathCursor, setCoursePathCursor } from '../../src/utils/coursePathProgress';
 import { isLastLessonInCourse } from '../../src/utils/learnerJourney';
+import { getCourseVideoProgress, type VideoProgress } from '../../src/api/videoProgress';
+import { summarizeCourseProgress } from '../../src/utils/watchProgress';
 import {
   getMainCourseWhatYouGetKey,
   isCompleteCollectionBundle,
@@ -87,8 +89,8 @@ export default function CourseDetailScreen() {
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [pathCursorId, setPathCursorId] = useState<string | null>(null);
-  // False until the saved position has been read, so a returning learner never sees a "Start" flash.
-  const [pathCursorLoaded, setPathCursorLoaded] = useState(false);
+  // What the learner has really watched in this course. Null until loaded (or if it cannot be loaded).
+  const [videoProgress, setVideoProgress] = useState<VideoProgress[] | null>(null);
 
   const hasLearningProfile = Boolean(learningProfile);
   const isBundle = isCompleteCollectionBundle(course);
@@ -164,10 +166,29 @@ export default function CourseDetailScreen() {
 
   useEffect(() => {
     if (!id || !hasAccess) return;
-    void getCoursePathCursor(id, pathOwnerId)
-      .then(setPathCursorId)
-      .finally(() => setPathCursorLoaded(true));
+    void getCoursePathCursor(id, pathOwnerId).then(setPathCursorId);
   }, [id, hasAccess, pathOwnerId]);
+
+  // Read again whenever this screen comes back into view, so a lesson just watched shows up.
+  useFocusEffect(
+    useCallback(() => {
+      if (!id || !hasAccess || !isAuthenticated) {
+        setVideoProgress(null);
+        return;
+      }
+      let cancelled = false;
+      void getCourseVideoProgress(id)
+        .then((list) => {
+          if (!cancelled) setVideoProgress(list);
+        })
+        .catch(() => {
+          if (!cancelled) setVideoProgress(null);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [id, hasAccess, isAuthenticated]),
+  );
 
   // Hardware/gesture Back must land on Learn (same target as the header's
   // Back arrow), not fall through to whatever the OS default pop reveals.
@@ -500,10 +521,10 @@ export default function CourseDetailScreen() {
             percent: renewalPercent,
           })
         : t('learn.addToCartPrice', { price: money(displayPrice) });
-  const pathCurrentIndex = Math.max(
-    0,
-    lessons.findIndex((lesson) => lesson.id === pathCursorId),
-  );
+  const watch = videoProgress ? summarizeCourseProgress(lessons, videoProgress) : null;
+  const pathCurrentIndex = watch
+    ? watch.currentIndex
+    : Math.max(0, lessons.findIndex((lesson) => lesson.id === pathCursorId));
 
   // Bundle owned users are redirected to Learn — avoid flashing locked/raw lesson rows.
   if (isBundle && collectionOwned && !isRenewalOffer) {
@@ -590,8 +611,7 @@ export default function CourseDetailScreen() {
                   <CourseLearningPath
                     lessons={lessons}
                     currentIndex={pathCurrentIndex === -1 ? 0 : pathCurrentIndex}
-                    // Nothing opened yet on this device: it is a first start, not a resume.
-                    started={!pathCursorLoaded || pathCursorId !== null}
+                    progress={watch ? { started: watch.started, byLesson: watch.byLesson } : null}
                     courseThumbnailUrl={course.thumbnailUrl}
                     onOpenLesson={(lesson) => openLesson(lesson)}
                   />

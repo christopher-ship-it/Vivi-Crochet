@@ -34,7 +34,9 @@ import type { Course, CourseLesson, Product } from '../../src/types';
 import { useI18n } from '../../src/i18n';
 import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, spacing } from '../../src/theme';
+import { getCourseVideoProgress, type VideoProgress } from '../../src/api/videoProgress';
 import { getCoursePathCursor } from '../../src/utils/coursePathProgress';
+import { summarizeCourseProgress } from '../../src/utils/watchProgress';
 import {
   buildLearnerJourney,
   isLastLessonInCourse,
@@ -92,6 +94,21 @@ function resolveCourseProgress(
   return {
     progressPct,
     resumeLessonId: current?.id,
+  };
+}
+
+/** Progress from what the learner has really watched: finished lessons plus the part watched of the others. */
+function resolveWatchedProgress(
+  course: Course,
+  watched: VideoProgress[],
+  completedFlag = false,
+): CourseProgress {
+  if (completedFlag) return { progressPct: 100 };
+  const lessons = (course.lessons ?? []).filter((lesson: CourseLesson) => lesson.status === 'Published');
+  const summary = summarizeCourseProgress(lessons, watched);
+  return {
+    progressPct: summary.overallPercent,
+    resumeLessonId: summary.currentLessonId ?? undefined,
   };
 }
 
@@ -252,15 +269,15 @@ export default function LearnScreen() {
           enrolledMain.map(async (course) => {
             try {
               const enrollment = mine.find((e) => e.courseId === course.id);
-              const [detail, cursor] = await Promise.all([
+              const [detail, cursor, watched] = await Promise.all([
                 getCourse(course.id),
                 getCoursePathCursor(course.id, pathOwnerId),
+                // Real watch progress; if it cannot be read, fall back to the lesson the learner last opened.
+                getCourseVideoProgress(course.id).catch(() => null),
               ]);
-              const progress = resolveCourseProgress(
-                detail,
-                cursor,
-                Boolean(enrollment?.completedFlag),
-              );
+              const progress = watched
+                ? resolveWatchedProgress(detail, watched, Boolean(enrollment?.completedFlag))
+                : resolveCourseProgress(detail, cursor, Boolean(enrollment?.completedFlag));
               if (
                 enrollment &&
                 !enrollment.completedFlag &&

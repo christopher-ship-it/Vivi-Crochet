@@ -7,6 +7,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   Modal,
   PanResponder,
   Pressable,
@@ -38,6 +39,10 @@ interface LessonPlayerProps {
   onPlayingChange?: (playing: boolean) => void;
   /** True while the user is dragging the seek thumb — parent should lock scroll. */
   onScrubbingChange?: (scrubbing: boolean) => void;
+  /** Where to start, in seconds, when the learner watched part of this lesson before. */
+  startAtSeconds?: number | null;
+  /** Called every few seconds while playing, and when paused, finished or closed. */
+  onProgress?: (positionSeconds: number, durationSeconds: number) => void;
 }
 
 const SPEEDS = [0.5, 1, 1.5, 1.75, 2];
@@ -50,6 +55,8 @@ function qualityLabel(height: number) {
 }
 
 const CONTROLS_HIDE_MS = 3200;
+/** How often the watched position is saved while a lesson plays. */
+const PROGRESS_SAVE_MS = 15000;
 /** A stall longer than this is reported to the admin App health page. */
 const BUFFERING_REPORT_MS = 5000;
 /** Above this, show a clearer “large file” loading hint (production camera MOVs are often 400MB+). */
@@ -81,6 +88,8 @@ export function LessonPlayer({
   onDurationKnown,
   onPlayingChange,
   onScrubbingChange,
+  startAtSeconds,
+  onProgress,
 }: LessonPlayerProps) {
   const insets = useSafeAreaInsets();
   const videoRef = useRef<VideoView>(null);
@@ -91,6 +100,12 @@ export function LessonPlayer({
   const scrubberRef = useRef<View>(null);
   const durationRef = useRef(0);
   const durationReportedRef = useRef(false);
+  // Latest position the player reported, kept so the final save still works after the player is gone.
+  const lastKnownRef = useRef({ position: 0, duration: 0 });
+  const lastSavedPositionRef = useRef(-1);
+  const resumeAppliedRef = useRef(false);
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onScrubbingChangeRef = useRef(onScrubbingChange);
   onScrubbingChangeRef.current = onScrubbingChange;
@@ -307,9 +322,52 @@ export function LessonPlayer({
     void lockPortrait();
   }, []);
 
+  /** Saves the watched position. Skips tiny moves unless forced (pause, finish, leave). */
+  const saveProgress = useCallback((force = false) => {
+    const { position, duration: total } = lastKnownRef.current;
+    if (!(total > 0) || position <= 0) return;
+    if (!force && Math.abs(position - lastSavedPositionRef.current) < 2) return;
+    lastSavedPositionRef.current = position;
+    onProgressRef.current?.(position, total);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (player.playing) saveProgress();
+    }, PROGRESS_SAVE_MS);
+    return () => clearInterval(interval);
+  }, [player, saveProgress]);
+
+  // Save when playback pauses, when the app goes to the background, and when the lesson is closed.
+  useEffect(() => {
+    if (!isPlaying) saveProgress(true);
+  }, [isPlaying, saveProgress]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') saveProgress(true);
+    });
+    return () => sub.remove();
+  }, [saveProgress]);
+
+  useEffect(() => () => saveProgress(true), [saveProgress]);
+
+  // Jump to where the learner stopped, once, as soon as the length is known.
+  useEffect(() => {
+    if (resumeAppliedRef.current) return;
+    const startAt = startAtSeconds ?? 0;
+    if (startAt <= 0 || duration <= 0) return;
+    resumeAppliedRef.current = true;
+    // They may already have started from the beginning while the saved spot was loading.
+    if (player.currentTime > 5 || startAt >= duration - 5) return;
+    player.currentTime = startAt;
+    setCurrentTime(startAt);
+  }, [startAtSeconds, duration, player]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (scrubbingRef.current) return;
+      lastKnownRef.current = { position: player.currentTime, duration: player.duration || 0 };
       setCurrentTime(player.currentTime);
       setDuration(player.duration || 0);
       const size = player.videoTrack?.size;
@@ -327,6 +385,8 @@ export function LessonPlayer({
       ) {
         completedRef.current = true;
         setFinished(true);
+        lastKnownRef.current = { position: dur, duration: dur };
+        saveProgress(true);
         onComplete?.();
       }
     }, 250);

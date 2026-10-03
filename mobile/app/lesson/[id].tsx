@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourse } from '../../src/api/courses';
 import { completeMyEnrollment, getMyEnrollment, type Enrollment } from '../../src/api/enrollments';
 import { getVideo, getStreamUrl, reportVideoDuration } from '../../src/api/videos';
+import { getCourseVideoProgress, saveVideoProgress } from '../../src/api/videoProgress';
 import { ApiClientError } from '../../src/api/client';
 import { useLearningCustomer, useShoppingSession } from '../../src/auth/SessionContext';
 import { HeroGradient } from '../../src/components/HeroGradient';
@@ -26,6 +27,7 @@ import {
   isLastLessonInCourse,
 } from '../../src/utils/learnerJourney';
 import { useI18n } from '../../src/i18n';
+import { resumePositionFor } from '../../src/utils/watchProgress';
 
 type LoadPhase = 'idle' | 'metadata' | 'stream';
 type AccessBlock = 'auth' | 'enrollment' | 'expired' | null;
@@ -52,6 +54,8 @@ export default function LessonScreen() {
   const [course, setCourse] = useState<Course | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [finalVideoDone, setFinalVideoDone] = useState(false);
+  // Where the learner stopped last time in this lesson (seconds), or null until it is known.
+  const [startAtSeconds, setStartAtSeconds] = useState<number | null>(null);
 
   const lessonReturnPath = id ? `/lesson/${id}` : '/(tabs)/learn';
   const courseId = courseIdParam || video?.courseId || course?.id;
@@ -157,6 +161,31 @@ export default function LessonScreen() {
   useEffect(() => {
     loadStream();
   }, [loadStream]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !courseId || !id) return;
+    let cancelled = false;
+    void getCourseVideoProgress(courseId)
+      .then((list) => {
+        if (!cancelled) setStartAtSeconds(resumePositionFor(list.find((p) => p.videoId === id)));
+      })
+      .catch(() => {
+        // No saved spot is fine: the lesson simply starts from the beginning.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, courseId, id]);
+
+  const handleProgress = useCallback(
+    (positionSeconds: number, durationSeconds: number) => {
+      if (!isAuthenticated || !id) return;
+      void saveVideoProgress(id, positionSeconds, durationSeconds).catch(() => {
+        // Best effort: a missed save only means resuming a little earlier next time.
+      });
+    },
+    [isAuthenticated, id],
+  );
 
   useEffect(() => {
     void loadCourseContext();
@@ -374,6 +403,8 @@ export default function LessonScreen() {
               onError={handlePlayerError}
               onRetry={handleRetry}
               onComplete={handleFinalVideoComplete}
+              startAtSeconds={startAtSeconds}
+              onProgress={handleProgress}
               onScrubbingChange={setScrubbing}
               onDurationKnown={(seconds) => {
                 if (video.durationSeconds != null && video.durationSeconds > 0) return;

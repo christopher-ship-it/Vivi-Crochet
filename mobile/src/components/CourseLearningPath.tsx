@@ -11,12 +11,30 @@ type Props = {
   lessons: CourseLesson[];
   currentIndex: number;
   courseThumbnailUrl?: string | null;
-  /** False when the learner has not opened any lesson yet: shows a first-start card, not a resume card. */
-  started?: boolean;
+  /**
+   * What the learner has really watched. Null while it is loading or unavailable: the card then
+   * makes no claim about progress.
+   */
+  progress?: PathProgress | null;
   onOpenLesson: (lesson: CourseLesson, index: number) => void;
 };
 
-function statusFor(index: number, currentIndex: number): LevelStatus {
+export type PathProgress = {
+  /** At least part of one lesson has been watched. */
+  started: boolean;
+  byLesson: Record<string, { percent: number; completed: boolean }>;
+};
+
+function statusFor(
+  lessonId: string,
+  index: number,
+  currentIndex: number,
+  progress: PathProgress | null,
+): LevelStatus {
+  if (progress) {
+    if (progress.byLesson[lessonId]?.completed) return 'completed';
+    return index === currentIndex ? 'current' : 'available';
+  }
   if (index < currentIndex) return 'completed';
   if (index === currentIndex) return 'current';
   return 'available';
@@ -44,9 +62,13 @@ function StatusGlyph({ status }: { status: LevelStatus }) {
   );
 }
 
-function ctaLabel(status: LevelStatus, started: boolean): string {
+function ctaLabel(status: LevelStatus, progress: PathProgress | null, percent: number): string {
   if (status === 'completed') return 'Revisit this level →';
-  if (status === 'current') return started ? 'Continue where you left off →' : 'Start watching →';
+  if (status === 'current') {
+    if (!progress) return 'Open this lesson →';
+    if (percent > 0) return 'Continue where you left off →';
+    return progress.started ? 'Start the next lesson →' : 'Start watching →';
+  }
   return 'Start this level →';
 }
 
@@ -57,13 +79,14 @@ export function CourseLearningPath({
   lessons,
   currentIndex,
   courseThumbnailUrl,
-  started = true,
+  progress = null,
   onOpenLesson,
 }: Props) {
   return (
     <View style={styles.path}>
       {lessons.map((lesson, index) => {
-        const status = statusFor(index, currentIndex);
+        const status = statusFor(lesson.id, index, currentIndex, progress);
+        const percent = progress?.byLesson[lesson.id]?.percent ?? 0;
         const isLast = index === lessons.length - 1;
         const durationLabel = formatDuration(lesson.durationSeconds);
         const hasDuration = Boolean(
@@ -72,11 +95,11 @@ export function CourseLearningPath({
         const blurb =
           lesson.description?.trim() ||
           (status === 'current'
-            ? started
+            ? percent > 0
               ? 'Pick up this lesson and keep building your stitch confidence.'
               : 'Start with this lesson and build your stitch confidence.'
             : status === 'completed'
-              ? 'You have opened this lesson. Revisit anytime to practice.'
+              ? 'You finished this lesson. Revisit anytime to practice.'
               : 'Unlocked with your course access — open when you are ready.');
 
         return (
@@ -135,7 +158,7 @@ export function CourseLearningPath({
                 ) : null}
                 {status === 'completed' ? (
                   <View style={[styles.chip, styles.chipDone]}>
-                    <Text style={styles.chipDoneText}>Opened ✓</Text>
+                    <Text style={styles.chipDoneText}>Completed ✓</Text>
                   </View>
                 ) : null}
                 {hasDuration ? (
@@ -150,22 +173,18 @@ export function CourseLearningPath({
                   <Text style={styles.progressMeta}>
                     Lesson {index + 1} of {lessons.length}
                     {hasDuration ? ` · ${durationLabel}` : ''}
+                    {percent > 0 ? ` · ${percent}% watched` : ''}
                   </Text>
-                  {started ? (
+                  {percent > 0 ? (
                     <View style={styles.progressTrack}>
-                      <View
-                        style={[
-                          styles.progressFill,
-                          { width: `${Math.max(8, ((index + 0.35) / lessons.length) * 100)}%` },
-                        ]}
-                      />
+                      <View style={[styles.progressFill, { width: `${percent}%` }]} />
                     </View>
                   ) : null}
                 </View>
               ) : null}
 
               <View style={styles.cardFooter}>
-                <Text style={styles.cta}>{ctaLabel(status, started)}</Text>
+                <Text style={styles.cta}>{ctaLabel(status, progress, percent)}</Text>
               </View>
             </View>
           </Pressable>
