@@ -662,11 +662,6 @@ export default function CourseDetailScreen() {
                       )}
                     </View>
                   )}
-                  {pricing?.launchOfferActive && !isRenewalOffer && (
-                    <Text style={styles.launch}>
-                      {t('offers.launchBanner')}
-                    </Text>
-                  )}
                   {isRenewalOffer ? (
                     <Text style={styles.launch}>
                       {t('learn.renewCtaWithDiscount', {

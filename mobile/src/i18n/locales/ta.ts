@@ -40,7 +40,6 @@ export const ta: EnTranslations = {
     eyebrow: 'வெளியீட்டு தொகுப்பு',
     collectionName: 'The Complete Crochet Collection',
     altName: 'All-Access Crochet Pass',
-    launchBanner: 'FIRST 100 USERS · LAUNCH OFFER · ₹999 · SAVE ₹998',
     accessDays: '{{days}} நாள் அணுகல்',
     lessonsIncluded: '{{count}} பதிவு செய்யப்பட்ட பாடங்கள்',
     includesCourses: 'Foundation Stitches · Signature Stitches · Master Stitch Series',

@@ -37,7 +37,6 @@ export const en = {
     eyebrow: 'LAUNCH BUNDLE',
     collectionName: 'The Complete Crochet Collection',
     altName: 'All-Access Crochet Pass',
-    launchBanner: 'FIRST 100 USERS · LAUNCH OFFER · ₹999 · SAVE ₹998',
     accessDays: '{{days}}-day access',
     lessonsIncluded: '{{count}} recorded lessons',
     includesCourses: 'Foundation Stitches · Signature Stitches · Master Stitch Series',

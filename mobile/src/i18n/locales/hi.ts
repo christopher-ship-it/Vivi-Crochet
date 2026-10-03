@@ -40,7 +40,6 @@ export const hi: EnTranslations = {
     eyebrow: 'लॉन्च बंडल',
     collectionName: 'The Complete Crochet Collection',
     altName: 'All-Access Crochet Pass',
-    launchBanner: 'FIRST 100 USERS · LAUNCH OFFER · ₹999 · SAVE ₹998',
     accessDays: '{{days}} दिन की पहुँच',
     lessonsIncluded: '{{count}} रिकॉर्डेड पाठ',
     includesCourses: 'Foundation Stitches · Signature Stitches · Master Stitch Series',
