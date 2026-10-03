@@ -7,8 +7,44 @@ export type LegalBlock =
 
 export type LegalDocument = {
   title: string;
-  effectiveDate: string;
+  /** Shown as "Effective Date" under the title. Leave out for pages that are not legal terms. */
+  effectiveDate?: string;
   blocks: LegalBlock[];
+};
+
+export const AUTHENTICITY_DOCUMENT: LegalDocument = {
+  title: 'Authenticity',
+  blocks: [
+    {
+      type: 'lead',
+      text: 'Every VIVI piece is handmade with care. What you see is what we stitch: authentic crochet from our studio.',
+    },
+    { type: 'heading', text: 'Made by hand, one stitch at a time' },
+    {
+      type: 'paragraph',
+      text: 'Our handmade pieces are crocheted by hand in Tamil Nadu. Each one is made with care, from the first loop to the last stitch.',
+    },
+    { type: 'heading', text: 'Handmade means a little different every time' },
+    {
+      type: 'paragraph',
+      text: 'Because every piece is crocheted by hand, small differences in stitches, shades and size are natural. They are what make your piece one of a kind. Colours can also look slightly different on your screen.',
+    },
+    { type: 'heading', text: 'Crochet Essentials' },
+    {
+      type: 'paragraph',
+      text: 'The yarn, hooks and tools in Crochet Essentials are chosen for crocheters. Each listing shows the details you need, such as weight, length, hook size and shade.',
+    },
+    { type: 'heading', text: 'Learn from the makers' },
+    {
+      type: 'paragraph',
+      text: 'Our Learn & Loop courses, tutorials and live crochet circles are created and taught by the VIVI team, so you learn the same way our pieces are made.',
+    },
+    { type: 'heading', text: 'Questions about your order?' },
+    {
+      type: 'paragraph',
+      text: 'If something is not what you expected, write to us from Help Center in the app and we will help you.',
+    },
+  ],
 };
 
 export const TERMS_DOCUMENT: LegalDocument = {

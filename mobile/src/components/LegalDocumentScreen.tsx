@@ -49,7 +49,9 @@ export function LegalDocumentScreen({ document }: Props) {
       >
         <Text style={styles.brandTitle}>VIVI CROCHET</Text>
         <Text style={styles.docTitle}>{document.title}</Text>
-        <Text style={styles.effective}>Effective Date: {document.effectiveDate}</Text>
+        {document.effectiveDate ? (
+          <Text style={styles.effective}>Effective Date: {document.effectiveDate}</Text>
+        ) : null}
 
         {document.blocks.map((block, index) => {
           const key = `${block.type}-${index}`;

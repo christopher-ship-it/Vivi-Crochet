@@ -593,11 +593,7 @@ export default function ProfileScreen() {
                     key: 'authenticity',
                     label: 'Authenticity',
                     icon: 'ribbon-outline',
-                    onPress: () =>
-                      Alert.alert(
-                        'Authenticity',
-                        'Every VIVI piece is handmade with care. What you see is what we stitch — authentic crochet from our studio.',
-                      ),
+                    onPress: () => router.push('/authenticity'),
                   },
                   {
                     key: 'privacy',

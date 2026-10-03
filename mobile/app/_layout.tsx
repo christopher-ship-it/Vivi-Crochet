@@ -137,6 +137,7 @@ function AppStack() {
       <Stack.Screen name="edit-address" options={{ title: t('headers.address') }} />
       <Stack.Screen name="help-center" options={{ headerShown: false }} />
       <Stack.Screen name="support-chat" options={{ headerShown: false }} />
+      <Stack.Screen name="authenticity" options={{ title: 'Authenticity' }} />
       <Stack.Screen name="privacy-policy" options={{ title: t('headers.privacyPolicy') }} />
       <Stack.Screen name="terms" options={{ title: t('headers.terms') }} />
       <Stack.Screen
