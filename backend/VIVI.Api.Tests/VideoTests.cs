@@ -50,6 +50,24 @@ public sealed class VideoTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_file_up_to_20_gb_is_accepted()
+    {
+        var (client, courseId) = await AdminWithCourse();
+
+        var response = await client.PostAsJsonAsync("/api/videos/upload-url", new
+        {
+            courseId,
+            fileName = "full-course-recording.mp4",
+            contentType = "video/mp4",
+            fileSizeBytes = 15L * 1024 * 1024 * 1024
+        });
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<UploadUrlResponse>(Json);
+        Assert.Equal(20L * 1024 * 1024 * 1024, body!.MaxFileSizeBytes);
+    }
+
+    [Fact]
     public async Task File_too_large_is_rejected()
     {
         var (client, courseId) = await AdminWithCourse();
@@ -59,7 +77,7 @@ public sealed class VideoTests : IClassFixture<ApiFactory>
             courseId,
             fileName = "huge.mp4",
             contentType = "video/mp4",
-            fileSizeBytes = 11L * 1024 * 1024 * 1024
+            fileSizeBytes = 21L * 1024 * 1024 * 1024
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

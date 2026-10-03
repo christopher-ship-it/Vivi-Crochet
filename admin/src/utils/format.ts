@@ -1,4 +1,4 @@
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024 * 1024; // 20 GB
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 const ALLOWED_EXTENSIONS = ['.mp4', '.mov', '.webm'];
@@ -23,7 +23,7 @@ export function validateVideoFile(file: File): FileValidationResult {
     return { valid: false, error: 'File is empty.' };
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    return { valid: false, error: 'File exceeds the 10 GB limit.' };
+    return { valid: false, error: 'File exceeds the 20 GB limit.' };
   }
   const contentType = ALLOWED_MIME[ext] ?? (file.type || 'video/mp4');
   return { valid: true, contentType };
