@@ -717,6 +717,72 @@ export function LessonPlayer({
   const showChrome = controlsVisible || !isPlaying || hasError || showInitialLoader || moreOpen || scrubRatio != null;
   const showScrubber = !hasError && duration > 0;
 
+  // The same menu content is shown in the video frame (fullscreen) or in a bottom panel (half screen,
+  // where the frame is too short to hold it).
+  const moreMenuBody = (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {menuPage === 'main' && (
+            <>
+              <Pressable style={styles.moreItem} onPress={() => setMenuPage('speed')}>
+                <Text style={styles.moreItemText}>Speed · {speed === 1 ? 'Normal' : `${speed}x`}</Text>
+              </Pressable>
+              <Pressable style={styles.moreItem} onPress={() => setMenuPage('quality')}>
+                <Text style={styles.moreItemText}>Quality · {qualityLabel(quality)}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.moreItem}
+                onPress={() => {
+                  const i = ZOOM_STEPS.findIndex((z) => Math.abs(z - zoom) < 0.05);
+                  applyZoom(ZOOM_STEPS[(i + 1) % ZOOM_STEPS.length], 0, 0);
+                  closeMenu();
+                }}
+              >
+                <Text style={styles.moreItemText}>
+                  Zoom · {zoom <= 1.001 ? '1x (pinch to zoom)' : `${Math.round(zoom * 10) / 10}x`}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.moreItem}
+                onPress={() => {
+                  seekBy(20);
+                  closeMenu();
+                }}
+              >
+                <Text style={styles.moreItemText}>Skip forward 20s</Text>
+              </Pressable>
+            </>
+          )}
+          {menuPage === 'speed' && (
+            <>
+              <Pressable style={styles.moreItem} onPress={() => setMenuPage('main')}>
+                <Text style={styles.moreItemText}>‹ Playback speed</Text>
+              </Pressable>
+              {SPEEDS.map((r) => (
+                <Pressable key={r} style={styles.moreItem} onPress={() => applySpeed(r)}>
+                  <Text style={[styles.moreItemText, r === speed && styles.moreItemActive]}>
+                    {r === 1 ? 'Normal' : `${r}x`}
+                  </Text>
+                </Pressable>
+              ))}
+            </>
+          )}
+          {menuPage === 'quality' && (
+            <>
+              <Pressable style={styles.moreItem} onPress={() => setMenuPage('main')}>
+                <Text style={styles.moreItemText}>‹ Quality</Text>
+              </Pressable>
+              {qualityOptions.map((q) => (
+                <Pressable key={q.height} style={styles.moreItem} onPress={() => void applyQuality(q.height)}>
+                  <Text style={[styles.moreItemText, q.height === quality && styles.moreItemActive]}>
+                    {qualityLabel(q.height)}
+                  </Text>
+                </Pressable>
+              ))}
+            </>
+          )}
+        </ScrollView>
+  );
+
   const surface = (
     <GestureHandlerRootView style={full ? styles.fullRoot : styles.wrap}>
       <GestureDetector gesture={zoomGesture}>
@@ -915,73 +981,24 @@ export function LessonPlayer({
         ) : null}
 
         {/* Above the scrubber dock so its dark backdrop never covers the menu. */}
-            {moreOpen && (
+            {moreOpen && full && (
               <View style={[styles.moreMenu, { top: topInset + 42, maxHeight: Math.max(frameHeight - topInset - 50, 110) }]}>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {menuPage === 'main' && (
-                  <>
-                    <Pressable style={styles.moreItem} onPress={() => setMenuPage('speed')}>
-                      <Text style={styles.moreItemText}>Speed · {speed === 1 ? 'Normal' : `${speed}x`}</Text>
-                    </Pressable>
-                    <Pressable style={styles.moreItem} onPress={() => setMenuPage('quality')}>
-                      <Text style={styles.moreItemText}>Quality · {qualityLabel(quality)}</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.moreItem}
-                      onPress={() => {
-                        const i = ZOOM_STEPS.findIndex((z) => Math.abs(z - zoom) < 0.05);
-                        applyZoom(ZOOM_STEPS[(i + 1) % ZOOM_STEPS.length], 0, 0);
-                        closeMenu();
-                      }}
-                    >
-                      <Text style={styles.moreItemText}>
-                        Zoom · {zoom <= 1.001 ? '1x (pinch to zoom)' : `${Math.round(zoom * 10) / 10}x`}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.moreItem}
-                      onPress={() => {
-                        seekBy(20);
-                        closeMenu();
-                      }}
-                    >
-                      <Text style={styles.moreItemText}>Skip forward 20s</Text>
-                    </Pressable>
-                  </>
-                )}
-                {menuPage === 'speed' && (
-                  <>
-                    <Pressable style={styles.moreItem} onPress={() => setMenuPage('main')}>
-                      <Text style={styles.moreItemText}>‹ Playback speed</Text>
-                    </Pressable>
-                    {SPEEDS.map((r) => (
-                      <Pressable key={r} style={styles.moreItem} onPress={() => applySpeed(r)}>
-                        <Text style={[styles.moreItemText, r === speed && styles.moreItemActive]}>
-                          {r === 1 ? 'Normal' : `${r}x`}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </>
-                )}
-                {menuPage === 'quality' && (
-                  <>
-                    <Pressable style={styles.moreItem} onPress={() => setMenuPage('main')}>
-                      <Text style={styles.moreItemText}>‹ Quality</Text>
-                    </Pressable>
-                    {qualityOptions.map((q) => (
-                      <Pressable key={q.height} style={styles.moreItem} onPress={() => void applyQuality(q.height)}>
-                        <Text style={[styles.moreItemText, q.height === quality && styles.moreItemActive]}>
-                          {qualityLabel(q.height)}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </>
-                )}
-              </ScrollView>
+                {moreMenuBody}
               </View>
             )}
       </View>
       </GestureDetector>
+
+      {!full && (
+        <Modal visible={moreOpen} transparent animationType="fade" onRequestClose={closeMenu}>
+          <Pressable style={styles.moreSheetBackdrop} onPress={closeMenu}>
+            <Pressable style={styles.moreSheet} onPress={() => {}}>
+              <View style={styles.moreSheetHandle} />
+              {moreMenuBody}
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
 
       {finished && !full && (
         <Text style={styles.finished}>You reached the end of this lesson.</Text>
@@ -1114,6 +1131,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  moreSheetBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  moreSheet: {
+    maxHeight: '70%',
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingBottom: 24,
+    overflow: 'hidden',
+  },
+  moreSheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginTop: 8,
+    marginBottom: 4,
   },
   moreMenu: {
     position: 'absolute',
