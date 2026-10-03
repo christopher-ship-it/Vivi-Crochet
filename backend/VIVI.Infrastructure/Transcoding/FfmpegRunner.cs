@@ -63,7 +63,8 @@ public sealed class FfmpegRunner
     public async Task RunTranscodeAsync(
         string inputPath,
         string outputPath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? shortSide = null)
     {
         var ffmpeg = TryResolveExecutable()
             ?? throw new InvalidOperationException(
@@ -74,7 +75,9 @@ public sealed class FfmpegRunner
             File.Delete(outputPath);
 
         var crf = Math.Clamp(_options.Crf, 18, 28);
-        var maxWidth = Math.Clamp(_options.MaxWidth, 640, 3840);
+        // "Quality" is the short side of the frame (YouTube style): 1080p = 1080 wide when portrait,
+        // 1080 tall when landscape. Never enlarged past the source.
+        var maxWidth = Math.Clamp(shortSide ?? _options.MaxWidth, 640, 2160);
         var maxFps = Math.Clamp(_options.MaxFps <= 0 ? 24 : _options.MaxFps, 15, 60);
         var preset = NormalizePreset(_options.Preset);
         var audioBitrate = string.IsNullOrWhiteSpace(_options.AudioBitrate) ? "96k" : _options.AudioBitrate.Trim();
@@ -84,7 +87,7 @@ public sealed class FfmpegRunner
         var args =
             $"-y -hide_banner -loglevel error " +
             $"-i \"{inputPath}\" " +
-            $"-vf \"fps={maxFps},scale='min({maxWidth},iw)':-2:flags=fast_bilinear\" " +
+            $"-vf \"fps={maxFps},scale='if(gt(iw,ih),-2,min({maxWidth},iw))':'if(gt(iw,ih),min({maxWidth},ih),-2)':flags=fast_bilinear\" " +
             $"-c:v libx264 -preset {preset} -crf {crf} -threads 0 " +
             $"-x264-params \"ref=1:bframes=0:rc-lookahead=0:sync-lookahead=0:mbtree=0\" " +
             $"-pix_fmt yuv420p " +
@@ -133,6 +136,41 @@ public sealed class FfmpegRunner
             throw new InvalidOperationException(
                 $"ffmpeg failed (exit {process.ExitCode}). {tail}");
         }
+    }
+
+    /// <summary>Short side (px) of the first video stream, or null if it cannot be read.</summary>
+    public async Task<int?> ProbeShortSideAsync(string inputPath, CancellationToken cancellationToken)
+    {
+        var ffmpeg = TryResolveExecutable();
+        if (ffmpeg is null)
+            return null;
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = ffmpeg,
+            Arguments = $"-hide_banner -i \"{inputPath}\"",
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        using var process = new Process { StartInfo = psi };
+        var stderr = new StringBuilder();
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
+        process.OutputDataReceived += (_, _) => { };
+        if (!process.Start())
+            return null;
+        process.BeginErrorReadLine();
+        process.BeginOutputReadLine();
+        await process.WaitForExitAsync(cancellationToken);
+
+        // e.g. "Stream #0:0: Video: h264 (High), yuv420p(tv), 1920x1080 [SAR 1:1 DAR 16:9], 30 fps"
+        var match = System.Text.RegularExpressions.Regex.Match(
+            stderr.ToString(),
+            @"Video:.*?,\s(\d{2,5})x(\d{2,5})");
+        if (!match.Success)
+            return null;
+        return Math.Min(int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value));
     }
 
     private static string NormalizePreset(string? preset)

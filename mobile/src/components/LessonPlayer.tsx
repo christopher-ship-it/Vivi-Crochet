@@ -2,10 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   ActivityIndicator,
+  Animated,
+  Modal,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -14,9 +19,12 @@ import {
 import { reportIssue } from '../telemetry/telemetry';
 import { colors, fonts, radii } from '../theme';
 import { formatDuration } from '../utils/format';
+import { lockLandscape, lockPortrait } from '../utils/screenOrientation';
 
 interface LessonPlayerProps {
   streamUrl: string;
+  /** Higher-quality copies (short side px). The default `streamUrl` is 720p. */
+  qualities?: { height: number; streamUrl: string }[];
   title: string;
   /** From API — large camera MOVs need softer progressive buffering. */
   fileSizeBytes?: number | null;
@@ -30,6 +38,15 @@ interface LessonPlayerProps {
   onPlayingChange?: (playing: boolean) => void;
   /** True while the user is dragging the seek thumb — parent should lock scroll. */
   onScrubbingChange?: (scrubbing: boolean) => void;
+}
+
+const SPEEDS = [0.5, 1, 1.5, 1.75, 2];
+const BASE_QUALITY = 720;
+const MAX_ZOOM = 4;
+const ZOOM_STEPS = [1, 1.5, 2, 3];
+
+function qualityLabel(height: number) {
+  return height >= 2160 ? '4K' : `${height}p`;
 }
 
 const CONTROLS_HIDE_MS = 3200;
@@ -54,6 +71,7 @@ function resolveContentType(
 
 export function LessonPlayer({
   streamUrl,
+  qualities,
   title,
   fileSizeBytes,
   contentType: sourceMime,
@@ -64,6 +82,7 @@ export function LessonPlayer({
   onPlayingChange,
   onScrubbingChange,
 }: LessonPlayerProps) {
+  const insets = useSafeAreaInsets();
   const videoRef = useRef<VideoView>(null);
   const completedRef = useRef(false);
   const scrubbingRef = useRef(false);
@@ -121,6 +140,29 @@ export function LessonPlayer({
   const [moreOpen, setMoreOpen] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [menuPage, setMenuPage] = useState<'main' | 'speed' | 'quality'>('main');
+  const [speed, setSpeed] = useState(1);
+  const [zoom, setZoomState] = useState(1);
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const frameSizeRef = useRef({ width: 0, height: 0 });
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const txAnim = useRef(new Animated.Value(0)).current;
+  const tyAnim = useRef(new Animated.Value(0)).current;
+  const [quality, setQuality] = useState(BASE_QUALITY);
+  const [full, setFull] = useState(false);
+  const [landscape, setLandscape] = useState(false);
+  const [frameHeight, setFrameHeight] = useState(0);
+  // Buttons sit lower than the frame's edge so they clear the page header above the video.
+  const topInset = full ? Math.max(insets.top, 12) + 6 : 30;
+  // Width / height of the playing video, so landscape lessons get a landscape frame.
+  const [frameRatio, setFrameRatio] = useState(9 / 16);
+  const keepPausedRef = useRef(false);
+
+  const qualityOptions = useMemo(() => {
+    const all = [{ height: BASE_QUALITY, streamUrl }, ...(qualities ?? []).filter((q) => q.height !== BASE_QUALITY)];
+    return all.sort((a, b) => b.height - a.height);
+  }, [qualities, streamUrl]);
 
   // #region agent log
   useEffect(() => {
@@ -217,6 +259,11 @@ export function LessonPlayer({
     setControlsVisible(true);
     setMoreOpen(false);
     setHasStarted(false);
+    setMenuPage('main');
+    setQuality(BASE_QUALITY);
+    setSpeed(1);
+    applyZoom(1, 0, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamUrl]);
 
   useEffect(() => {
@@ -226,7 +273,7 @@ export function LessonPlayer({
   }, [isPlaying, status]);
 
   useEffect(() => {
-    if (status === 'readyToPlay' && !player.playing && !finished) {
+    if (status === 'readyToPlay' && !player.playing && !finished && !keepPausedRef.current) {
       try {
         player.play();
       } catch {
@@ -255,11 +302,21 @@ export function LessonPlayer({
 
   useEffect(() => () => clearHideTimer(), [clearHideTimer]);
 
+  // Leaving the lesson while fullscreen must not leave the app stuck in landscape.
+  useEffect(() => () => {
+    void lockPortrait();
+  }, []);
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (scrubbingRef.current) return;
       setCurrentTime(player.currentTime);
       setDuration(player.duration || 0);
+      const size = player.videoTrack?.size;
+      if (size && size.width > 0 && size.height > 0) {
+        const ratio = clamp(size.width / size.height, 9 / 16, 16 / 9);
+        setFrameRatio((prev) => (Math.abs(prev - ratio) > 0.01 ? ratio : prev));
+      }
 
       const dur = player.duration || 0;
       if (
@@ -471,11 +528,108 @@ export function LessonPlayer({
     measureScrubber();
   }
 
-  async function enterFullScreen() {
+  /** Own fullscreen (not the native one) so speed / quality / zoom stay available. */
+  function toggleFullScreen() {
+    const next = !full;
+    applyZoom(1, 0, 0);
+    closeMenu();
+    setFull(next);
+    if (next) {
+      const wide = frameRatio > 1;
+      setLandscape(wide);
+      void (wide ? lockLandscape() : lockPortrait());
+    } else {
+      setLandscape(false);
+      void lockPortrait();
+    }
+  }
+
+  function toggleRotate() {
+    const next = !landscape;
+    setLandscape(next);
+    void (next ? lockLandscape() : lockPortrait());
+  }
+
+  /** Zoom + pan, keeping the picture's edges from leaving the frame. */
+  const applyZoom = useCallback((nextScale: number, nextX = panRef.current.x, nextY = panRef.current.y) => {
+    const scale = clamp(nextScale, 1, MAX_ZOOM);
+    const maxX = ((scale - 1) * frameSizeRef.current.width) / 2;
+    const maxY = ((scale - 1) * frameSizeRef.current.height) / 2;
+    const x = clamp(nextX, -maxX, maxX);
+    const y = clamp(nextY, -maxY, maxY);
+    zoomRef.current = scale;
+    panRef.current = { x, y };
+    scaleAnim.setValue(scale);
+    txAnim.setValue(x);
+    tyAnim.setValue(y);
+    setZoomState((prev) => (Math.abs(prev - scale) > 0.001 ? scale : prev));
+  }, [scaleAnim, txAnim, tyAnim]);
+
+  const zoomGesture = useMemo(() => {
+    let startScale = 1;
+    let startPan = { x: 0, y: 0 };
+    const pinch = Gesture.Pinch()
+      .runOnJS(true)
+      .onStart(() => {
+        startScale = zoomRef.current;
+        // Stop the lesson screen's ScrollView from taking the gesture.
+        onScrubbingChangeRef.current?.(true);
+      })
+      .onUpdate((e) => applyZoom(startScale * e.scale))
+      .onFinalize(() => onScrubbingChangeRef.current?.(scrubbingRef.current));
+    // Two-finger drag, so one-finger scrubbing and taps keep working.
+    const pan = Gesture.Pan()
+      .runOnJS(true)
+      .minPointers(2)
+      .onStart(() => {
+        startPan = { ...panRef.current };
+        onScrubbingChangeRef.current?.(true);
+      })
+      .onUpdate((e) => applyZoom(zoomRef.current, startPan.x + e.translationX, startPan.y + e.translationY))
+      .onFinalize(() => onScrubbingChangeRef.current?.(scrubbingRef.current));
+    const reset = Gesture.Tap()
+      .runOnJS(true)
+      .numberOfTaps(2)
+      .onEnd((_e, success) => {
+        if (success) applyZoom(1, 0, 0);
+      });
+    return Gesture.Simultaneous(pinch, pan, reset);
+  }, [applyZoom]);
+
+  function closeMenu() {
+    setMoreOpen(false);
+    setMenuPage('main');
+  }
+
+  function applySpeed(next: number) {
+    setSpeed(next);
     try {
-      await videoRef.current?.enterFullscreen();
+      player.preservesPitch = true;
+      player.playbackRate = next;
     } catch {
-      // Native fullscreen may be unavailable on some builds.
+      // Rate is applied again after the next source load.
+    }
+    closeMenu();
+  }
+
+  async function applyQuality(height: number) {
+    const option = qualityOptions.find((q) => q.height === height);
+    closeMenu();
+    if (!option || height === quality) return;
+    const previous = quality;
+    const resumeAt = player.currentTime;
+    const wasPlaying = player.playing;
+    keepPausedRef.current = !wasPlaying;
+    setQuality(height);
+    try {
+      await player.replaceAsync({ uri: option.streamUrl, contentType: 'progressive', useCaching: false });
+      player.currentTime = resumeAt;
+      player.playbackRate = speed;
+      if (wasPlaying) player.play();
+    } catch {
+      setQuality(previous);
+    } finally {
+      keepPausedRef.current = false;
     }
   }
 
@@ -487,7 +641,7 @@ export function LessonPlayer({
 
   function toggleChrome() {
     if (moreOpen) {
-      setMoreOpen(false);
+      closeMenu();
       return;
     }
     if (controlsVisible && isPlaying) {
@@ -503,17 +657,40 @@ export function LessonPlayer({
   const showChrome = controlsVisible || !isPlaying || hasError || showInitialLoader || moreOpen || scrubRatio != null;
   const showScrubber = !hasError && duration > 0;
 
-  return (
-    <View style={styles.wrap}>
-      <View style={styles.videoWrap}>
-        <VideoView
-          ref={videoRef}
-          player={player}
-          style={styles.video}
-          contentFit="contain"
-          nativeControls={false}
-          fullscreenOptions={{ enable: true, orientation: 'portrait' }}
-        />
+  const surface = (
+    <GestureHandlerRootView style={full ? styles.fullRoot : styles.wrap}>
+      <GestureDetector gesture={zoomGesture}>
+      <View
+        style={[styles.videoWrap, full ? styles.videoWrapFull : { aspectRatio: frameRatio }]}
+        onLayout={(e) => {
+          frameSizeRef.current = e.nativeEvent.layout;
+          setFrameHeight(e.nativeEvent.layout.height);
+          applyZoom(zoomRef.current);
+        }}
+      >
+        <Animated.View
+          style={[
+            styles.video,
+            { transform: [{ translateX: txAnim }, { translateY: tyAnim }, { scale: scaleAnim }] },
+          ]}
+        >
+          <VideoView
+            ref={videoRef}
+            player={player}
+            style={styles.video}
+            contentFit="contain"
+            // Android's default SurfaceView ignores scale/translate; TextureView honours them (pinch zoom).
+            surfaceType="textureView"
+            nativeControls={false}
+            fullscreenOptions={{ enable: false }}
+          />
+        </Animated.View>
+
+        {zoom > 1.001 && (
+          <View style={[styles.zoomBadge, { top: topInset + 44 }]} pointerEvents="none">
+            <Text style={styles.zoomBadgeText}>{Math.round(zoom * 10) / 10}x · double-tap to reset</Text>
+          </View>
+        )}
 
         {/* Tap layer — below chrome/scrubber so drag seeks are not stolen. */}
         <Pressable style={styles.tapLayer} onPress={toggleChrome} />
@@ -559,45 +736,54 @@ export function LessonPlayer({
 
         {showChrome && !hasError && (
           <View style={styles.chrome} pointerEvents="box-none">
-            <View style={styles.chromeTop} pointerEvents="box-none">
+            <View style={[styles.chromeTop, { paddingTop: topInset }]} pointerEvents="box-none">
               <Pressable
                 style={styles.iconBtn}
                 onPress={() => {
+                  const i = ZOOM_STEPS.findIndex((z) => Math.abs(z - zoom) < 0.05);
+                  applyZoom(ZOOM_STEPS[(i + 1) % ZOOM_STEPS.length], 0, 0);
+                  revealControls();
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Zoom"
+              >
+                <Ionicons name="search-outline" size={18} color={colors.white} />
+              </Pressable>
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => {
+                  setMenuPage('main');
                   setMoreOpen((open) => !open);
                   revealControls();
                 }}
                 hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel="More player options"
+                accessibilityLabel="Player settings"
               >
                 <Ionicons name="ellipsis-horizontal" size={18} color={colors.white} />
               </Pressable>
+              {full && (
+                <Pressable
+                  style={styles.iconBtn}
+                  onPress={toggleRotate}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Rotate screen"
+                >
+                  <Ionicons name="phone-landscape-outline" size={18} color={colors.white} />
+                </Pressable>
+              )}
               <Pressable
                 style={styles.iconBtn}
-                onPress={() => {
-                  void enterFullScreen();
-                }}
+                onPress={toggleFullScreen}
                 hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel="Full screen"
+                accessibilityLabel={full ? 'Exit full screen' : 'Full screen'}
               >
-                <Ionicons name="expand-outline" size={18} color={colors.white} />
+                <Ionicons name={full ? 'contract-outline' : 'expand-outline'} size={18} color={colors.white} />
               </Pressable>
             </View>
-
-            {moreOpen && (
-              <View style={styles.moreMenu}>
-                <Pressable
-                  style={styles.moreItem}
-                  onPress={() => {
-                    seekBy(20);
-                    setMoreOpen(false);
-                  }}
-                >
-                  <Text style={styles.moreItemText}>Skip forward 20s</Text>
-                </Pressable>
-              </View>
-            )}
 
             <View style={styles.transport} pointerEvents="box-none">
               <Pressable
@@ -667,12 +853,98 @@ export function LessonPlayer({
             </View>
           </View>
         ) : null}
-      </View>
 
-      {finished && (
+        {/* Above the scrubber dock so its dark backdrop never covers the menu. */}
+            {moreOpen && (
+              <View style={[styles.moreMenu, { top: topInset + 42, maxHeight: Math.max(frameHeight - topInset - 50, 110) }]}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {menuPage === 'main' && (
+                  <>
+                    <Pressable style={styles.moreItem} onPress={() => setMenuPage('speed')}>
+                      <Text style={styles.moreItemText}>Speed · {speed === 1 ? 'Normal' : `${speed}x`}</Text>
+                    </Pressable>
+                    <Pressable style={styles.moreItem} onPress={() => setMenuPage('quality')}>
+                      <Text style={styles.moreItemText}>Quality · {qualityLabel(quality)}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.moreItem}
+                      onPress={() => {
+                        const i = ZOOM_STEPS.findIndex((z) => Math.abs(z - zoom) < 0.05);
+                        applyZoom(ZOOM_STEPS[(i + 1) % ZOOM_STEPS.length], 0, 0);
+                        closeMenu();
+                      }}
+                    >
+                      <Text style={styles.moreItemText}>
+                        Zoom · {zoom <= 1.001 ? '1x (pinch to zoom)' : `${Math.round(zoom * 10) / 10}x`}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.moreItem}
+                      onPress={() => {
+                        seekBy(20);
+                        closeMenu();
+                      }}
+                    >
+                      <Text style={styles.moreItemText}>Skip forward 20s</Text>
+                    </Pressable>
+                  </>
+                )}
+                {menuPage === 'speed' && (
+                  <>
+                    <Pressable style={styles.moreItem} onPress={() => setMenuPage('main')}>
+                      <Text style={styles.moreItemText}>‹ Playback speed</Text>
+                    </Pressable>
+                    {SPEEDS.map((r) => (
+                      <Pressable key={r} style={styles.moreItem} onPress={() => applySpeed(r)}>
+                        <Text style={[styles.moreItemText, r === speed && styles.moreItemActive]}>
+                          {r === 1 ? 'Normal' : `${r}x`}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </>
+                )}
+                {menuPage === 'quality' && (
+                  <>
+                    <Pressable style={styles.moreItem} onPress={() => setMenuPage('main')}>
+                      <Text style={styles.moreItemText}>‹ Quality</Text>
+                    </Pressable>
+                    {qualityOptions.map((q) => (
+                      <Pressable key={q.height} style={styles.moreItem} onPress={() => void applyQuality(q.height)}>
+                        <Text style={[styles.moreItemText, q.height === quality && styles.moreItemActive]}>
+                          {qualityLabel(q.height)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </>
+                )}
+              </ScrollView>
+              </View>
+            )}
+      </View>
+      </GestureDetector>
+
+      {finished && !full && (
         <Text style={styles.finished}>You reached the end of this lesson.</Text>
       )}
-    </View>
+    </GestureHandlerRootView>
+  );
+
+  if (!full) return surface;
+
+  return (
+    <>
+      {/* Keeps the lesson's place on the page while the video is fullscreen. */}
+      <View style={[styles.wrap, { aspectRatio: frameRatio }]} />
+      <Modal
+        visible
+        animationType="fade"
+        statusBarTranslucent
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        onRequestClose={toggleFullScreen}
+      >
+        {surface}
+      </Modal>
+    </>
   );
 }
 
@@ -692,6 +964,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#000',
+  },
+  fullRoot: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  videoWrapFull: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    aspectRatio: undefined,
   },
   tapLayer: {
     ...StyleSheet.absoluteFill,
@@ -758,7 +1040,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 2,
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(18,14,16,0.28)',
   },
   chromeTop: {
     flexDirection: 'row',
@@ -782,9 +1063,10 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    minWidth: 160,
+    minWidth: 170,
     overflow: 'hidden',
-    zIndex: 4,
+    zIndex: 10,
+    elevation: 10,
   },
   moreItem: {
     paddingHorizontal: 14,
@@ -794,6 +1076,24 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
     fontSize: 13,
     color: colors.ink,
+  },
+  zoomBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    zIndex: 5,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  zoomBadgeText: {
+    fontFamily: fonts.semiBold,
+    fontSize: 11,
+    color: colors.white,
+  },
+  moreItemActive: {
+    color: colors.pink,
   },
   transport: {
     flexDirection: 'row',
@@ -832,7 +1132,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 12,
-    backgroundColor: 'rgba(18,14,16,0.35)',
   },
   scrubberHit: {
     height: 44,
@@ -869,6 +1168,8 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 11,
     color: 'rgba(255,255,255,0.85)',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 3,
   },
   finished: {
     fontFamily: fonts.semiBold,

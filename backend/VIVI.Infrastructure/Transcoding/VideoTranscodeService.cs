@@ -159,6 +159,8 @@ public sealed class VideoTranscodeService
                 "Transcode ready for {VideoId}: {Bytes} bytes playable",
                 video.Id,
                 playableInfo.Length);
+
+            await BuildExtraRenditionsAsync(video, inputPath, jobDir, cancellationToken);
             return true;
         }
         catch (Exception ex)
@@ -181,6 +183,48 @@ public sealed class VideoTranscodeService
             {
                 _logger.LogWarning(cleanupEx, "Failed to clean transcode temp dir {Dir}", jobDir);
             }
+        }
+    }
+
+    /// <summary>
+    /// 1080p / 4K copies, only when the source is that large. Best effort: the lesson is already
+    /// playable at 720p, so a failure here is logged and ignored.
+    /// </summary>
+    private async Task BuildExtraRenditionsAsync(
+        Video video,
+        string inputPath,
+        string jobDir,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sourceShortSide = await _ffmpeg.ProbeShortSideAsync(inputPath, cancellationToken);
+            if (sourceShortSide is null)
+                return;
+
+            foreach (var quality in VideoFileRules.ExtraQualities)
+            {
+                // Allow a little slack (e.g. 1080x1920 portrait or 1920x1088 sources).
+                if (sourceShortSide.Value < quality * 0.9)
+                    continue;
+
+                var path = Path.Combine(jobDir, $"lesson_{quality}.mp4");
+                await _ffmpeg.RunTranscodeAsync(inputPath, path, cancellationToken, quality);
+                await _blob.UploadFromFileAsync(
+                    VideoFileRules.BuildRenditionBlobPath(video.CourseId, video.Id, quality),
+                    path,
+                    "video/mp4",
+                    cancellationToken);
+                _logger.LogInformation("Built {Quality}p rendition for {VideoId}", quality, video.Id);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Extra renditions failed for video {VideoId}; 720p stays available.", video.Id);
         }
     }
 

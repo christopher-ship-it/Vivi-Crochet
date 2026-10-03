@@ -43,6 +43,7 @@ export default function LessonScreen() {
   const { profile } = useLearningCustomer();
   const [video, setVideo] = useState<Video | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [qualities, setQualities] = useState<{ height: number; streamUrl: string }[]>([]);
   const [phase, setPhase] = useState<LoadPhase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [accessBlock, setAccessBlock] = useState<AccessBlock>(null);
@@ -97,6 +98,7 @@ export default function LessonScreen() {
       // #region agent log
       fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'A',location:'lesson/[id].tsx:loadStream:url',message:'stream url received',data:{elapsedMs:Date.now()-streamStarted,host:streamHost,pathPrefix:streamPath,urlLen:stream.streamUrl?.length??0,expiresAt:stream.expiresAt??null},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
+      setQualities(stream.qualities ?? []);
       setStreamUrl(stream.streamUrl);
       setPlayerKey((k) => k + 1);
     } catch (err) {
@@ -365,6 +367,7 @@ export default function LessonScreen() {
             <LessonPlayer
               key={playerKey}
               streamUrl={streamUrl}
+              qualities={qualities}
               title={video.title}
               fileSizeBytes={video.fileSizeBytes}
               contentType={video.contentType}

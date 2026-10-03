@@ -34,6 +34,7 @@ import { TapCapture } from '../src/telemetry/TapCapture';
 import { TelemetryHost } from '../src/telemetry/TelemetryHost';
 import { errorToPayload, reportIssue } from '../src/telemetry/telemetry';
 import { colors } from '../src/theme';
+import { lockPortrait } from '../src/utils/screenOrientation';
 import { applyStatusBar } from '../src/utils/statusBar';
 
 // Keep native splash briefly, but NEVER forever — module-level escape if React never mounts.
@@ -173,6 +174,9 @@ function AppStack() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    void lockPortrait();
+  }, []);
   // Load fonts in the background — never block first paint / splash handoff.
   useFonts({
     Nunito_400Regular,

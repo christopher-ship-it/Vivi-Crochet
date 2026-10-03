@@ -17,7 +17,8 @@ module.exports = ({ config }) => {
     owner: 'vivi-crochet',
     scheme: 'vivi',
     version: '1.0.16',
-    orientation: 'portrait',
+    // 'default' so video fullscreen can rotate; the app itself is locked to portrait at startup.
+    orientation: 'default',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
     runtimeVersion: {
@@ -35,6 +36,7 @@ module.exports = ({ config }) => {
       'expo-router',
       'expo-image',
       'expo-video',
+      'expo-screen-orientation',
       'expo-secure-store',
       'expo-font',
       'expo-status-bar',

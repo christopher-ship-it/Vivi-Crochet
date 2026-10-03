@@ -427,13 +427,26 @@ public sealed class VideosController : ControllerBase
             throw ViviException.Conflict("BLOB_MISSING", "Video file not found. Re-upload the lesson from the admin dashboard.");
 
         var ticket = await _blob.CreateReadSasAsync(video.BlobPath, cancellationToken);
-        return Ok(new StreamUrlResponse
+        var response = new StreamUrlResponse
         {
             VideoId = video.Id,
             Title = video.Title,
             StreamUrl = ticket.ReadUrl,
             ExpiresAt = ticket.ExpiresAt
-        });
+        };
+
+        // Higher-quality copies exist only for sources that were that large.
+        foreach (var quality in VideoFileRules.ExtraQualities)
+        {
+            var path = VideoFileRules.BuildRenditionBlobPath(video.CourseId, video.Id, quality);
+            var props = await _blob.GetPropertiesAsync(path, cancellationToken);
+            if (!props.Exists)
+                continue;
+            var rendition = await _blob.CreateReadSasAsync(path, cancellationToken);
+            response.Qualities.Add(new StreamQualityDto { Height = quality, StreamUrl = rendition.ReadUrl });
+        }
+
+        return Ok(response);
     }
 
     private async Task<Video> Load(Guid id, CancellationToken cancellationToken, bool tracking)

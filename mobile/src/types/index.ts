@@ -91,6 +91,8 @@ export interface StreamUrlResponse {
   title: string;
   streamUrl: string;
   expiresAt: string;
+  /** Extra qualities (short side in px) beyond the default 720p `streamUrl`. */
+  qualities?: { height: number; streamUrl: string }[];
 }
 
 export type ProductStatus = 'Draft' | 'Published';

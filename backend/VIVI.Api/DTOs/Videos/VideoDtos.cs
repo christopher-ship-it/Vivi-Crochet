@@ -61,4 +61,12 @@ public sealed class StreamUrlResponse
     public string Title { get; set; } = string.Empty;
     public string StreamUrl { get; set; } = string.Empty;
     public DateTimeOffset ExpiresAt { get; set; }
+    /// <summary>Other qualities that exist for this lesson (short side in px). Empty = only StreamUrl.</summary>
+    public List<StreamQualityDto> Qualities { get; set; } = new();
+}
+
+public sealed class StreamQualityDto
+{
+    public int Height { get; set; }
+    public string StreamUrl { get; set; } = string.Empty;
 }
