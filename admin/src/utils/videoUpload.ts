@@ -14,6 +14,8 @@ export interface BlobUploadResult {
 const BLOCK_UPLOAD_THRESHOLD = 256 * 1024 * 1024;
 const BLOCK_SIZE = 64 * 1024 * 1024;
 const BLOCK_RETRIES = 3;
+/** Blocks sent at the same time. Each is up to BLOCK_SIZE in memory-light slices of the file. */
+const BLOCK_CONCURRENCY = 4;
 
 export async function uploadToBlob(
   uploadUrl: string,
@@ -43,7 +45,10 @@ function withQuery(uploadUrl: string, params: Record<string, string>): string {
   return url.toString();
 }
 
-/** Put Block × N, then Put Block List — supports files far beyond the single-request limit. */
+/**
+ * Put Block × N (several at once), then Put Block List — supports files far beyond the single-request
+ * limit. One connection rarely fills a home upload link, so a few blocks go up in parallel.
+ */
 async function uploadInBlocks(
   uploadUrl: string,
   file: File,
@@ -52,26 +57,43 @@ async function uploadInBlocks(
   signal?: AbortSignal,
 ): Promise<BlobUploadResult> {
   const blockCount = Math.ceil(file.size / BLOCK_SIZE);
-  const blockIds: string[] = [];
-  let uploaded = 0;
+  // Block ids must all be the same length before encoding.
+  const blockIds = Array.from({ length: blockCount }, (_, i) => btoa(String(i).padStart(6, '0')));
+  const loadedByBlock = new Array<number>(blockCount).fill(0);
+  const report = () =>
+    reportProgress(onProgress, loadedByBlock.reduce((sum, n) => sum + n, 0), file.size);
 
-  for (let i = 0; i < blockCount; i++) {
-    // Block ids must all be the same length before encoding.
-    const blockId = btoa(String(i).padStart(6, '0'));
-    blockIds.push(blockId);
-    const chunk = file.slice(i * BLOCK_SIZE, Math.min(file.size, (i + 1) * BLOCK_SIZE));
-    const url = withQuery(uploadUrl, { comp: 'block', blockid: blockId });
+  const state = { next: 0, failure: null as BlobUploadResult | null };
 
-    let result: BlobUploadResult = { success: false, error: 'Upload failed.' };
-    for (let attempt = 1; attempt <= BLOCK_RETRIES; attempt++) {
-      result = await putRequest(url, chunk, {}, (loaded) =>
-        reportProgress(onProgress, uploaded + loaded, file.size), signal);
-      if (result.success || result.status === 403 || signal?.aborted) break;
+  async function worker(): Promise<void> {
+    while (state.failure === null && !signal?.aborted) {
+      const i = state.next++;
+      if (i >= blockCount) return;
+
+      const chunk = file.slice(i * BLOCK_SIZE, Math.min(file.size, (i + 1) * BLOCK_SIZE));
+      const url = withQuery(uploadUrl, { comp: 'block', blockid: blockIds[i] });
+
+      let result: BlobUploadResult = { success: false, error: 'Upload failed.' };
+      for (let attempt = 1; attempt <= BLOCK_RETRIES; attempt++) {
+        loadedByBlock[i] = 0;
+        result = await putRequest(url, chunk, {}, (loaded) => {
+          loadedByBlock[i] = loaded;
+          report();
+        }, signal);
+        if (result.success || result.status === 403 || signal?.aborted) break;
+      }
+      if (!result.success) {
+        state.failure ??= result;
+        return;
+      }
+      loadedByBlock[i] = chunk.size;
+      report();
     }
-    if (!result.success) return result;
-    uploaded += chunk.size;
-    reportProgress(onProgress, uploaded, file.size);
   }
+
+  await Promise.all(Array.from({ length: Math.min(BLOCK_CONCURRENCY, blockCount) }, () => worker()));
+  if (state.failure) return state.failure;
+  if (signal?.aborted) return { success: false, error: 'Upload cancelled.' };
 
   const body =
     '<?xml version="1.0" encoding="utf-8"?><BlockList>' +

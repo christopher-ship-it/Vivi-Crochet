@@ -24,6 +24,14 @@ function displayOrDash(value: string | null | undefined): string {
   return trimmed.length > 0 ? trimmed : '—';
 }
 
+/** Big orders list dozens of codes; show the first few and the count, the full list is in the tooltip. */
+function summarizeCodes(codes: string | null | undefined, keep = 2): string {
+  const list = (codes ?? '').split(',').map((c) => c.trim()).filter(Boolean);
+  if (list.length === 0) return '—';
+  if (list.length <= keep) return list.join(', ');
+  return `${list.slice(0, keep).join(', ')} +${list.length - keep} more`;
+}
+
 const ROOM_LABEL: Record<string, string> = {
   Handmade: 'Handmade',
   Essentials: 'Crochet Essentials',
@@ -53,7 +61,7 @@ const COLUMNS: ColumnDef[] = [
   { id: 'email', label: 'Email', width: 230, clip: true, render: (o) => displayOrDash(o.customerEmail), title: (o) => displayOrDash(o.customerEmail) },
   { id: 'phone', label: 'Phone', width: 130, clip: true, render: (o) => displayOrDash(o.customerPhone), title: (o) => displayOrDash(o.customerPhone) },
   { id: 'title', label: 'Title', width: 190, clip: true, render: (o) => displayOrDash(o.titleSummary), title: (o) => displayOrDash(o.titleSummary) },
-  { id: 'productId', label: 'Product ID', width: 140, shopOnly: true, clip: true, render: (o) => displayOrDash(o.productCodes), title: (o) => displayOrDash(o.productCodes) },
+  { id: 'productId', label: 'Product ID', width: 140, shopOnly: true, clip: true, render: (o) => summarizeCodes(o.productCodes), title: (o) => displayOrDash(o.productCodes) },
   { id: 'quantity', label: 'Qty', width: 60, shopOnly: true, render: (o) => (o.hasPhysicalItems && o.productQuantity !== undefined ? o.productQuantity : '—') },
   {
     id: 'category', label: 'Category', width: 170, shopOnly: true, clip: true,
@@ -337,7 +345,7 @@ export function OrderList({
                         className={c.clip ? 'col-clip' : c.id === 'amount' || c.id === 'payment' ? 'col-nowrap' : undefined}
                         title={tip === '—' ? undefined : tip}
                       >
-                        {c.render(order)}
+                        {c.clip ? <span className="cell-clamp">{c.render(order)}</span> : c.render(order)}
                       </td>
                     );
                   })}

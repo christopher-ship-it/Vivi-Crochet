@@ -4294,3 +4294,13 @@ label.btn {
     flex-wrap: wrap;
   }
 }
+
+/* Orders: long cells (many product codes, long titles) stop at two lines; hover shows the full text. */
+.data-table--orders .cell-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
