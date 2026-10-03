@@ -16,7 +16,7 @@ module.exports = ({ config }) => {
     slug: 'vivi-crochet',
     owner: 'vivi-crochet',
     scheme: 'vivi',
-    version: '1.0.16',
+    version: '1.0.17',
     // 'default' so video fullscreen can rotate; the app itself is locked to portrait at startup.
     orientation: 'default',
     icon: './assets/icon.png',
@@ -77,14 +77,14 @@ module.exports = ({ config }) => {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'in.vivicrochet.app',
-      buildNumber: '17',
+      buildNumber: '18',
       infoPlist: {
         UIBackgroundModes: ['remote-notification'],
       },
     },
     android: {
       package: 'in.vivicrochet.app',
-      versionCode: 17,
+      versionCode: 18,
       googleServicesFile: './google-services.json',
       adaptiveIcon: {
         backgroundColor: '#fcf3ee',

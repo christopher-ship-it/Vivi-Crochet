@@ -3,7 +3,7 @@
     "name": "VIVI Crochet",
     "slug": "vivi-crochet",
     "scheme": "vivi",
-    "version": "1.0.16",
+    "version": "1.0.17",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
