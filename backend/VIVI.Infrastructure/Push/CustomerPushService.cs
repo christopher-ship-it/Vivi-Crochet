@@ -112,7 +112,7 @@ public sealed class CustomerPushService
             messages.Add(new ExpoPushMessage(
                 to,
                 "Welcome to VIVI",
-                "Your crochet learning path is ready — explore Learn & Loop courses.",
+                "Your crochet learning path is ready. Explore Learn & Loop courses.",
                 ScreenData("/(tabs)/learn")));
             messages.Add(new ExpoPushMessage(
                 to,
@@ -182,7 +182,7 @@ public sealed class CustomerPushService
             var productTitle = "Fresh from the VIVI studio";
             var productBody = string.IsNullOrWhiteSpace(productName)
                 ? "New handmade picks just for you. Open Shop to see what’s new."
-                : $"{productName} is waiting in Shop — handmade with care.";
+                : $"{productName} is waiting in Shop. Handmade with care.";
 
             var courseTitle = "Keep stitching this week";
             var courseBody = string.IsNullOrWhiteSpace(courseName)
