@@ -4,7 +4,7 @@ import { listCourses, deleteCourse, publishCourse, unpublishCourse } from '../ap
 import { ApiClientError } from '../api/client';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { Course } from '../types';
-import { COURSE_TYPE_LABELS, formatDate, formatInr } from '../utils/format';
+import { formatDate, formatInr } from '../utils/format';
 import { confirmDialog, alertDialog } from '../components/AppDialog';
 
 export function CoursesPage() {
@@ -17,7 +17,8 @@ export function CoursesPage() {
     setLoading(true);
     setError(null);
     try {
-      setCourses(await listCourses());
+      // Bundles are managed on the Special Offers page.
+      setCourses((await listCourses()).filter((c) => c.type !== 'Bundle'));
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to load courses.');
     } finally {
@@ -102,7 +103,6 @@ export function CoursesPage() {
                 <th className="col-name">Name</th>
                 <th className="col-category">Category</th>
                 <th className="col-order">Order</th>
-                <th className="col-type">Type</th>
                 <th className="col-price">Price</th>
                 <th className="col-videos">Videos</th>
                 <th className="col-status">Status</th>
@@ -124,11 +124,6 @@ export function CoursesPage() {
                     </span>
                   </td>
                   <td className="col-order">{course.sortOrder ?? 0}</td>
-                  <td className="col-type">
-                    <span className="cell-clip">
-                      {COURSE_TYPE_LABELS[course.type] ?? course.type}
-                    </span>
-                  </td>
                   <td className="col-price">{formatInr(course.price)}</td>
                   <td className="col-videos">{course.videoCount}</td>
                   <td className="col-status">

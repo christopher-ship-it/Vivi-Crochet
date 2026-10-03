@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { listSpecialOffers, updateSpecialOffer, listFoundingMembers } from '../api/specialOffers';
 import { listCourses } from '../api/courses';
 import { ApiClientError } from '../api/client';
@@ -58,6 +59,7 @@ export function SpecialOffersPage() {
   const [offer, setOffer] = useState<AdminSpecialOffer | null>(null);
   const [form, setForm] = useState<OfferFormState | null>(null);
   const [viralProjects, setViralProjects] = useState<Course[]>([]);
+  const [bundles, setBundles] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -84,6 +86,7 @@ export function SpecialOffersPage() {
         const first = offers[0] ?? null;
         setOffer(first);
         setForm(first ? toForm(first) : null);
+        setBundles(courses.filter((c) => c.type === 'Bundle'));
         setViralProjects(courses.filter((c) => c.type === 'ProjectCourse' && c.status === 'Published'));
       } catch (err) {
         if (!cancelled) {
@@ -194,10 +197,54 @@ export function SpecialOffersPage() {
 
   if (!offer || !form) {
     return (
-      <div className="empty-state">
-        <h3>No special offer configured</h3>
-        <p>Seed or create a launch-offer bundle course before configuring the special offer here.</p>
-      </div>
+      <>
+        <header className="page-header">
+          <div>
+            <h1 className="page-header__title">Special Offers</h1>
+            <p className="page-header__subtitle">Create bundles of courses</p>
+          </div>
+        </header>
+
+      <section className="section-block">
+        <div className="section-block__head">
+          <h2 className="section-title" style={{ marginBottom: 0 }}>Bundles</h2>
+          <Link to="/courses/new?type=Bundle" className="btn btn--primary">New bundle</Link>
+        </div>
+        {bundles.length === 0 ? (
+          <div className="empty-state">
+            <h3>No bundles yet</h3>
+            <p>Create a bundle, pick the courses it includes and set its price.</p>
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Price</th>
+                  <th>Status</th>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {bundles.map((b) => (
+                  <tr key={b.id}>
+                    <td className="cell-strong">
+                      <Link to={`/courses/${b.id}`} className="cell-link">{b.name}</Link>
+                    </td>
+                    <td>{formatInr(b.price)}</td>
+                    <td>
+                      <span className={`badge badge--${b.status.toLowerCase()}`}>{b.status}</span>
+                    </td>
+                    <td><Link to={`/courses/${b.id}/edit`} className="btn btn--ghost btn--sm">Edit</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      </>
     );
   }
 
@@ -462,6 +509,47 @@ export function SpecialOffersPage() {
           </button>
         </div>
       </form>
+
+
+      <section className="section-block">
+        <div className="section-block__head">
+          <h2 className="section-title" style={{ marginBottom: 0 }}>Bundles</h2>
+          <Link to="/courses/new?type=Bundle" className="btn btn--primary">New bundle</Link>
+        </div>
+        {bundles.length === 0 ? (
+          <div className="empty-state">
+            <h3>No bundles yet</h3>
+            <p>Create a bundle, pick the courses it includes and set its price.</p>
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Price</th>
+                  <th>Status</th>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {bundles.map((b) => (
+                  <tr key={b.id}>
+                    <td className="cell-strong">
+                      <Link to={`/courses/${b.id}`} className="cell-link">{b.name}</Link>
+                    </td>
+                    <td>{formatInr(b.price)}</td>
+                    <td>
+                      <span className={`badge badge--${b.status.toLowerCase()}`}>{b.status}</span>
+                    </td>
+                    <td><Link to={`/courses/${b.id}/edit`} className="btn btn--ghost btn--sm">Edit</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="section-block special-offer-members">
         <div className="section-block__head">

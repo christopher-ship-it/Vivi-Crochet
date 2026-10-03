@@ -22,7 +22,6 @@ import { VideoRetryUploadModal } from '../components/VideoRetryUploadModal';
 import { VideoUploadModal } from '../components/VideoUploadModal';
 import type { Course, Video } from '../types';
 import {
-  COURSE_TYPE_LABELS,
   formatDuration,
   formatFileSize,
   formatInr,
@@ -352,7 +351,7 @@ export function CourseDetailPage() {
           <h1 className="page-header__title page-header__title--display">{course.name}</h1>
           <div className="page-header__meta">
             <p className="page-header__subtitle">
-              {COURSE_TYPE_LABELS[course.type]} · {formatInr(course.price)}
+              {course.type === 'Bundle' ? 'Bundle' : course.categoryName ?? 'No category'} · {formatInr(course.price)}
             </p>
             <span className={`badge badge--${course.status.toLowerCase()}`}>
               {course.status}
@@ -403,8 +402,8 @@ export function CourseDetailPage() {
           <dl className="info-grid">
             <dt>Course name</dt>
             <dd>{course.name}</dd>
-            <dt>Type</dt>
-            <dd>{COURSE_TYPE_LABELS[course.type]}</dd>
+            <dt>Category</dt>
+            <dd>{course.type === 'Bundle' ? 'Bundle' : course.categoryName ?? '—'}</dd>
             <dt>Level</dt>
             <dd>{course.level || '—'}</dd>
             <dt>Price</dt>

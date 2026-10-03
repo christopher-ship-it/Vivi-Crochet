@@ -17,11 +17,14 @@ import { prepareUploadImage } from '../utils/imageUploadPrepare';
 import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
 import { confirmDialog } from '../components/AppDialog';
 
-const COURSE_TYPES: { value: CourseType; label: string }[] = [
-  { value: 'DigitalCourse', label: 'Course' },
-  { value: 'ProjectCourse', label: 'Viral project' },
-  { value: 'Bundle', label: 'Bundle' },
-];
+/** The "Viral projects" category (seeded id); courses in it are project courses. */
+const VIRAL_CATEGORY_ID = '22222222-2222-2222-2222-222222222222';
+
+/** Category is the only thing admins pick; the stored type follows from it (bundles are made on Special Offers). */
+function typeForCategory(categoryId: string | null | undefined, current: CourseType): CourseType {
+  if (current === 'Bundle') return 'Bundle';
+  return categoryId === VIRAL_CATEGORY_ID ? 'ProjectCourse' : 'DigitalCourse';
+}
 
 type NumberDraft = number | '';
 
@@ -80,9 +83,9 @@ export function CourseFormPage() {
   const [searchParams] = useSearchParams();
 
   const [form, setForm] = useState<CourseFormState>(() => {
-    const presetType = searchParams.get('type');
-    const isValidType = presetType === 'DigitalCourse' || presetType === 'ProjectCourse' || presetType === 'Bundle';
-    return isValidType ? { ...emptyForm, type: presetType as CourseType } : emptyForm;
+    if (searchParams.get('type') === 'Bundle') return { ...emptyForm, type: 'Bundle' };
+    if (searchParams.get('type') === 'ProjectCourse') return { ...emptyForm, categoryId: VIRAL_CATEGORY_ID };
+    return emptyForm;
   });
   const [selectedLangs, setSelectedLangs] = useState<string[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -180,11 +183,17 @@ export function CourseFormPage() {
       setError('The US launch price must be greater than zero.');
       return;
     }
+    const isBundle = form.type === 'Bundle';
+    if (!isBundle && !form.categoryId) {
+      setError('Choose a category.');
+      return;
+    }
     setSaving(true);
     setError(null);
-    const isBundle = form.type === 'Bundle';
     const payload: CourseRequest = {
       ...form,
+      type: typeForCategory(form.categoryId, form.type),
+      categoryId: isBundle ? null : form.categoryId,
       price: form.price,
       accessDays: form.accessDays,
       renewalPercentage: form.renewalPercentage === '' ? 50 : form.renewalPercentage,
@@ -293,7 +302,7 @@ export function CourseFormPage() {
     <>
       <header className="page-header page-header--compact">
         <div>
-          <h1 className="page-header__title">{isEdit ? 'Edit course' : 'New course'}</h1>
+          <h1 className="page-header__title">{form.type === 'Bundle' ? (isEdit ? 'Edit bundle' : 'New bundle') : isEdit ? 'Edit course' : 'New course'}</h1>
           <p className="page-header__subtitle">
             {isEdit
               ? 'Update course details and Learn & Loop thumbnail'
@@ -301,7 +310,7 @@ export function CourseFormPage() {
           </p>
         </div>
         <div className="page-header__actions">
-          <Link to={isEdit && id ? `/courses/${id}` : '/courses'} className="btn btn--ghost">
+          <Link to={isEdit && id ? `/courses/${id}` : form.type === 'Bundle' ? '/special-offers' : '/courses'} className="btn btn--ghost">
             Cancel
           </Link>
         </div>
@@ -324,19 +333,6 @@ export function CourseFormPage() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="type">Type</label>
-            <select
-              id="type"
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value as CourseType })}
-            >
-              {COURSE_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-field">
             <label htmlFor="level">Level</label>
             <input
               id="level"
@@ -347,26 +343,29 @@ export function CourseFormPage() {
             />
           </div>
 
-          <div className="form-field span-2">
-            <label
-              htmlFor="category"
-              title="Use Viral projects or Trending Tutorials to show this on Home / Learn. Publish to make it active; Draft hides it from the app."
-            >
-              Category
-            </label>
-            <select
-              id="category"
-              value={form.categoryId ?? ''}
-              onChange={(e) =>
-                setForm({ ...form, categoryId: e.target.value || null })
-              }
-            >
-              <option value="">— None —</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+          {form.type !== 'Bundle' && (
+            <div className="form-field span-2">
+              <label
+                htmlFor="category"
+                title="Learn & Loop, Viral projects or Trending Tutorials. Publish to make it active; Draft hides it from the app."
+              >
+                Category
+              </label>
+              <select
+                id="category"
+                value={form.categoryId ?? ''}
+                onChange={(e) =>
+                  setForm({ ...form, categoryId: e.target.value || null })
+                }
+                required
+              >
+                <option value="" disabled>Choose a category…</option>
+                {categories.filter((c) => c.isActive).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="form-field">
             <label htmlFor="sortOrder" title="Lower numbers appear first (0 = top).">
@@ -524,10 +523,13 @@ export function CourseFormPage() {
             </div>
           </div>
 
-          <p className="form-hint span-6 form-hint--note">
-            <strong>Category:</strong> use <strong>Viral projects</strong> or <strong>Trending Tutorials</strong> to
-            show this on Home / Learn. Publish to make it active; Draft hides it from the app.
-          </p>
+          {form.type !== 'Bundle' && (
+            <p className="form-hint span-6 form-hint--note">
+              <strong>Category:</strong> <strong>Learn &amp; Loop</strong>, <strong>Viral projects</strong> or{' '}
+              <strong>Trending Tutorials</strong> decides where this shows in the app. Publish to make it active;
+              Draft hides it from the app.
+            </p>
+          )}
 
           <div className="form-field span-6">
             <div className="form-label-row">
@@ -638,9 +640,9 @@ export function CourseFormPage() {
 
         <div className="form-actions form-actions--sticky">
           <button type="submit" className="btn btn--primary" disabled={saving}>
-            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create course'}
+            {saving ? 'Saving…' : isEdit ? 'Save changes' : form.type === 'Bundle' ? 'Create bundle' : 'Create course'}
           </button>
-          <Link to={isEdit && id ? `/courses/${id}` : '/courses'} className="btn btn--ghost">
+          <Link to={isEdit && id ? `/courses/${id}` : form.type === 'Bundle' ? '/special-offers' : '/courses'} className="btn btn--ghost">
             Cancel
           </Link>
           {!isEdit ? (
