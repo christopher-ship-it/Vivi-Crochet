@@ -615,6 +615,8 @@ export interface AdminSpecialOfferRequest {
   usPrice?: AdminSpecialOfferMarketPrice | null;
   /** Stop selling the membership in the US. */
   removeUsPrice?: boolean;
+  /** Included courses in display order (reorder only). */
+  includedCourseIds?: string[];
 }
 
 export interface FoundingMember {

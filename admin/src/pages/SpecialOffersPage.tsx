@@ -25,6 +25,8 @@ type OfferFormState = {
   usLaunchPrice: NumberDraft;
   usRegularPrice: NumberDraft;
   usMrp: NumberDraft;
+  /** Included course ids in the order the app shows them. */
+  courseOrder: string[];
 };
 
 function parseNumberDraft(raw: string): NumberDraft {
@@ -50,6 +52,7 @@ function toForm(offer: AdminSpecialOffer): OfferFormState {
     usLaunchPrice: offer.usPrice?.launchPrice ?? '',
     usRegularPrice: offer.usPrice?.regularPriceAfterLaunch ?? '',
     usMrp: offer.usPrice?.mrp ? offer.usPrice.mrp : '',
+    courseOrder: offer.includedCourses.map((c) => c.id),
   };
 }
 
@@ -166,6 +169,7 @@ export function SpecialOffersPage() {
             }
           : null,
         removeUsPrice: !form.usEnabled && Boolean(offer.usPrice),
+        includedCourseIds: form.courseOrder,
       };
       const updated = await updateSpecialOffer(offer.courseId, payload);
       setOffer(updated);
@@ -176,6 +180,17 @@ export function SpecialOffersPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function moveCourse(index: number, delta: -1 | 1) {
+    setForm((f) => {
+      if (!f) return f;
+      const target = index + delta;
+      if (target < 0 || target >= f.courseOrder.length) return f;
+      const next = [...f.courseOrder];
+      [next[index], next[target]] = [next[target], next[index]];
+      return { ...f, courseOrder: next };
+    });
   }
 
   if (loading) {
@@ -205,7 +220,7 @@ export function SpecialOffersPage() {
           </div>
         </header>
 
-      <section className="section-block">
+      <section className="section-block so-panel">
         <div className="section-block__head">
           <h2 className="section-title" style={{ marginBottom: 0 }}>Bundles</h2>
           <Link to="/courses/new?type=Bundle" className="btn btn--primary">New bundle</Link>
@@ -283,11 +298,17 @@ export function SpecialOffersPage() {
         </div>
       </div>
 
-      <form className="card form-dense special-offer-form" onSubmit={handleSave}>
+      <form className="form-dense special-offer-form" onSubmit={handleSave}>
         {saveError && <div className="form-error">{saveError}</div>}
         {saved && <div className="alert alert--success">Special offer saved.</div>}
 
-        <div className="form-grid-6">
+        <div className="so-sections">
+          <section className="so-card">
+            <header className="so-card__head">
+              <h2 className="so-card__title">Offer details</h2>
+              <p className="so-card__desc">Name, visibility and the badges shown on the offer card in the app.</p>
+            </header>
+            <div className="form-grid-6 so-grid">
           <div className="form-field span-3">
             <label htmlFor="offerName">Offer name</label>
             <input
@@ -333,6 +354,15 @@ export function SpecialOffersPage() {
             />
           </div>
 
+          </div>
+          </section>
+
+          <section className="so-card">
+            <header className="so-card__head">
+              <h2 className="so-card__title">Pricing & access</h2>
+              <p className="so-card__desc">Launch price, regular price, member limit and how long membership lasts.</p>
+            </header>
+            <div className="form-grid-6 so-grid">
           <div className="form-field span-2">
             <label htmlFor="priceLabel">Price label</label>
             <input
@@ -422,6 +452,15 @@ export function SpecialOffersPage() {
             </select>
           </div>
 
+          </div>
+          </section>
+
+          <section className="so-card">
+            <header className="so-card__head">
+              <h2 className="so-card__title">United States</h2>
+              <p className="so-card__desc">Sell the membership to US customers in dollars.</p>
+            </header>
+            <div className="form-grid-6 so-grid">
           <div className={`usd-panel span-6${form.usEnabled ? ' usd-panel--on' : ''}`}>
           <div className="form-field">
             <label className="choice" htmlFor="usEnabled">
@@ -488,22 +527,60 @@ export function SpecialOffersPage() {
 
           </div>
 
+          </div>
+          </section>
+
+          <section className="so-card">
+            <header className="so-card__head">
+              <h2 className="so-card__title">Included courses</h2>
+              <p className="so-card__desc">Everything a member gets. Reorder to control how the app lists them.</p>
+            </header>
+            <div className="form-grid-6 so-grid">
           <div className="form-field span-6">
             <div className="form-label-row">
               <span className="form-label">Included courses (current regular price)</span>
+              <span className="form-hint">The app shows them in this order. Use the arrows, then Save offer.</span>
             </div>
-            <div className="check-list check-list--compact">
-              {offer.includedCourses.map((c) => (
-                <span key={c.id} className="choice">
-                  <span className="cell-clip">{c.name}</span>
-                  <span className="form-hint">{formatInr(c.price)}</span>
-                </span>
-              ))}
-            </div>
+            <ol className="order-list">
+              {form.courseOrder.map((courseId, index) => {
+                const c = offer.includedCourses.find((x) => x.id === courseId);
+                if (!c) return null;
+                return (
+                  <li key={c.id} className="order-list__row">
+                    <span className="order-list__num">{index + 1}</span>
+                    <span className="cell-clip order-list__name">{c.name}</span>
+                    <span className="form-hint">{formatInr(c.price)}</span>
+                    <span className="order-list__btns">
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        disabled={index === 0}
+                        onClick={() => moveCourse(index, -1)}
+                        aria-label={`Move ${c.name} up`}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        disabled={index === form.courseOrder.length - 1}
+                        onClick={() => moveCourse(index, 1)}
+                        aria-label={`Move ${c.name} down`}
+                      >
+                        ↓
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
+          </div>
+          </section>
         </div>
 
-        <div className="form-actions form-actions--sticky">
+        <div className="form-actions form-actions--sticky so-actions">
+          <span className="so-actions__note">Changes go live in the app as soon as you save.</span>
           <button type="submit" className="btn btn--primary" disabled={saving}>
             {saving ? 'Saving…' : 'Save offer'}
           </button>
@@ -511,7 +588,7 @@ export function SpecialOffersPage() {
       </form>
 
 
-      <section className="section-block">
+      <section className="section-block so-panel">
         <div className="section-block__head">
           <h2 className="section-title" style={{ marginBottom: 0 }}>Bundles</h2>
           <Link to="/courses/new?type=Bundle" className="btn btn--primary">New bundle</Link>
@@ -551,7 +628,7 @@ export function SpecialOffersPage() {
         )}
       </section>
 
-      <section className="section-block special-offer-members">
+      <section className="section-block so-panel special-offer-members">
         <div className="section-block__head">
           <h2 className="section-title" style={{ marginBottom: 0 }}>Founding members</h2>
         </div>

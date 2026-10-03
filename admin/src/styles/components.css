@@ -4031,3 +4031,266 @@ label.btn {
 .data-table--live-bookings .col-status {
   white-space: nowrap;
 }
+
+/* ============================================================
+   Special Offers — premium layout
+   ============================================================ */
+.special-offer-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.special-offer-stats .card--stat {
+  padding: 18px 20px;
+  gap: 8px;
+  border-radius: 16px;
+}
+.special-offer-stats .card__label {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.special-offer-stats .card__value {
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+
+.special-offer-form {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.so-sections {
+  display: grid;
+  gap: 18px;
+}
+.so-card {
+  background: var(--vivi-surface);
+  border: 1px solid var(--vivi-border-soft);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(34, 26, 30, 0.04), 0 8px 24px -16px rgba(34, 26, 30, 0.12);
+  padding: 22px 24px 24px;
+}
+.so-card__head {
+  position: relative;
+  padding-left: 14px;
+  margin-bottom: 18px;
+}
+.so-card__head::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 4px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--vivi-pink) 0%, var(--vivi-pink-dark) 100%);
+}
+.so-card__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--vivi-ink);
+}
+.so-card__desc {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--vivi-muted);
+}
+.special-offer-form .so-grid {
+  gap: 16px 18px;
+}
+.special-offer-form .form-field {
+  gap: 6px;
+}
+.special-offer-form .form-field > label,
+.special-offer-form .form-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--vivi-ink);
+}
+
+/* Active switch */
+.special-offer-form .form-field--checkbox {
+  align-self: end;
+  min-height: var(--field-height);
+  padding: 0 14px;
+  border: 1px solid var(--vivi-border-soft);
+  border-radius: 12px;
+  background: var(--vivi-cream);
+  display: flex;
+  align-items: center;
+}
+.special-offer-form .form-field--checkbox > label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--vivi-muted);
+  cursor: pointer;
+}
+.special-offer-form .form-field--checkbox input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  border-radius: 999px;
+  background: #d9cfd3;
+  position: relative;
+  transition: background 0.18s ease;
+  cursor: pointer;
+}
+.special-offer-form .form-field--checkbox input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s ease;
+}
+.special-offer-form .form-field--checkbox input[type='checkbox']:checked {
+  background: var(--vivi-pink);
+}
+.special-offer-form .form-field--checkbox input[type='checkbox']:checked::after {
+  transform: translateX(18px);
+}
+.special-offer-form .form-field--checkbox input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* US panel sits inside its own card */
+.special-offer-form .usd-panel {
+  padding: 16px 18px 18px;
+  border: 1px solid var(--vivi-border-soft);
+  border-left: 1px solid var(--vivi-border-soft);
+  border-radius: 12px;
+  background: var(--vivi-cream);
+}
+.special-offer-form .usd-panel--on {
+  border-color: #c9d8ee;
+  background: #f3f7fd;
+}
+
+/* Included courses */
+.order-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.order-list__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--vivi-border-soft);
+  border-radius: 12px;
+  background: var(--vivi-surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.order-list__row:hover {
+  border-color: var(--vivi-pink);
+  box-shadow: 0 6px 18px -12px rgba(232, 33, 91, 0.45);
+}
+.order-list__num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: var(--vivi-pink-light);
+  color: var(--vivi-pink-dark);
+  flex: none;
+}
+.order-list__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--vivi-ink);
+}
+.order-list__row .form-hint {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.order-list__btns {
+  display: inline-flex;
+  gap: 6px;
+  flex: none;
+}
+.order-list__btns .btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+/* Save bar */
+.special-offer-form .so-actions {
+  margin: 18px 0 0;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--vivi-border-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 -6px 24px -14px rgba(34, 26, 30, 0.25);
+}
+.so-actions__note {
+  font-size: 12.5px;
+  color: var(--vivi-muted);
+}
+
+/* Bundles + members panels */
+.so-panel {
+  margin-top: 28px;
+}
+.so-panel .section-block__head {
+  padding: 0 2px;
+}
+.so-panel .table-wrap {
+  border-radius: 16px;
+  border: 1px solid var(--vivi-border-soft);
+  box-shadow: 0 1px 2px rgba(34, 26, 30, 0.04), 0 8px 24px -16px rgba(34, 26, 30, 0.12);
+  overflow: hidden;
+}
+
+@media (max-width: 1100px) {
+  .special-offer-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .so-card {
+    padding: 18px 16px 20px;
+  }
+  .special-offer-form .so-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .order-list__row {
+    flex-wrap: wrap;
+  }
+}

@@ -63,6 +63,11 @@ public sealed class AdminSpecialOfferRequest
     /// </summary>
     public AdminSpecialOfferMarketPrice? UsPrice { get; set; }
     public bool RemoveUsPrice { get; set; }
+    /// <summary>
+    /// The included courses in the order they should be shown. Must list exactly the courses already in
+    /// the bundle (this only reorders). Null leaves the order unchanged.
+    /// </summary>
+    public List<Guid>? IncludedCourseIds { get; set; }
 }
 
 public sealed class AdminFoundingMemberListItemResponse

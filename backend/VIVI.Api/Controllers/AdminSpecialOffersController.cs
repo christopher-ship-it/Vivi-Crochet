@@ -87,6 +87,7 @@ public sealed class AdminSpecialOffersController : ControllerBase
         offer.UpdatedAt = DateTime.UtcNow;
 
         await SaveUsPriceAsync(offer, request, cancellationToken);
+        await SaveCourseOrderAsync(offer, request, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         offer = await LoadAsync(courseId, cancellationToken);
         return Ok(await BuildDtoAsync(offer, cancellationToken));
@@ -151,6 +152,26 @@ public sealed class AdminSpecialOffersController : ControllerBase
         });
     }
 
+    /// <summary>Saves the order of the included courses (reorder only; the set of courses cannot change here).</summary>
+    private async Task SaveCourseOrderAsync(LaunchOfferCounter offer, AdminSpecialOfferRequest request, CancellationToken cancellationToken)
+    {
+        if (request.IncludedCourseIds is null)
+            return;
+
+        var items = await _db.CourseBundleItems
+            .Where(b => b.BundleCourseId == offer.CourseId)
+            .ToListAsync(cancellationToken);
+
+        var ordered = request.IncludedCourseIds;
+        if (ordered.Count != items.Count
+            || ordered.Distinct().Count() != ordered.Count
+            || !items.Select(i => i.IncludedCourseId).ToHashSet().SetEquals(ordered))
+            throw new ViviException("COURSE_ORDER_INVALID", "The course order must list each included course exactly once.");
+
+        for (var i = 0; i < ordered.Count; i++)
+            items.Single(b => b.IncludedCourseId == ordered[i]).SortOrder = i;
+    }
+
     /// <summary>Adds, updates or removes the membership's US price (stored on the bundle course's US price row).</summary>
     private async Task SaveUsPriceAsync(LaunchOfferCounter offer, AdminSpecialOfferRequest request, CancellationToken cancellationToken)
     {
@@ -205,6 +226,11 @@ public sealed class AdminSpecialOffersController : ControllerBase
             .AsNoTracking()
             .Where(c => includedCourseIds.Contains(c.Id))
             .ToListAsync(cancellationToken);
+        includedCourses = includedCourseIds
+            .Select(id => includedCourses.SingleOrDefault(c => c.Id == id))
+            .Where(c => c is not null)
+            .Select(c => c!)
+            .ToList();
 
         // Rupee and dollar sales are added up separately.
         var sales = await _db.LaunchMemberships
