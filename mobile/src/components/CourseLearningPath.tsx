@@ -11,6 +11,8 @@ type Props = {
   lessons: CourseLesson[];
   currentIndex: number;
   courseThumbnailUrl?: string | null;
+  /** False when the learner has not opened any lesson yet: shows a first-start card, not a resume card. */
+  started?: boolean;
   onOpenLesson: (lesson: CourseLesson, index: number) => void;
 };
 
@@ -42,9 +44,9 @@ function StatusGlyph({ status }: { status: LevelStatus }) {
   );
 }
 
-function ctaLabel(status: LevelStatus): string {
+function ctaLabel(status: LevelStatus, started: boolean): string {
   if (status === 'completed') return 'Revisit this level →';
-  if (status === 'current') return 'Continue where you left off →';
+  if (status === 'current') return started ? 'Continue where you left off →' : 'Start watching →';
   return 'Start this level →';
 }
 
@@ -55,6 +57,7 @@ export function CourseLearningPath({
   lessons,
   currentIndex,
   courseThumbnailUrl,
+  started = true,
   onOpenLesson,
 }: Props) {
   return (
@@ -69,7 +72,9 @@ export function CourseLearningPath({
         const blurb =
           lesson.description?.trim() ||
           (status === 'current'
-            ? 'Pick up this lesson and keep building your stitch confidence.'
+            ? started
+              ? 'Pick up this lesson and keep building your stitch confidence.'
+              : 'Start with this lesson and build your stitch confidence.'
             : status === 'completed'
               ? 'You have opened this lesson. Revisit anytime to practice.'
               : 'Unlocked with your course access — open when you are ready.');
@@ -146,19 +151,21 @@ export function CourseLearningPath({
                     Lesson {index + 1} of {lessons.length}
                     {hasDuration ? ` · ${durationLabel}` : ''}
                   </Text>
-                  <View style={styles.progressTrack}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        { width: `${Math.max(8, ((index + 0.35) / lessons.length) * 100)}%` },
-                      ]}
-                    />
-                  </View>
+                  {started ? (
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          { width: `${Math.max(8, ((index + 0.35) / lessons.length) * 100)}%` },
+                        ]}
+                      />
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
 
               <View style={styles.cardFooter}>
-                <Text style={styles.cta}>{ctaLabel(status)}</Text>
+                <Text style={styles.cta}>{ctaLabel(status, started)}</Text>
               </View>
             </View>
           </Pressable>

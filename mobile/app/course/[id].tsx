@@ -87,6 +87,8 @@ export default function CourseDetailScreen() {
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [pathCursorId, setPathCursorId] = useState<string | null>(null);
+  // False until the saved position has been read, so a returning learner never sees a "Start" flash.
+  const [pathCursorLoaded, setPathCursorLoaded] = useState(false);
 
   const hasLearningProfile = Boolean(learningProfile);
   const isBundle = isCompleteCollectionBundle(course);
@@ -162,7 +164,9 @@ export default function CourseDetailScreen() {
 
   useEffect(() => {
     if (!id || !hasAccess) return;
-    void getCoursePathCursor(id, pathOwnerId).then(setPathCursorId);
+    void getCoursePathCursor(id, pathOwnerId)
+      .then(setPathCursorId)
+      .finally(() => setPathCursorLoaded(true));
   }, [id, hasAccess, pathOwnerId]);
 
   // Hardware/gesture Back must land on Learn (same target as the header's
@@ -586,6 +590,8 @@ export default function CourseDetailScreen() {
                   <CourseLearningPath
                     lessons={lessons}
                     currentIndex={pathCurrentIndex === -1 ? 0 : pathCurrentIndex}
+                    // Nothing opened yet on this device: it is a first start, not a resume.
+                    started={!pathCursorLoaded || pathCursorId !== null}
                     courseThumbnailUrl={course.thumbnailUrl}
                     onOpenLesson={(lesson) => openLesson(lesson)}
                   />
