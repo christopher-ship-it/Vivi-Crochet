@@ -473,6 +473,16 @@ using (var scope = app.Services.CreateScope())
 
             try
             {
+                await VideoProgressSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
+                logger.LogInformation("Video progress schema verified.");
+            }
+            catch (Exception videoProgressEx)
+            {
+                logger.LogError(videoProgressEx, "Video progress schema bootstrap failed. Watch progress will not save until the VideoProgress table exists.");
+            }
+
+            try
+            {
                 await AppHealthSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
                 logger.LogInformation("App health schema verified.");
             }

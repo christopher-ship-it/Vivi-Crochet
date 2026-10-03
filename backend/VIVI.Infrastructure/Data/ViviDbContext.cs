@@ -82,6 +82,7 @@ public sealed class ViviDbContext : DbContext
     public DbSet<DevicePushToken> DevicePushTokens => Set<DevicePushToken>();
     public DbSet<AppIssue> AppIssues => Set<AppIssue>();
     public DbSet<ScreenTapCell> ScreenTapCells => Set<ScreenTapCell>();
+    public DbSet<VideoProgress> VideoProgress => Set<VideoProgress>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -696,6 +697,16 @@ public sealed class ViviDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Screen).HasMaxLength(200).IsRequired();
             entity.HasIndex(x => new { x.Screen, x.Col, x.Row }).IsUnique();
+        });
+
+        modelBuilder.Entity<VideoProgress>(entity =>
+        {
+            entity.ToTable("VideoProgress");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.CustomerId, x.VideoId }).IsUnique();
+            entity.HasIndex(x => new { x.CustomerId, x.CourseId });
+            entity.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Video>().WithMany().HasForeignKey(x => x.VideoId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
