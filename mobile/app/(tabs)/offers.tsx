@@ -272,6 +272,9 @@ export default function OffersScreen() {
   const unavailableInCountry =
     !showAsOwned && (offer?.availableInMarket === false || course?.availableInMarket === false);
   const accessDays = offer?.accessDurationDays ?? course?.accessDays ?? 30;
+  // Published lessons across the courses the collection includes; the bundle's own count is the fallback.
+  const includedLessonTotal = includedCourseDetails.reduce((n, c) => n + (c.videoCount ?? 0), 0);
+  const lessonCount = includedLessonTotal > 0 ? includedLessonTotal : course?.videoCount || LESSON_COUNT;
   const title = offer?.offerName || course?.name || t('offers.collectionName');
 
   const ctaLabel = showAsOwned ? t('offers.ctaOwned') : t('offers.cta');
@@ -628,7 +631,7 @@ export default function OffersScreen() {
                 <Ionicons name="play-circle-outline" size={18} color={colors.pink} />
                 <Text style={styles.perkText}>
                   {t('offers.lessonsIncluded', {
-                    count: course.videoCount > 0 ? course.videoCount : LESSON_COUNT,
+                    count: lessonCount,
                   })}
                 </Text>
               </View>
