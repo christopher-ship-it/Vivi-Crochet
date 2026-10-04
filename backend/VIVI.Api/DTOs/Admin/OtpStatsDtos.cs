@@ -44,3 +44,34 @@ public sealed class OtpRecentRequest
     public string Status { get; set; } = string.Empty;
     public int Attempts { get; set; }
 }
+
+/// <summary>Everything the Excel download needs: every day, every month and every request since the first OTP.</summary>
+public sealed class OtpHistoryResponse
+{
+    /// <summary>Each India calendar day from the first OTP to today, including days with none.</summary>
+    public IReadOnlyList<OtpDayHistory> Daily { get; set; } = [];
+    /// <summary>Each month from the first OTP to this month.</summary>
+    public IReadOnlyList<OtpMonthHistory> Monthly { get; set; } = [];
+    /// <summary>Every request, newest first, with the phone masked.</summary>
+    public IReadOnlyList<OtpRecentRequest> Requests { get; set; } = [];
+}
+
+public sealed class OtpDayHistory
+{
+    /// <summary>yyyy-MM-dd, India calendar day.</summary>
+    public string Date { get; set; } = string.Empty;
+    public int Requested { get; set; }
+    public int Verified { get; set; }
+    public int UniquePhones { get; set; }
+}
+
+public sealed class OtpMonthHistory
+{
+    /// <summary>yyyy-MM.</summary>
+    public string Month { get; set; } = string.Empty;
+    public int Requested { get; set; }
+    public int Verified { get; set; }
+    public int UniquePhones { get; set; }
+    /// <summary>Days in the month (up to today) on which at least one OTP was requested.</summary>
+    public int ActiveDays { get; set; }
+}

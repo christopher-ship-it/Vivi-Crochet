@@ -4,7 +4,6 @@ import { listCourses } from '../api/courses';
 import { listVideos } from '../api/videos';
 import { listSpecialOffers } from '../api/specialOffers';
 import { ApiClientError } from '../api/client';
-import { OtpStatsSection } from '../components/OtpStatsSection';
 import type { AdminSpecialOffer, Course, Video } from '../types';
 import { formatDate, formatInr, formatMoney, parseApiDate } from '../utils/format';
 
@@ -101,8 +100,6 @@ export function DashboardPage() {
           <span className="card__value">{videos.length}</span>
         </div>
       </div>
-
-      <OtpStatsSection />
 
       <section className="section-block dashboard-section">
         <div className="section-block__head">
