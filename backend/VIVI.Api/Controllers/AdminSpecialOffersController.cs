@@ -113,7 +113,7 @@ public sealed class AdminSpecialOffersController : ControllerBase
             .Include(m => m.Customer)
             .Include(m => m.Order).ThenInclude(o => o!.Items)
             .Include(m => m.ViralProjectCourse)
-            .Where(m => m.CourseId == courseId);
+            .Where(m => m.CourseId == courseId && !m.IsStudent);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -235,7 +235,7 @@ public sealed class AdminSpecialOffersController : ControllerBase
         // Rupee and dollar sales are added up separately.
         var sales = await _db.LaunchMemberships
             .AsNoTracking()
-            .Where(m => m.CourseId == offer.CourseId)
+            .Where(m => m.CourseId == offer.CourseId && !m.IsStudent)
             .Join(_db.OrderItems, m => m.OrderItemId, i => i.Id, (m, i) => new { i.TotalAmount, i.OrderId })
             .Join(_db.Orders, x => x.OrderId, o => o.Id, (x, o) => new { x.TotalAmount, o.Currency })
             .ToListAsync(cancellationToken);

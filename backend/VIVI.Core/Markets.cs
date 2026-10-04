@@ -1,3 +1,5 @@
+using VIVI.Core.Enums;
+
 namespace VIVI.Core;
 
 /// <summary>What a customer in one country can do and which currency they pay in.</summary>
@@ -25,6 +27,13 @@ public static class Markets
     /// <summary>The market for a country code. Missing or unknown codes fall back to India (legacy accounts).</summary>
     public static Market For(string? countryCode)
         => string.Equals(countryCode?.Trim(), "US", StringComparison.OrdinalIgnoreCase) ? UnitedStates : India;
+
+    /// <summary>
+    /// The country a customer is priced in. International (email) accounts are always US: only an Indian mobile
+    /// number signs up through the India route, so they cannot pick India prices. Everyone else uses the country they chose.
+    /// </summary>
+    public static string? EffectiveCountry(CustomerAuthMethod authMethod, string? savedCountry)
+        => authMethod == CustomerAuthMethod.EmailPassword ? "US" : savedCountry;
 
     public static Market ForCurrency(string? currency)
         => string.Equals(currency?.Trim(), "USD", StringComparison.OrdinalIgnoreCase) ? UnitedStates : India;

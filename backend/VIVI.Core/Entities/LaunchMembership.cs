@@ -14,7 +14,13 @@ public sealed class LaunchMembership
     public Guid OrderItemId { get; set; }
     /// <summary>Sequential founding-member number, allocated atomically from LaunchOfferCounter.CompletedPurchaseCount.</summary>
     public int MemberNumber { get; set; }
-    /// <summary>Founding-member ID like <c>VV-KQTD-007</c>: random letters plus <see cref="MemberNumber"/>.</summary>
+    /// <summary>
+    /// True for a student-code purchase. Students have their own number series (<see cref="MemberNumber"/> counts
+    /// students only) and never use one of the launch slots.
+    /// </summary>
+    public bool IsStudent { get; set; }
+    public Guid? StudentCodeId { get; set; }
+    /// <summary>Founding-member ID like <c>VV-KQTD-007</c> (students: <c>VS-KQTD-007</c>): random letters plus <see cref="MemberNumber"/>.</summary>
     public string? MemberCode { get; set; }
     /// <summary>Snapshot of the viral project granted at purchase time (the offer's configured project may change later).</summary>
     public Guid? ViralProjectCourseId { get; set; }

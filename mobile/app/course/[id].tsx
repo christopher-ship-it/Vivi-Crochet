@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +21,7 @@ import {
   type Enrollment,
 } from '../../src/api/enrollments';
 import { createOrder } from '../../src/api/orders';
+import { validateStudentCode } from '../../src/api/offers';
 import { getMyProfile, updateMyProfile } from '../../src/api/me';
 import { verifyRazorpayPayment } from '../../src/api/payments';
 import { ApiClientError } from '../../src/api/client';
@@ -88,12 +90,19 @@ export default function CourseDetailScreen() {
   const [checkoutPayload, setCheckoutPayload] = useState<RazorpayCheckoutPayload | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  // Student code (bundle only): typed text, the code once the server accepted it, and its price.
+  const [studentOpen, setStudentOpen] = useState(false);
+  const [studentInput, setStudentInput] = useState('');
+  const [studentChecking, setStudentChecking] = useState(false);
+  const [studentError, setStudentError] = useState<string | null>(null);
+  const [appliedStudent, setAppliedStudent] = useState<{ code: string; price: number } | null>(null);
   const [pathCursorId, setPathCursorId] = useState<string | null>(null);
   // What the learner has really watched in this course. Null until loaded (or if it cannot be loaded).
   const [videoProgress, setVideoProgress] = useState<VideoProgress[] | null>(null);
 
   const hasLearningProfile = Boolean(learningProfile);
   const isBundle = isCompleteCollectionBundle(course);
+  const studentCodeInUse = isBundle && appliedStudent !== null;
   const hasAccess = Boolean(enrollment?.isActive) || (isBundle && collectionOwned);
 
   const daysUntilExpiry = useMemo(() => {
@@ -322,6 +331,36 @@ export default function CourseDetailScreen() {
     }
   }
 
+  async function applyStudentCode() {
+    const code = studentInput.trim();
+    if (!code) {
+      setStudentError('Enter your student code.');
+      return;
+    }
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
+    setStudentChecking(true);
+    setStudentError(null);
+    try {
+      const result = await validateStudentCode(code);
+      setAppliedStudent({ code, price: result.price });
+      setStudentOpen(false);
+    } catch (err) {
+      setAppliedStudent(null);
+      setStudentError(err instanceof ApiClientError ? err.message : 'Could not check this code. Try again.');
+    } finally {
+      setStudentChecking(false);
+    }
+  }
+
+  function removeStudentCode() {
+    setAppliedStudent(null);
+    setStudentInput('');
+    setStudentError(null);
+  }
+
   async function startPurchase() {
     if (!course || !id) return;
 
@@ -379,13 +418,16 @@ export default function CourseDetailScreen() {
       });
 
       const itemType = course.type === 'Bundle' ? 'CourseBundle' : 'Course';
-      const order = await createOrder([
-        {
-          itemType,
-          courseId: course.id,
-          quantity: 1,
-        },
-      ]);
+      const order = await createOrder(
+        [
+          {
+            itemType,
+            courseId: course.id,
+            quantity: 1,
+          },
+        ],
+        studentCodeInUse ? { studentCode: appliedStudent?.code } : undefined,
+      );
 
       setPendingOrderId(order.orderId);
 
@@ -489,6 +531,8 @@ export default function CourseDetailScreen() {
   const unavailableInCountry = pricing?.availableInMarket === false || course.availableInMarket === false;
   const isRenewalOffer = Boolean(pricing?.isRenewalOffer);
   const renewalPercent = pricing?.renewalPercentage ?? course.renewalPercentage ?? 50;
+  // Student codes only apply to the founding bundle (not a renewal). The server prices them per country.
+  const showStudentCodeEntry = isBundle && !isRenewalOffer;
   const showPurchaseFooter =
     (!hasAccess || isRenewalOffer) && !(isBundle && collectionOwned && !isRenewalOffer) && !unavailableInCountry;
   // Prefer admin "What you get" (About), then Description, then catalog package copy.
@@ -505,7 +549,9 @@ export default function CourseDetailScreen() {
   );
   const payButtonLabel = purchasing
     ? 'Starting checkout…'
-    : isRenewalOffer
+    : studentCodeInUse
+      ? t('learn.buyNowPrice', { price: money(appliedStudent?.price ?? displayPrice) })
+      : isRenewalOffer
       ? t('learn.renewCtaWithDiscount', {
           price: money(displayPrice),
           percent: renewalPercent,
@@ -739,6 +785,52 @@ export default function CourseDetailScreen() {
 
         {showPurchaseFooter ? (
           <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
+            {showStudentCodeEntry ? (
+              <View style={styles.studentBox}>
+                {studentCodeInUse ? (
+                  <View style={styles.studentRow}>
+                    <Text style={styles.studentApplied}>
+                      Student code {appliedStudent?.code} applied · {money(appliedStudent?.price ?? 0)}
+                    </Text>
+                    <Pressable onPress={removeStudentCode} hitSlop={8}>
+                      <Text style={styles.studentLink}>Remove</Text>
+                    </Pressable>
+                  </View>
+                ) : studentOpen ? (
+                  <View>
+                    <View style={styles.studentRow}>
+                      <TextInput
+                        style={styles.studentInput}
+                        value={studentInput}
+                        onChangeText={(text) => {
+                          setStudentInput(text);
+                          setStudentError(null);
+                        }}
+                        placeholder="VIVISTUDENT1234"
+                        placeholderTextColor={colors.muted}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        editable={!studentChecking}
+                        onSubmitEditing={() => void applyStudentCode()}
+                      />
+                      <Pressable
+                        style={[styles.studentApply, studentChecking && styles.btnDisabled]}
+                        onPress={() => void applyStudentCode()}
+                        disabled={studentChecking}
+                      >
+                        <Text style={styles.studentApplyText}>{studentChecking ? 'Checking…' : 'Apply'}</Text>
+                      </Pressable>
+                    </View>
+                    {studentError ? <Text style={styles.studentError}>{studentError}</Text> : null}
+                  </View>
+                ) : (
+                  <Pressable onPress={() => setStudentOpen(true)} hitSlop={8}>
+                    <Text style={styles.studentLink}>Have a student code?</Text>
+                  </Pressable>
+                )}
+              </View>
+            ) : null}
+            {studentCodeInUse ? null : (
             <Pressable
               style={[styles.unlockBtn, (purchasing || addingToCart) && styles.btnDisabled]}
               onPress={() => {
@@ -752,12 +844,13 @@ export default function CourseDetailScreen() {
             >
               <Text style={styles.unlockBtnText}>{addCartLabel}</Text>
             </Pressable>
+            )}
             <Pressable
-              style={[styles.secondaryBtn, (purchasing || addingToCart) && styles.btnDisabled]}
+              style={[studentCodeInUse ? styles.unlockBtn : styles.secondaryBtn, (purchasing || addingToCart) && styles.btnDisabled]}
               onPress={() => void startPurchase()}
               disabled={purchasing || addingToCart}
             >
-              <Text style={styles.secondaryBtnText}>{payButtonLabel}</Text>
+              <Text style={studentCodeInUse ? styles.unlockBtnText : styles.secondaryBtnText}>{payButtonLabel}</Text>
             </Pressable>
             <Text style={styles.payNote}>
               {isRenewalOffer
@@ -1106,6 +1199,54 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.muted,
     textAlign: 'center',
+  },
+  studentBox: {
+    marginBottom: spacing.sm,
+  },
+  studentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  studentInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.softBorder,
+    borderRadius: radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: fonts.semiBold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  studentApply: {
+    backgroundColor: colors.pink,
+    borderRadius: radii.md,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  studentApplyText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 13,
+    color: colors.white,
+  },
+  studentApplied: {
+    flex: 1,
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  studentLink: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.pink,
+  },
+  studentError: {
+    marginTop: 6,
+    fontFamily: fonts.semiBold,
+    fontSize: 12,
+    color: colors.pink,
   },
   secondaryBtn: {
     marginTop: 8,

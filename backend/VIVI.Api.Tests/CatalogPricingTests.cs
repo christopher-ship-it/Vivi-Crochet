@@ -187,13 +187,15 @@ public sealed class CatalogPricingTests
     [Fact]
     public async Task Concurrent_last_slot_allows_only_one_launch_price_purchase()
     {
-        await ResetLaunchCountAsync(99);
+        // Both checkouts are opened while two slots are free; the last slot then goes while both are open.
+        await ResetLaunchCountAsync(98);
         var customerA = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
         var customerB = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
         var orderA = await CreateBundleOrderAsync(customerA);
         var orderB = await CreateBundleOrderAsync(customerB);
         Assert.Equal(999m, orderA.TotalAmount);
         Assert.Equal(999m, orderB.TotalAmount);
+        await ResetLaunchCountAsync(99);
 
         var results = await Task.WhenAll(
             VerifyPaymentRawAsync(customerA, orderA),
@@ -219,6 +221,38 @@ public sealed class CatalogPricingTests
         Assert.Single(memberships);
         Assert.Equal(100, memberships[0].MemberNumber);
         Assert.Equal(winningOrderId, memberships[0].OrderId);
+    }
+
+    [Fact]
+    public async Task Last_slot_held_by_open_checkout_blocks_another_launch_checkout()
+    {
+        await ResetLaunchCountAsync(99);
+        var holder = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        var other = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+        var held = await CreateBundleOrderAsync(holder);
+        Assert.Equal(999m, held.TotalAmount);
+
+        var blocked = await other.PostAsJsonAsync("/api/orders", new
+        {
+            items = new[] { new { itemType = "Course", courseId = DatabaseSeeder.Catalog.BundleId, quantity = 1 } }
+        });
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+        var body = await blocked.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal("LAUNCH_OFFER_SLOTS_HELD", body.GetProperty("code").GetString());
+
+        // Once the hold expires the slot is available again.
+        await AgeOrderAsync(held.OrderId);
+        var retry = await CreateBundleOrderAsync(other);
+        Assert.Equal(999m, retry.TotalAmount);
+    }
+
+    private async Task AgeOrderAsync(Guid orderId)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+        var order = await db.Orders.SingleAsync(o => o.Id == orderId);
+        order.CreatedAt = DateTime.UtcNow - LaunchOfferService.CheckoutHoldWindow - TimeSpan.FromMinutes(1);
+        await db.SaveChangesAsync();
     }
 
     [Fact]
@@ -290,10 +324,14 @@ public sealed class CatalogPricingTests
     [Fact]
     public async Task Stale_launch_checkout_cannot_be_paid_after_offer_ends()
     {
-        await ResetLaunchCountAsync(99);
+        await ResetLaunchCountAsync(98);
         var abandoned = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
         var stale = await CreateBundleOrderAsync(abandoned);
         Assert.Equal(999m, stale.TotalAmount);
+
+        // Another customer takes a slot, then the stale checkout's hold has expired.
+        await ResetLaunchCountAsync(99);
+        await AgeOrderAsync(stale.OrderId);
 
         var winner = await PayBundleAsync(NextPhone());
         Assert.Equal(999m, winner.TotalAmount);
@@ -519,6 +557,11 @@ public sealed class CatalogPricingTests
         offer.ViralProjectCourseId = null;
         offer.AccessDurationDays = 365;
         offer.UpdatedAt = DateTime.UtcNow;
+
+        // Unpaid checkouts left by other tests would otherwise count as held slots.
+        var expired = DateTime.UtcNow - LaunchOfferService.CheckoutHoldWindow - TimeSpan.FromMinutes(1);
+        foreach (var open in await db.Orders.Where(o => o.Status == OrderStatus.PendingPayment && o.CreatedAt > expired).ToListAsync())
+            open.CreatedAt = expired;
         await db.SaveChangesAsync();
     }
 

@@ -27,6 +27,8 @@ public sealed class CreateOrderRequest
 {
     public IReadOnlyList<CreateOrderItemRequest> Items { get; set; } = Array.Empty<CreateOrderItemRequest>();
     public string? PaymentMethod { get; set; }
+    /// <summary>Optional student code. Applies the student price to the founding bundle; never uses a launch slot.</summary>
+    public string? StudentCode { get; set; }
     public ShippingAddressRequest? ShippingAddress { get; set; }
     /// <summary>When true (default), persists the shipping address on the customer profile.</summary>
     public bool SaveShippingAddress { get; set; } = true;

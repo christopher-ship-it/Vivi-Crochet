@@ -17,6 +17,10 @@ public sealed class LaunchOfferCounter
     public int RegularPriceAfterLaunch { get; set; }
     public int Mrp { get; set; }
     public int CompletedPurchaseCount { get; set; }
+    /// <summary>Price a student pays with a valid <see cref="StudentCode"/>. Independent of the 100 launch slots.</summary>
+    public int StudentPrice { get; set; } = 999;
+    /// <summary>Students enrolled so far; the post-increment value is the student's member number.</summary>
+    public int StudentCompletedCount { get; set; }
     /// <summary>Membership access window in days, applied to every course (and the viral project) granted by this offer — independent of each course's own AccessDays.</summary>
     public int AccessDurationDays { get; set; } = 365;
     /// <summary>The ProjectCourse ("Viral Project") granted free with this offer. Null if none configured.</summary>

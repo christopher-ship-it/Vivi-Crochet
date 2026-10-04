@@ -343,6 +343,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
 
+                    b.Property<decimal?>("StudentPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -758,6 +762,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("IsStudent")
+                        .HasColumnType("bit");
+
                     b.Property<string>("MemberCode")
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
@@ -769,6 +776,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("StudentCodeId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -790,9 +800,11 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasIndex("OrderItemId")
                         .IsUnique();
 
+                    b.HasIndex("StudentCodeId");
+
                     b.HasIndex("ViralProjectCourseId");
 
-                    b.HasIndex("CourseId", "MemberNumber")
+                    b.HasIndex("CourseId", "IsStudent", "MemberNumber")
                         .IsUnique();
 
                     b.ToTable("LaunchMemberships", (string)null);
@@ -847,6 +859,12 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(60)");
 
                     b.Property<int>("RegularPriceAfterLaunch")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentCompletedCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentPrice")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -1330,6 +1348,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("StudentCodeId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -1348,7 +1369,51 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProductId");
 
+                    b.HasIndex("StudentCodeId");
+
                     b.ToTable("OrderItems", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.StudentCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int?>("MaxUses")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UsedCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("StudentCodes", (string)null);
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.OtpChallenge", b =>
@@ -1957,6 +2022,11 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("VIVI.Core.Entities.StudentCode", null)
+                        .WithMany()
+                        .HasForeignKey("StudentCodeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("VIVI.Core.Entities.Course", "ViralProjectCourse")
                         .WithMany()
                         .HasForeignKey("ViralProjectCourseId")
@@ -2090,6 +2160,11 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasOne("VIVI.Core.Entities.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("VIVI.Core.Entities.StudentCode", null)
+                        .WithMany()
+                        .HasForeignKey("StudentCodeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Course");

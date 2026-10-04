@@ -278,8 +278,16 @@ public sealed class PaymentFulfillmentService
                 && decimal.Round(item.UnitPrice, market.UsesBasePrices ? 0 : 2, MidpointRounding.AwayFromZero)
                     == renewal.RenewalPrice;
 
+            // A student-code purchase has its own member numbering and never uses a launch slot.
+            var isStudentPurchase = !isRenewalPurchase
+                && item.StudentCodeId.HasValue
+                && course.Type == CourseType.Bundle
+                && course.LaunchOffer is not null;
+
             int? memberNumber = null;
-            if (!isRenewalPurchase)
+            if (isStudentPurchase)
+                memberNumber = await _launchOffers.ConsumeStudentPurchaseAsync(item.StudentCodeId!.Value, course.Id, cancellationToken);
+            else if (!isRenewalPurchase)
                 memberNumber = await _launchOffers.EnsureLaunchSlotForPricedOrderOrThrowAsync(course, item.UnitPrice, cancellationToken, market);
 
             var isFoundingMembership = memberNumber.HasValue && course.LaunchOffer is not null;
@@ -360,7 +368,11 @@ public sealed class PaymentFulfillmentService
                         OrderId = order.Id,
                         OrderItemId = item.Id,
                         MemberNumber = memberNumber!.Value,
-                        MemberCode = PublicIds.NewMemberCode(memberNumber.Value),
+                        IsStudent = isStudentPurchase,
+                        StudentCodeId = isStudentPurchase ? item.StudentCodeId : null,
+                        MemberCode = isStudentPurchase
+                            ? PublicIds.NewStudentMemberCode(memberNumber.Value)
+                            : PublicIds.NewMemberCode(memberNumber.Value),
                         ViralProjectCourseId = course.LaunchOffer!.ViralProjectCourseId,
                         AccessStartDate = accessStart,
                         AccessExpiryDate = membershipAccessExpiry!.Value,

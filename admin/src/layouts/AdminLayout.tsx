@@ -90,7 +90,8 @@ const COURSE_DASHBOARD_ITEMS = [
   { to: '/live/settings', label: 'Live settings' },
   { to: '/courses', label: 'Courses & videos' },
   { to: '/categories', label: 'Categories' },
-  { to: '/special-offers', label: 'Special Offers' },
+  { to: '/special-offers', label: 'Special Offers', end: true },
+  { to: '/special-offers/students', label: 'Student offers' },
   { to: '/viral-projects', label: 'Viral Projects' },
 ];
 

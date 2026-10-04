@@ -20,6 +20,8 @@ public sealed class CoursePrice
     public decimal? LaunchPrice { get; set; }
     /// <summary>Price once the launch offer ends or sells out (bundles with a launch offer). Null = use <see cref="Price"/>.</summary>
     public decimal? RegularPriceAfterLaunch { get; set; }
+    /// <summary>Price a student pays here with a student code. Null = student codes are not available in this country.</summary>
+    public decimal? StudentPrice { get; set; }
     public DateTime UpdatedAt { get; set; }
 
     public Course? Course { get; set; }

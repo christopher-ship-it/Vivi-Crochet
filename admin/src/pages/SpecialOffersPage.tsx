@@ -5,6 +5,7 @@ import { listCourses } from '../api/courses';
 import { ApiClientError } from '../api/client';
 import type { AdminSpecialOffer, AdminSpecialOfferRequest, Course, FoundingMember } from '../types';
 import { formatDate, formatInr, formatMoney } from '../utils/format';
+import { OfferTabs } from '../components/OfferTabs';
 
 type NumberDraft = number | '';
 
@@ -271,6 +272,8 @@ export function SpecialOffersPage() {
           <p className="page-header__subtitle">₹999 Launch Offer — VIVI Crochet Circle Founding Membership</p>
         </div>
       </header>
+
+      <OfferTabs />
 
       <div className="stat-grid special-offer-stats">
         <div className="card card--stat">
