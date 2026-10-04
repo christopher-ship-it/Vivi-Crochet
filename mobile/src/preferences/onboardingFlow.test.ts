@@ -6,6 +6,7 @@ import {
   isSupportedLanguage,
   preferencesToPull,
   preferencesToPush,
+  routeAfterCountry,
   routeAfterLanguage,
   routeAfterSplash,
   suggestCountry,
@@ -16,6 +17,11 @@ import {
 describe('first launch routing', () => {
   test('new user sees Language first', () => {
     assert.equal(routeAfterSplash(null, null), '/language-onboarding');
+  });
+
+  test('first-time user lands on the Offers tab after choosing a country, once', () => {
+    assert.equal(routeAfterCountry(false), '/(tabs)/offers');
+    assert.equal(routeAfterCountry(true), '/(tabs)');
   });
 
   test('Country screen follows Language', () => {

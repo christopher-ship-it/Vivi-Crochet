@@ -8,12 +8,13 @@ import { useI18n } from '../src/i18n';
 import { uiFonts } from '../src/i18n/uiFonts';
 import {
   canContinue,
+  routeAfterCountry,
   SUPPORTED_COUNTRIES,
   type AppCountryCode,
 } from '../src/preferences/onboardingFlow';
 import { detectDeviceCountry } from '../src/preferences/deviceRegion';
 import { usePreferences } from '../src/preferences/PreferencesContext';
-import { loadStoredCountry } from '../src/preferences/storage';
+import { hasLandedOnOffers, loadStoredCountry, markLandedOnOffers } from '../src/preferences/storage';
 import { colors, radii, spacing } from '../src/theme';
 import { applyStatusBar } from '../src/utils/statusBar';
 
@@ -55,7 +56,10 @@ export default function CountryOnboardingScreen() {
     if (!selected || continuing) return;
     setContinuing(true);
     await setCountry(selected);
-    router.replace('/(tabs)');
+    // First-time users start on the Offers tab (once); everyone else goes to Home.
+    const target = routeAfterCountry(await hasLandedOnOffers());
+    if (target === '/(tabs)/offers') await markLandedOnOffers();
+    router.replace(target);
   }, [continuing, router, selected, setCountry]);
 
   const enabled = canContinue(selected) && !continuing;
