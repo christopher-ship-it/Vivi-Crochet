@@ -627,7 +627,9 @@ export default function OffersScreen() {
               <View style={styles.perkRow}>
                 <Ionicons name="play-circle-outline" size={18} color={colors.pink} />
                 <Text style={styles.perkText}>
-                  {t('offers.lessonsIncluded', { count: LESSON_COUNT })}
+                  {t('offers.lessonsIncluded', {
+                    count: course.videoCount > 0 ? course.videoCount : LESSON_COUNT,
+                  })}
                 </Text>
               </View>
               <View style={styles.perkRow}>
