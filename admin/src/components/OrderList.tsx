@@ -223,7 +223,10 @@ export function OrderList({
     }
   }
 
-  const visibleOrders = orders.filter(filter);
+  // Only orders whose payment went through; abandoned or failed checkouts stay out of the list.
+  const visibleOrders = orders.filter(
+    (o) => (o.paymentStatus === 'Captured' || o.paymentStatus === 'Refunded') && filter(o),
+  );
 
   async function handleExport() {
     setExporting(true);
