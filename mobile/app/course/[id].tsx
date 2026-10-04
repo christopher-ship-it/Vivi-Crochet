@@ -1,8 +1,11 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   BackHandler,
+  Keyboard,
+  type LayoutChangeEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -95,12 +98,37 @@ export default function CourseDetailScreen() {
   const [studentInput, setStudentInput] = useState('');
   const [studentChecking, setStudentChecking] = useState(false);
   const [studentError, setStudentError] = useState<string | null>(null);
+  // The pay bar is pinned to the bottom, so lift it above the keyboard while typing a code. The screen may
+  // already shrink for the keyboard on some Android setups; only the part it did not shrink by is added.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [screenHeight, setScreenHeight] = useState(0);
+  const restingScreenHeight = useRef(0);
   const [appliedStudent, setAppliedStudent] = useState<{ code: string; price: number } | null>(null);
   const [pathCursorId, setPathCursorId] = useState<string | null>(null);
   // What the learner has really watched in this course. Null until loaded (or if it cannot be loaded).
   const [videoProgress, setVideoProgress] = useState<VideoProgress[] | null>(null);
 
   const hasLearningProfile = Boolean(learningProfile);
+  useEffect(() => {
+    const subs = [
+      Keyboard.addListener('keyboardDidShow', (e) => setKeyboardHeight(e.endCoordinates.height)),
+      Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0)),
+    ];
+    if (Platform.OS === 'ios') {
+      subs.push(
+        Keyboard.addListener('keyboardWillChangeFrame', (e) => setKeyboardHeight(Math.max(0, e.endCoordinates.height))),
+        Keyboard.addListener('keyboardWillHide', () => setKeyboardHeight(0)),
+      );
+    }
+    return () => subs.forEach((sub) => sub.remove());
+  }, []);
+
+  function handleScreenLayout(e: LayoutChangeEvent) {
+    const height = e.nativeEvent.layout.height;
+    if (keyboardHeight === 0) restingScreenHeight.current = height;
+    setScreenHeight(height);
+  }
+
   const isBundle = isCompleteCollectionBundle(course);
   const studentCodeInUse = isBundle && appliedStudent !== null;
   const hasAccess = Boolean(enrollment?.isActive) || (isBundle && collectionOwned);
@@ -533,6 +561,9 @@ export default function CourseDetailScreen() {
   const renewalPercent = pricing?.renewalPercentage ?? course.renewalPercentage ?? 50;
   // Student codes only apply to the founding bundle (not a renewal). The server prices them per country.
   const showStudentCodeEntry = isBundle && !isRenewalOffer;
+  const screenShrink =
+    restingScreenHeight.current > 0 ? Math.max(0, restingScreenHeight.current - screenHeight) : 0;
+  const footerLift = keyboardHeight > 0 ? Math.max(0, keyboardHeight - screenShrink) : 0;
   const showPurchaseFooter =
     (!hasAccess || isRenewalOffer) && !(isBundle && collectionOwned && !isRenewalOffer) && !unavailableInCountry;
   // Prefer admin "What you get" (About), then Description, then catalog package copy.
@@ -592,7 +623,7 @@ export default function CourseDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top }]} onLayout={handleScreenLayout}>
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[styles.content, hasAccess && styles.contentUnlocked]}
@@ -784,7 +815,15 @@ export default function CourseDetailScreen() {
         </ScrollView>
 
         {showPurchaseFooter ? (
-          <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
+          <View
+            style={[
+              styles.footer,
+              {
+                bottom: footerLift,
+                paddingBottom: footerLift > 0 ? spacing.sm : insets.bottom + spacing.sm,
+              },
+            ]}
+          >
             {showStudentCodeEntry ? (
               <View style={styles.studentBox}>
                 {studentCodeInUse ? (
