@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { cancelAdminLiveBooking, getAdminLiveBooking } from '../api/live';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { cancelAdminLiveBooking, deleteAdminLiveBooking, getAdminLiveBooking } from '../api/live';
 import { ApiClientError } from '../api/client';
 import type { AdminLiveBookingDetail } from '../types';
 import { formatDate, formatInr } from '../utils/format';
@@ -17,6 +17,8 @@ export function LiveBookingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
 
   async function load() {
     if (!id) return;
@@ -51,6 +53,24 @@ export function LiveBookingDetailPage() {
       setError(err instanceof ApiClientError ? err.message : 'Could not cancel booking.');
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!id || !booking) return;
+    const ok = await confirmDialog(
+      `Delete this booking for ${booking.customerName || 'this customer'}?\n\nThis permanently removes the booking, its order and payment, frees the seat, and removes it from revenue. This cannot be undone.`,
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteAdminLiveBooking(id);
+      navigate('/live');
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not delete booking.');
+      setDeleting(false);
     }
   }
 
@@ -96,6 +116,14 @@ export function LiveBookingDetailPage() {
               {cancelling ? 'Cancelling…' : 'Cancel booking'}
             </button>
           )}
+          <button
+            type="button"
+            className="btn"
+            onClick={() => void handleDelete()}
+            disabled={deleting}
+          >
+            {deleting ? 'Deleting…' : 'Delete booking'}
+          </button>
           <Link to="/live" className="btn btn--ghost">
             Back
           </Link>

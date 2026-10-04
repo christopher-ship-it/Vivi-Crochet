@@ -44,6 +44,10 @@ export async function cancelAdminLiveBooking(id: string): Promise<AdminLiveBooki
   });
 }
 
+export async function deleteAdminLiveBooking(id: string): Promise<void> {
+  await apiRequest<void>(`/api/admin/live/bookings/${id}`, { method: 'DELETE' });
+}
+
 export async function listAdminLiveWeeks(): Promise<AdminLiveWeek[]> {
   return apiRequest<AdminLiveWeek[]>('/api/admin/live/weeks');
 }

@@ -23,6 +23,7 @@ public sealed class AdminLiveController : ControllerBase
     private readonly LiveCalendarService _calendar;
     private readonly LiveBookingService _bookings;
     private readonly IBlobStorageService _blob;
+    private readonly AdminDataCleanupService _cleanup;
     private readonly ILogger<AdminLiveController> _logger;
 
     public AdminLiveController(
@@ -30,12 +31,14 @@ public sealed class AdminLiveController : ControllerBase
         LiveCalendarService calendar,
         LiveBookingService bookings,
         IBlobStorageService blob,
+        AdminDataCleanupService cleanup,
         ILogger<AdminLiveController> logger)
     {
         _db = db;
         _calendar = calendar;
         _bookings = bookings;
         _blob = blob;
+        _cleanup = cleanup;
         _logger = logger;
     }
 
@@ -570,6 +573,32 @@ public sealed class AdminLiveController : ControllerBase
             .SingleAsync(b => b.Id == id, cancellationToken);
 
         return Ok(MapDetail(booking));
+    }
+
+    /// <summary>
+    /// Hard-deletes a booking (any status) for test-data cleanup. Removes its order and payments too,
+    /// so the seat is freed and the payment no longer counts in revenue.
+    /// </summary>
+    [HttpDelete("bookings/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteBooking(Guid id, CancellationToken cancellationToken)
+    {
+        var booking = await _db.LiveBookings
+            .SingleOrDefaultAsync(b => b.Id == id, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_BOOKING_NOT_FOUND", "Live booking was not found.");
+
+        var orderExists = await _db.Orders.AnyAsync(o => o.Id == booking.OrderId, cancellationToken);
+        if (orderExists)
+        {
+            await _cleanup.DeleteOrderAsync(booking.OrderId, cancellationToken);
+        }
+        else
+        {
+            _db.LiveBookings.Remove(booking);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        return NoContent();
     }
 
     private async Task<AdminLiveWeekResponse> MapWeekAsync(
