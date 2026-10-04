@@ -129,10 +129,15 @@ function SlotCard({
   onModifyCapacity?: (slotType: LiveSlotType, currentCapacity: number) => void;
 }) {
   const meta = slotMeta(week, slotType);
-  const slotBookings = bookings.filter((b) => b.slotType === slotType);
-  const seatHolders = slotBookings.filter((b) => holdsSeat(String(b.status)));
-  // Week.slots seatsBooked can lag / omit pending holds — never show below named seat-holders.
-  const displayBooked = Math.max(meta.seatsBooked, seatHolders.length);
+  const slotAll = bookings.filter((b) => b.slotType === slotType);
+  const seatHolders = slotAll.filter((b) => holdsSeat(String(b.status)));
+  // Unless a status filter is chosen, list only people who hold a seat (paid or payment pending);
+  // expired / cancelled attempts stay out of the calendar.
+  const slotBookings = statusFilter ? slotAll : seatHolders;
+  // Without a filter the named seat-holders are the truth; the week counter can be stale.
+  const displayBooked = statusFilter
+    ? Math.max(meta.seatsBooked, seatHolders.length)
+    : seatHolders.length;
   const visible = slotBookings.slice(0, MAX_VISIBLE_NAMES);
   const hiddenCount = Math.max(0, slotBookings.length - visible.length);
   const capacity = meta.seatCapacity;

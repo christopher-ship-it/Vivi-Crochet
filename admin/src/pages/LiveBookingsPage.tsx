@@ -105,7 +105,7 @@ function patchWeekSlot(
 export function LiveBookingsPage() {
   const [view, setView] = useState<ViewMode>('table');
   const [bookings, setBookings] = useState<AdminLiveBookingListItem[]>([]);
-  const [status, setStatus] = useState<LiveBookingStatus | ''>('');
+  const [status, setStatus] = useState<LiveBookingStatus | ''>('Confirmed');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
