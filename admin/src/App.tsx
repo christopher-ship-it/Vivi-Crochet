@@ -28,6 +28,7 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { SupportPage } from './pages/SupportPage';
 import { AppHealthPage } from './pages/AppHealthPage';
 import { PhoneOtpsPage } from './pages/PhoneOtpsPage';
+import { IntroVideoPage } from './pages/IntroVideoPage';
 import { AccountPage } from './pages/AccountPage';
 import { DeleteAccountPage } from './pages/DeleteAccountPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
@@ -62,6 +63,7 @@ export default function App() {
               <Route path="categories" element={<CategoriesPage />} />
               <Route path="special-offers" element={<SpecialOffersPage />} />
               <Route path="special-offers/students" element={<StudentOffersPage />} />
+              <Route path="intro-video" element={<IntroVideoPage />} />
               <Route path="viral-projects" element={<ViralProjectsPage />} />
               <Route path="payments" element={<PaymentsPage />} />
               <Route path="customers"element={<CustomersPage />} />

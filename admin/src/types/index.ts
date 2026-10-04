@@ -771,3 +771,26 @@ export interface OtpHistory {
   monthly: OtpMonthHistory[];
   requests: OtpRecentRequest[];
 }
+
+export interface AdminIntroVideo {
+  /** True once a compressed video exists for the app to play. */
+  hasVideo: boolean;
+  isEnabled: boolean;
+  fileName?: string | null;
+  uploadedFileSizeBytes?: number | null;
+  playableFileSizeBytes?: number | null;
+  /** State of the newest upload. */
+  status: 'None' | 'Queued' | 'Processing' | 'Ready' | 'Failed';
+  error?: string | null;
+  version: number;
+  updatedAt?: string | null;
+  /** Temporary link to watch what the app plays. */
+  previewUrl?: string | null;
+}
+
+export interface IntroVideoUploadTicket {
+  uploadUrl: string;
+  expiresAt: string;
+  blobPath: string;
+  maxFileSizeBytes: number;
+}

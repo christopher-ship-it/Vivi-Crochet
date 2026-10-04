@@ -56,3 +56,9 @@ backend/VIVI.Api/App_Data/
 
 # macOS zip leftovers
 __MACOSX/
+
+# Large source videos stay out of git; upload them from the admin dashboard instead.
+mobile/assets/*.MP4
+mobile/assets/*.mp4
+mobile/assets/*.MOV
+mobile/assets/*.mov

@@ -451,6 +451,16 @@ using (var scope = app.Services.CreateScope())
 
             try
             {
+                await IntroVideoSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
+                logger.LogInformation("Intro video schema verified.");
+            }
+            catch (Exception introEx)
+            {
+                logger.LogError(introEx, "Intro video schema bootstrap failed. The intro video will not work until the IntroVideos table exists.");
+            }
+
+            try
+            {
                 await StudentOfferSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
                 logger.LogInformation("Student code schema verified.");
             }
