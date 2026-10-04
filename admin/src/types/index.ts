@@ -711,3 +711,40 @@ export interface AdminStudentMemberListResponse {
   pageSize: number;
   items: AdminStudentMember[];
 }
+
+export interface OtpDayCount {
+  /** yyyy-MM-dd, India calendar day. */
+  date: string;
+  requested: number;
+  verified: number;
+}
+
+export interface OtpPhoneCount {
+  /** Phone with all but the last four digits hidden. */
+  phone: string;
+  requests: number;
+  verified: number;
+}
+
+export interface OtpRecentRequest {
+  requestedAt: string;
+  phone: string;
+  status: 'Verified' | 'Pending' | 'Expired';
+  attempts: number;
+}
+
+export interface OtpStats {
+  totalAllTime: number;
+  verifiedAllTime: number;
+  firstRequestedAt?: string | null;
+  today: number;
+  last7Days: number;
+  last30Days: number;
+  verifiedToday: number;
+  verifiedLast7Days: number;
+  verifiedLast30Days: number;
+  uniquePhonesLast30Days: number;
+  daily: OtpDayCount[];
+  topPhonesLast7Days: OtpPhoneCount[];
+  recent: OtpRecentRequest[];
+}
