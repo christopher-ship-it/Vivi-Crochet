@@ -29,9 +29,10 @@ import { listProducts } from '../../src/api/products';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { useCart } from '../../src/cart/CartContext';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
+import { IntroPlayButton } from '../../src/components/IntroPlayButton';
 import { IntroPreviewCard } from '../../src/components/IntroPreviewCard';
 import { IntroVideoModal } from '../../src/components/IntroVideoModal';
-import { hasSeenIntroPreview, markIntroPreviewSeen } from '../../src/introVideo/storage';
+import { hasSeenIntroPreview, markIntroPreviewSeen, markIntroWatched } from '../../src/introVideo/storage';
 import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
 import { RoomSlideshow, type SlideItem } from '../../src/components/RoomSlideshow';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
@@ -767,18 +768,12 @@ export default function HomeScreen() {
           <BrandWordmark size="sm" />
           <View style={styles.topActions}>
           {introUrl ? (
-            <Pressable
-              style={styles.iconBtn}
+            <IntroPlayButton
               onPress={() => {
                 setIntroPreviewVisible(false);
                 setIntroOpen(true);
               }}
-              accessibilityRole="button"
-              accessibilityLabel={t('home.introPlay')}
-              hitSlop={8}
-            >
-              <Ionicons name="play-circle-outline" size={26} color={colors.pink} />
-            </Pressable>
+            />
           ) : null}
           <Pressable
             style={styles.iconBtn}
@@ -804,6 +799,7 @@ export default function HomeScreen() {
             <IntroPreviewCard
               url={introUrl}
               onWatch={() => {
+                void markIntroWatched();
                 setIntroPreviewVisible(false);
                 setIntroOpen(true);
               }}

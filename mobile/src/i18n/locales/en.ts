@@ -129,6 +129,7 @@ export const en = {
     cart: 'Cart',
     cartItems: 'Cart, {{count}} items',
     introPlay: 'Watch intro video',
+    introLabel: 'Watch intro',
     introTitle: 'Welcome to VIVI',
     introWatch: 'Watch',
     introSkip: 'Skip',

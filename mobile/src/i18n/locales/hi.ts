@@ -132,6 +132,7 @@ export const hi: EnTranslations = {
     cart: 'कार्ट',
     cartItems: 'कार्ट, {{count}} आइटम',
     introPlay: 'इंट्रो वीडियो देखें',
+    introLabel: 'इंट्रो देखें',
     introTitle: 'VIVI में आपका स्वागत है',
     introWatch: 'देखें',
     introSkip: 'छोड़ें',
