@@ -646,3 +646,68 @@ export interface FoundingMemberListResponse {
   items: FoundingMember[];
 }
 
+
+export interface AdminStudentCode {
+  id: string;
+  code: string;
+  /** Who the code is for, e.g. a college name. */
+  label: string;
+  isActive: boolean;
+  /** Null means unlimited. */
+  maxUses?: number | null;
+  usedCount: number;
+  expiresAt?: string | null;
+  isExpired: boolean;
+  createdAt: string;
+}
+
+export interface AdminStudentOffer {
+  courseId: string;
+  studentPrice: number;
+  /** Dollar student price for US buyers; null when student codes are not available in the US. */
+  studentPriceUsd?: number | null;
+  /** True once the membership has US pricing (set on the Launch offer tab). */
+  usPriceConfigured: boolean;
+  accessDurationDays: number;
+  /** Students enrolled so far. They are not part of the launch offer's 100. */
+  enrolledCount: number;
+  revenue: number;
+  revenueUsd: number;
+  codes: AdminStudentCode[];
+}
+
+export interface AdminStudentCodeRequest {
+  /** Blank on create generates one like VIVISTUDENT4821. */
+  code?: string | null;
+  label: string;
+  isActive: boolean;
+  maxUses?: number | null;
+  expiresAt?: string | null;
+}
+
+export interface AdminStudentMember {
+  id: string;
+  memberNumber: number;
+  /** Student member ID, e.g. VS-KQTD-007. */
+  memberCode?: string | null;
+  customerCode?: string | null;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  studentCode?: string | null;
+  studentLabel?: string | null;
+  joinedDate: string;
+  expiryDate: string;
+  amountPaid: number;
+  /** Currency the student paid in (INR or USD). */
+  currency?: string;
+  orderNumber: string;
+  isActive: boolean;
+}
+
+export interface AdminStudentMemberListResponse {
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  items: AdminStudentMember[];
+}

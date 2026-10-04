@@ -451,6 +451,16 @@ using (var scope = app.Services.CreateScope())
 
             try
             {
+                await StudentOfferSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
+                logger.LogInformation("Student code schema verified.");
+            }
+            catch (Exception studentEx)
+            {
+                logger.LogError(studentEx, "Student code schema bootstrap failed. Student codes will not work until the StudentCodes table exists.");
+            }
+
+            try
+            {
                 await PushSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
                 logger.LogInformation("Push notification schema verified.");
             }

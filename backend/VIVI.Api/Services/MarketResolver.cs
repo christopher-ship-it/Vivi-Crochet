@@ -26,11 +26,12 @@ public sealed class MarketResolver
         if (user.Identity?.IsAuthenticated == true && user.IsInRole(nameof(UserRole.Customer)))
         {
             var userId = user.GetUserId();
-            var saved = await _db.Customers
+            var customer = await _db.Customers
                 .AsNoTracking()
                 .Where(c => c.UserId == userId)
-                .Select(c => c.CountryCode)
+                .Select(c => new { c.CountryCode, c.AuthMethod })
                 .SingleOrDefaultAsync(cancellationToken);
+            var saved = customer is null ? null : Markets.EffectiveCountry(customer.AuthMethod, customer.CountryCode);
             if (!string.IsNullOrWhiteSpace(saved))
                 return Markets.For(saved);
         }

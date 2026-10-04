@@ -35,6 +35,22 @@ public static class PublicIds
         return $"{MemberPrefix}{RandomString(Letters, MemberLetterLength)}-{memberNumber:D3}";
     }
 
+    /// <summary>Student founding-member ID, e.g. <c>VS-KQTD-007</c>. Students are numbered separately from the launch members.</summary>
+    public static string NewStudentMemberCode(int memberNumber)
+    {
+        if (memberNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(memberNumber), "Member number must be at least 1.");
+        return $"VS-{RandomString(Letters, MemberLetterLength)}-{memberNumber:D3}";
+    }
+
+    /// <summary>A fresh student code like <c>VIVISTUDENT4821</c>.</summary>
+    public static string NewStudentCode() =>
+        $"VIVISTUDENT{RandomNumberGenerator.GetInt32(1000, 10000)}";
+
+    /// <summary>Normalizes a student code: upper-case, no spaces or dashes.</summary>
+    public static string NormalizeStudentCode(string? value) =>
+        new string((value ?? string.Empty).Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+
     /// <summary>Normalizes what a person typed (spaces, lowercase) for lookups.</summary>
     public static string Normalize(string? value) =>
         (value ?? string.Empty).Trim().ToUpperInvariant().Replace(" ", string.Empty);

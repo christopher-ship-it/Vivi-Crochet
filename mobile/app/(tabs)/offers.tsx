@@ -348,7 +348,9 @@ export default function OffersScreen() {
 
   const memberNumberLabel =
     showAsOwned && membership?.isMember && membership.memberNumber
-      ? t('offers.founding.badgeLabel', { number: String(membership.memberNumber).padStart(3, '0') })
+      ? t('offers.founding.badgeLabel', {
+          number: `${membership.isStudent ? 'S' : ''}${String(membership.memberNumber).padStart(3, '0')}`,
+        })
       : null;
 
   const headTag = showAsOwned

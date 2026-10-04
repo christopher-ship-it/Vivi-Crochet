@@ -16,6 +16,8 @@ public sealed class OrderItem
     public decimal DiscountAmount { get; set; }
     public decimal TotalAmount { get; set; }
     public string ItemNameSnapshot { get; set; } = string.Empty;
+    /// <summary>Set when this line was priced with a student code. Such lines never use a launch slot.</summary>
+    public Guid? StudentCodeId { get; set; }
 
     public Order? Order { get; set; }
     public Product? Product { get; set; }

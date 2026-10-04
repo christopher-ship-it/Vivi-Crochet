@@ -70,6 +70,7 @@ public sealed class ViviDbContext : DbContext
     public DbSet<CoursePrice> CoursePrices => Set<CoursePrice>();
     public DbSet<LaunchOfferCounter> LaunchOfferCounters => Set<LaunchOfferCounter>();
     public DbSet<LaunchMembership> LaunchMemberships => Set<LaunchMembership>();
+    public DbSet<StudentCode> StudentCodes => Set<StudentCode>();
     public DbSet<EmailNotification> EmailNotifications => Set<EmailNotification>();
     public DbSet<OrderDeliveryUpdate> OrderDeliveryUpdates => Set<OrderDeliveryUpdate>();
     public DbSet<LiveWeek> LiveWeeks => Set<LiveWeek>();
@@ -398,6 +399,11 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.ItemNameSnapshot).HasMaxLength(200).IsRequired();
             entity.HasIndex(x => x.OrderId);
 
+            entity.HasOne<StudentCode>()
+                .WithMany()
+                .HasForeignKey(x => x.StudentCodeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasOne(x => x.Order)
                 .WithMany(x => x.Items)
                 .HasForeignKey(x => x.OrderId)
@@ -557,6 +563,7 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.Mrp).HasPrecision(12, 2);
             entity.Property(x => x.LaunchPrice).HasPrecision(12, 2);
             entity.Property(x => x.RegularPriceAfterLaunch).HasPrecision(12, 2);
+            entity.Property(x => x.StudentPrice).HasPrecision(12, 2);
             entity.HasIndex(x => new { x.CourseId, x.CountryCode }).IsUnique();
 
             entity.HasOne(x => x.Course)
@@ -613,7 +620,8 @@ public sealed class ViviDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.MemberCode).HasMaxLength(16);
             entity.HasIndex(x => x.MemberCode).IsUnique();
-            entity.HasIndex(x => new { x.CourseId, x.MemberNumber }).IsUnique();
+            // Students are numbered separately from the launch members, so the number is unique per series.
+            entity.HasIndex(x => new { x.CourseId, x.IsStudent, x.MemberNumber }).IsUnique();
             entity.HasIndex(x => x.OrderItemId).IsUnique();
             entity.HasIndex(x => x.CustomerId);
 
@@ -641,6 +649,20 @@ public sealed class ViviDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.ViralProjectCourseId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne<StudentCode>()
+                .WithMany()
+                .HasForeignKey(x => x.StudentCodeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<StudentCode>(entity =>
+        {
+            entity.ToTable("StudentCodes");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Code).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Label).HasMaxLength(120).IsRequired();
+            entity.HasIndex(x => x.Code).IsUnique();
         });
 
         modelBuilder.Entity<EmailNotification>(entity =>

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using VIVI.Api.DTOs.Auth;
 using VIVI.Api.DTOs.Customers;
 using Xunit;
 
@@ -17,6 +18,46 @@ public sealed class PreferencesTests
 
     private async Task<HttpClient> CustomerAsync()
         => await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+
+    private async Task<HttpClient> InternationalCustomerAsync()
+    {
+        var client = _factory.CreateClient();
+        var register = await client.PostAsJsonAsync("/api/auth/mobile/email/register", new
+        {
+            email = $"intl.{Guid.NewGuid():N}@example.com",
+            password = "SecurePass1",
+            age = 28,
+            country = "United States"
+        });
+        register.EnsureSuccessStatusCode();
+        var login = (await register.Content.ReadFromJsonAsync<LoginResponse>(AuthTests.Json))!;
+        return AuthTests.WithToken(client, login.AccessToken);
+    }
+
+    [Fact]
+    public async Task International_account_cannot_choose_India_pricing()
+    {
+        var customer = await InternationalCustomerAsync();
+
+        var india = await customer.PatchAsJsonAsync("/api/me/preferences", new { countryCode = "IN" });
+        Assert.Equal(HttpStatusCode.Conflict, india.StatusCode);
+        Assert.Contains("INTERNATIONAL_ACCOUNT_US_PRICING", await india.Content.ReadAsStringAsync());
+
+        // Without any saved country they are still priced as US, not as the India fallback.
+        var profile = await customer.GetFromJsonAsync<CustomerProfileResponse>("/api/me/profile", AuthTests.Json);
+        Assert.Equal("US", profile!.CountryCode);
+
+        var us = await customer.PatchAsJsonAsync("/api/me/preferences", new { countryCode = "US" });
+        Assert.Equal(HttpStatusCode.OK, us.StatusCode);
+    }
+
+    [Fact]
+    public async Task Indian_phone_account_can_still_choose_either_country()
+    {
+        var customer = await CustomerAsync();
+        Assert.Equal(HttpStatusCode.OK, (await customer.PatchAsJsonAsync("/api/me/preferences", new { countryCode = "IN" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await customer.PatchAsJsonAsync("/api/me/preferences", new { countryCode = "US" })).StatusCode);
+    }
 
     [Fact]
     public async Task New_customer_has_no_preferences()

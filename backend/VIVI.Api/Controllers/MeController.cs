@@ -123,6 +123,11 @@ public sealed class MeController : ControllerBase
             throw new ViviException("NO_PREFERENCES", "Send a languageCode and/or a countryCode.");
 
         var customer = await _customers.ResolveForUserAsync(User.GetUserId(), cancellationToken);
+        if (country == Markets.DefaultCountry && customer.AuthMethod == CustomerAuthMethod.EmailPassword)
+            throw ViviException.Conflict(
+                "INTERNATIONAL_ACCOUNT_US_PRICING",
+                "International accounts use US pricing. To buy in India, sign up with an Indian mobile number.");
+
         if (language is not null)
             customer.LanguageCode = language;
         if (country is not null)
@@ -381,7 +386,7 @@ public sealed class MeController : ControllerBase
             State = customer.State,
             City = customer.City,
             LanguageCode = customer.LanguageCode,
-            CountryCode = customer.CountryCode,
+            CountryCode = Markets.EffectiveCountry(customer.AuthMethod, customer.CountryCode),
             AuthMethod = customer.AuthMethod.ToString(),
             ShippingAddress = ToSavedShippingAddress(customer)
         };

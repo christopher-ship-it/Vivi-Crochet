@@ -81,6 +81,7 @@ public static class OffersMapper
             IsMember = true,
             MemberNumber = membership.MemberNumber,
             MemberCode = membership.MemberCode,
+            IsStudent = membership.IsStudent,
             OfferName = offer?.OfferName,
             BadgeGrantedAt = membership.BadgeGrantedAt,
             AccessExpiryDate = membership.AccessExpiryDate,

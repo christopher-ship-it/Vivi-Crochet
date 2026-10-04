@@ -163,7 +163,7 @@ public sealed class LiveBookingService
                 .SingleOrDefaultAsync(c => c.Id == customerId, cancellationToken)
                 ?? throw ViviException.NotFound("CUSTOMER_NOT_FOUND", "Customer was not found.");
 
-            if (!Markets.For(customer.CountryCode).CanBookLiveClasses)
+            if (!Markets.For(Markets.EffectiveCountry(customer.AuthMethod, customer.CountryCode)).CanBookLiveClasses)
             {
                 throw ViviException.Conflict(
                     "LIVE_NOT_AVAILABLE_IN_COUNTRY",

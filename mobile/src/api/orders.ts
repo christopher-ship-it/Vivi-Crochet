@@ -131,6 +131,8 @@ export async function createOrder(
     shippingAddress?: ShippingAddressInput;
     paymentMethod?: string;
     saveShippingAddress?: boolean;
+    /** A validated student code. Applies the student price to the founding bundle. */
+    studentCode?: string;
   },
 ): Promise<CreateOrderResponse> {
   return apiRequest<CreateOrderResponse>('/api/orders', {
@@ -140,6 +142,7 @@ export async function createOrder(
       paymentMethod: options?.paymentMethod ?? 'OnlinePayment',
       shippingAddress: options?.shippingAddress,
       saveShippingAddress: options?.saveShippingAddress ?? true,
+      studentCode: options?.studentCode,
     }),
   });
 }

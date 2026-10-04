@@ -46,6 +46,8 @@ public sealed class MyMembershipResponse
     public int? MemberNumber { get; set; }
     /// <summary>Founding-member ID, e.g. VV-KQTD-007.</summary>
     public string? MemberCode { get; set; }
+    /// <summary>True for a student-code membership (numbered separately from the launch members).</summary>
+    public bool IsStudent { get; set; }
     public string? OfferName { get; set; }
     public DateTime? BadgeGrantedAt { get; set; }
     public DateTime? AccessExpiryDate { get; set; }

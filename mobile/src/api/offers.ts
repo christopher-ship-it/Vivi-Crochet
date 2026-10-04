@@ -40,6 +40,8 @@ export interface MyMembership {
   memberNumber?: number | null;
   /** Founding-member ID, e.g. VV-KQTD-007. */
   memberCode?: string | null;
+  /** True for a student-code membership; students are numbered separately from the launch members. */
+  isStudent?: boolean;
   offerName?: string | null;
   badgeGrantedAt?: string | null;
   accessExpiryDate?: string | null;
@@ -55,4 +57,20 @@ export async function getFoundingMembershipOffer(): Promise<FoundingMembershipOf
 /** Authenticated — the caller's founding-membership status, or `{ isMember: false }`. */
 export async function getMyMembership(): Promise<MyMembership> {
   return apiRequest<MyMembership>('/api/me/membership');
+}
+
+export interface StudentCodeCheck {
+  valid: boolean;
+  /** The student price in the buyer's currency. */
+  price: number;
+  currency?: string;
+  accessDurationDays: number;
+}
+
+/** Authenticated — checks a student code and returns the price it unlocks. Throws an ApiClientError when the code cannot be used. */
+export async function validateStudentCode(code: string): Promise<StudentCodeCheck> {
+  return apiRequest<StudentCodeCheck>('/api/offers/student-code/validate', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
 }

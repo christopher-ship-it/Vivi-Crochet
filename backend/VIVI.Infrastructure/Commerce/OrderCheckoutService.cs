@@ -9,7 +9,13 @@ using VIVI.Infrastructure.Data;
 
 namespace VIVI.Infrastructure.Commerce;
 
-public sealed record CheckoutLineInput(OrderItemType ItemType, Guid? ProductId, Guid? CourseId, int Quantity);
+/// <param name="StudentCode">A student code typed at checkout. Only applies to the founding bundle line.</param>
+public sealed record CheckoutLineInput(
+    OrderItemType ItemType,
+    Guid? ProductId,
+    Guid? CourseId,
+    int Quantity,
+    string? StudentCode = null);
 
 public sealed record CheckoutResult(
     Order Order,
@@ -34,6 +40,7 @@ public sealed class OrderCheckoutService
 {
     private readonly ViviDbContext _db;
     private readonly PricingService _pricing;
+    private readonly LaunchOfferService _launchOffers;
     private readonly IRazorpayPaymentGateway _razorpay;
     private readonly RazorpayOptionsAccessor _razorpayOptions;
     private readonly IDeliveryEstimateService _delivery;
@@ -44,6 +51,7 @@ public sealed class OrderCheckoutService
     public OrderCheckoutService(
         ViviDbContext db,
         PricingService pricing,
+        LaunchOfferService launchOffers,
         IRazorpayPaymentGateway razorpay,
         RazorpayOptionsAccessor razorpayOptions,
         IDeliveryEstimateService delivery,
@@ -53,6 +61,7 @@ public sealed class OrderCheckoutService
     {
         _db = db;
         _pricing = pricing;
+        _launchOffers = launchOffers;
         _razorpay = razorpay;
         _razorpayOptions = razorpayOptions;
         _delivery = delivery;
@@ -334,12 +343,12 @@ public sealed class OrderCheckoutService
     /// <summary>The customer's market, from the country they chose (missing = India, for older accounts).</summary>
     private async Task<Market> LoadMarketAsync(Guid customerId, CancellationToken cancellationToken)
     {
-        var country = await _db.Customers
+        var customer = await _db.Customers
             .AsNoTracking()
             .Where(c => c.Id == customerId)
-            .Select(c => c.CountryCode)
+            .Select(c => new { c.CountryCode, c.AuthMethod })
             .SingleOrDefaultAsync(cancellationToken);
-        return Markets.For(country);
+        return Markets.For(customer is null ? null : Markets.EffectiveCountry(customer.AuthMethod, customer.CountryCode));
     }
 
     private static void EnsureProductsAllowed(Market market)
@@ -463,6 +472,22 @@ public sealed class OrderCheckoutService
             cancellationToken,
             market);
 
+        // A student code on the bundle sets the student price. It never touches the launch slots.
+        // A renewal keeps its own (lower) price, so a code is ignored there.
+        Guid? studentCodeId = null;
+        if (!isRenewal && course.Type == CourseType.Bundle && !string.IsNullOrWhiteSpace(line.StudentCode))
+        {
+            var studentPrice = await _launchOffers.GetStudentPriceOrThrowAsync(course.Id, market, cancellationToken);
+            var code = await _launchOffers.ResolveStudentCodeOrThrowAsync(line.StudentCode, customerId, cancellationToken);
+            studentCodeId = code.Id;
+            unitPrice = studentPrice;
+            basePrice = studentPrice;
+        }
+        else if (!isRenewal)
+        {
+            await _launchOffers.EnsureSlotAvailableForCheckoutOrThrowAsync(course, unitPrice, customerId, market, cancellationToken);
+        }
+
         // The list price used for the "you save" discount comes from the same market as the price.
         decimal? marketMrp = market.UsesBasePrices
             ? course.Mrp
@@ -479,6 +504,7 @@ public sealed class OrderCheckoutService
             UnitPrice = unitPrice,
             DiscountAmount = discount,
             TotalAmount = unitPrice,
+            StudentCodeId = studentCodeId,
             ItemNameSnapshot = isRenewal ? $"{course.Name} (renewal)" : course.Name
         };
     }

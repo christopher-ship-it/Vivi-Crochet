@@ -62,7 +62,7 @@ public sealed class OrdersController : ControllerBase
     {
         var customer = await _customers.ResolveForUserAsync(User.GetUserId(), cancellationToken);
         var lines = request.Items
-            .Select(i => new CheckoutLineInput(i.ItemType, i.ProductId, i.CourseId, i.Quantity))
+            .Select(i => new CheckoutLineInput(i.ItemType, i.ProductId, i.CourseId, i.Quantity, request.StudentCode))
             .ToList();
         var shipping = request.ShippingAddress is null ? null : request.ShippingAddress.ToInput();
 
