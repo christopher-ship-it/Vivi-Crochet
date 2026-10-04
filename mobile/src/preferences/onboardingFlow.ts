@@ -30,7 +30,11 @@ export function isSupportedCountry(value: unknown): value is AppCountryCode {
   return value === 'IN' || value === 'US';
 }
 
-export type OnboardingRoute = '/language-onboarding' | '/country-onboarding' | '/(tabs)';
+export type OnboardingRoute =
+  | '/language-onboarding'
+  | '/country-onboarding'
+  | '/(tabs)'
+  | '/(tabs)/offers';
 
 /**
  * Where the app goes after the splash. Returning users with both choices saved go straight
@@ -48,6 +52,14 @@ export function routeAfterSplash(
 /** Where "Continue" on the language screen goes. */
 export function routeAfterLanguage(country: AppCountryCode | null): OnboardingRoute {
   return country ? '/(tabs)' : '/country-onboarding';
+}
+
+/**
+ * Where "Continue" on the country screen goes. A first-time user lands on the Offers tab once; after that (and
+ * for anyone who has already landed there) it is the normal Home tab.
+ */
+export function routeAfterCountry(hasLandedOnOffers: boolean): OnboardingRoute {
+  return hasLandedOnOffers ? '/(tabs)' : '/(tabs)/offers';
 }
 
 /** The Continue button is only enabled once something is selected. */

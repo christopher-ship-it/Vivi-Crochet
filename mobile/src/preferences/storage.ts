@@ -20,3 +20,23 @@ export async function saveStoredCountry(country: AppCountryCode): Promise<void> 
     // Persistence failure should not block the flow.
   }
 }
+
+/** Set when a first-time user has been sent to the Offers tab, so it happens only once. */
+export const OFFERS_LANDING_KEY = 'vivi_offers_landing_done';
+
+export async function hasLandedOnOffers(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(OFFERS_LANDING_KEY)) === '1';
+  } catch {
+    // If storage cannot be read, go to Home rather than risk sending someone to Offers again.
+    return true;
+  }
+}
+
+export async function markLandedOnOffers(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(OFFERS_LANDING_KEY, '1');
+  } catch {
+    // Not saving only means a repeat of the Offers landing next time.
+  }
+}
