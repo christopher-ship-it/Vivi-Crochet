@@ -20,23 +20,37 @@ const SOURCE_LABEL: Record<PaymentSource, string> = {
   Live: 'Live class',
 };
 
-const STATUSES: PaymentStatus[] = ['Captured', 'Created', 'Authorized', 'Failed', 'Refunded'];
+/** A checkout still unpaid after this long counts as left without paying. */
+const ABANDONED_AFTER_MS = 30 * 60 * 1000;
 
-const STATUS_BADGE: Record<PaymentStatus, string> = {
+type DisplayStatus = PaymentStatus | 'Abandoned';
+
+const STATUSES: DisplayStatus[] = ['Captured', 'Abandoned', 'Created', 'Authorized', 'Failed', 'Refunded'];
+
+const STATUS_BADGE: Record<DisplayStatus, string> = {
   Captured: 'badge badge--paid',
+  Abandoned: 'badge badge--inactive',
   Created: 'badge badge--pending',
   Authorized: 'badge badge--pending',
   Failed: 'badge badge--failed',
   Refunded: 'badge badge--inactive',
 };
 
-const STATUS_LABEL: Record<PaymentStatus, string> = {
+const STATUS_LABEL: Record<DisplayStatus, string> = {
   Captured: 'Paid',
-  Created: 'Awaiting payment',
+  Abandoned: 'Left without paying',
+  Created: 'Checkout open',
   Authorized: 'Authorized',
   Failed: 'Failed',
   Refunded: 'Refunded',
 };
+
+/** Unpaid checkouts older than the cut-off are shown as "Left without paying". */
+function displayStatus(p: AdminPaymentListItem): DisplayStatus {
+  if (p.status !== 'Created' && p.status !== 'Authorized') return p.status;
+  const started = parseApiDate(p.createdAt)?.getTime();
+  return started != null && Date.now() - started > ABANDONED_AFTER_MS ? 'Abandoned' : p.status;
+}
 
 function displayOrDash(value: string | null | undefined): string {
   const trimmed = (value ?? '').trim();
@@ -55,7 +69,7 @@ export function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<PaymentSource | ''>('');
-  const [status, setStatus] = useState<PaymentStatus | ''>('');
+  const [status, setStatus] = useState<DisplayStatus | ''>('');
   const [query, setQuery] = useState('');
   const [exporting, setExporting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -82,7 +96,7 @@ export function PaymentsPage() {
     const q = query.trim().toLowerCase();
     return (payments ?? []).filter((p) => {
       if (source && p.source !== source) return false;
-      if (status && p.status !== status) return false;
+      if (status && displayStatus(p) !== status) return false;
       if (!q) return true;
       return [p.orderNumber, p.customerName, p.customerEmail, p.customerPhone, p.titleSummary, p.providerPaymentId, p.providerOrderId]
         .some((v) => (v ?? '').toLowerCase().includes(q));
@@ -99,7 +113,9 @@ export function PaymentsPage() {
         label,
         amount: sumLabel([...byCurrency].map(([currency, value]) => ({ currency, value }))),
         paid: list.reduce((n, t) => n + t.capturedCount, 0),
-        pending: list.reduce((n, t) => n + t.pendingCount, 0),
+        abandoned: (payments ?? []).filter(
+          (p) => (s === null || p.source === s) && displayStatus(p) === 'Abandoned',
+        ).length,
         failed: list.reduce((n, t) => n + t.failedCount, 0),
       };
     };
@@ -109,7 +125,7 @@ export function PaymentsPage() {
       card('Courses & videos', 'Course'),
       card('Live classes', 'Live'),
     ];
-  }, [data]);
+  }, [data, payments]);
 
   async function handleDelete(p: AdminPaymentListItem) {
     const ok = window.confirm(
@@ -141,7 +157,7 @@ export function PaymentsPage() {
         { header: 'Phone', width: 16, value: (p) => p.customerPhone },
         { header: 'Amount', width: 12, value: (p) => p.amount },
         { header: 'Currency', width: 10, value: (p) => p.currency },
-        { header: 'Status', width: 16, value: (p) => STATUS_LABEL[p.status] },
+        { header: 'Status', width: 16, value: (p) => STATUS_LABEL[displayStatus(p)] },
         { header: 'Razorpay payment ID', width: 26, value: (p) => p.providerPaymentId },
         { header: 'Razorpay order ID', width: 26, value: (p) => p.providerOrderId },
         { header: 'Paid on', width: 20, value: (p) => (p.completedAt ? parseApiDate(p.completedAt) : null) },
@@ -185,7 +201,7 @@ export function PaymentsPage() {
               <span className="card__label">{c.label}</span>
               <span className="card__value">{c.amount}</span>
               <span className="card__label" style={{ fontWeight: 400 }}>
-                {c.paid} paid · {c.pending} awaiting · {c.failed} failed
+                {c.paid} paid · {c.abandoned} left without paying · {c.failed} failed
               </span>
             </div>
           ))}
@@ -220,7 +236,7 @@ export function PaymentsPage() {
         </div>
         <div className="form-field">
           <label htmlFor="payments-status">Status</label>
-          <select id="payments-status" value={status} onChange={(e) => setStatus(e.target.value as PaymentStatus | '')}>
+          <select id="payments-status" value={status} onChange={(e) => setStatus(e.target.value as DisplayStatus | '')}>
             <option value="">All statuses</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -288,7 +304,7 @@ export function PaymentsPage() {
                   </td>
                   <td className="col-nowrap">{formatMoney(p.amount, p.currency)}</td>
                   <td className="col-nowrap">
-                    <span className={STATUS_BADGE[p.status]}>{STATUS_LABEL[p.status]}</span>
+                    <span className={STATUS_BADGE[displayStatus(p)]}>{STATUS_LABEL[displayStatus(p)]}</span>
                   </td>
                   <td className="col-clip" title={p.providerPaymentId ?? undefined}>
                     {displayOrDash(p.providerPaymentId)}
