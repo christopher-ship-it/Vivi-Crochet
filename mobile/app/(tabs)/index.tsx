@@ -24,10 +24,14 @@ import {
   type LiveSlotAvailability,
   type LiveWeekSummary,
 } from '../../src/api/live';
+import { getIntroVideo } from '../../src/api/introVideo';
 import { listProducts } from '../../src/api/products';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { useCart } from '../../src/cart/CartContext';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
+import { IntroPreviewCard } from '../../src/components/IntroPreviewCard';
+import { IntroVideoModal } from '../../src/components/IntroVideoModal';
+import { hasSeenIntroPreview, markIntroPreviewSeen } from '../../src/introVideo/storage';
 import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
 import { RoomSlideshow, type SlideItem } from '../../src/components/RoomSlideshow';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
@@ -210,6 +214,10 @@ export default function HomeScreen() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [liveWeek, setLiveWeek] = useState<LiveWeekSummary | null>(null);
   const [resume, setResume] = useState<ResumeInfo | null>(null);
+  // Welcome video: the play icon in the header, and a one-time preview after 5 seconds on Home.
+  const [introUrl, setIntroUrl] = useState<string | null>(null);
+  const [introOpen, setIntroOpen] = useState(false);
+  const [introPreviewVisible, setIntroPreviewVisible] = useState(false);
 
   // Refresh the live catalogue each time Home comes into view; failures just keep the last
   // (or the static illustration), never an error state.
@@ -230,6 +238,43 @@ export default function HomeScreen() {
         cancelled = true;
       };
     }, []),
+  );
+
+  // Ask for the welcome video each time Home is shown (its link is temporary). No video, or any failure, means no icon.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getIntroVideo()
+        .then((intro) => {
+          if (!cancelled) setIntroUrl(intro.available && intro.url ? intro.url : null);
+        })
+        .catch(() => undefined);
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  // After 5 seconds on Home, show the preview once. It is marked as seen as soon as it appears, so it never returns.
+  useFocusEffect(
+    useCallback(() => {
+      if (!introUrl) return undefined;
+      let cancelled = false;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      void hasSeenIntroPreview().then((seen) => {
+        if (seen || cancelled) return;
+        timer = setTimeout(() => {
+          if (cancelled) return;
+          void markIntroPreviewSeen();
+          setIntroPreviewVisible(true);
+        }, 5000);
+      });
+      return () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+        setIntroPreviewVisible(false);
+      };
+    }, [introUrl]),
   );
 
   const mainCourses = useMemo(() => selectMainCourses(courses), [courses]);
@@ -720,6 +765,21 @@ export default function HomeScreen() {
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.topBar}>
           <BrandWordmark size="sm" />
+          <View style={styles.topActions}>
+          {introUrl ? (
+            <Pressable
+              style={styles.iconBtn}
+              onPress={() => {
+                setIntroPreviewVisible(false);
+                setIntroOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={t('home.introPlay')}
+              hitSlop={8}
+            >
+              <Ionicons name="play-circle-outline" size={26} color={colors.pink} />
+            </Pressable>
+          ) : null}
           <Pressable
             style={styles.iconBtn}
             onPress={() => router.push('/cart')}
@@ -736,7 +796,22 @@ export default function HomeScreen() {
               </View>
             ) : null}
           </Pressable>
+          </View>
         </View>
+
+        {introUrl && introPreviewVisible ? (
+          <View pointerEvents="box-none" style={[styles.introPreviewSlot, { top: insets.top + 56 }]}>
+            <IntroPreviewCard
+              url={introUrl}
+              onWatch={() => {
+                setIntroPreviewVisible(false);
+                setIntroOpen(true);
+              }}
+              onSkip={() => setIntroPreviewVisible(false)}
+            />
+          </View>
+        ) : null}
+        {introUrl ? <IntroVideoModal visible={introOpen} url={introUrl} onClose={() => setIntroOpen(false)} /> : null}
 
         <ScrollView
           style={styles.scroll}
@@ -791,6 +866,16 @@ function createStyles(fonts: UiFonts, compact = false) {
       paddingHorizontal: spacing.md,
       paddingTop: spacing.sm,
       paddingBottom: spacing.sm,
+    },
+    topActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    introPreviewSlot: {
+      position: 'absolute',
+      right: 12,
+      zIndex: 20,
     },
     iconBtn: {
       width: 40,

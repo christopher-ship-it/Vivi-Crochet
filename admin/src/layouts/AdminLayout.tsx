@@ -96,6 +96,7 @@ const COURSE_DASHBOARD_ITEMS = [
   { to: '/special-offers', label: 'Special Offers', end: true },
   { to: '/special-offers/students', label: 'Student offers' },
   { to: '/viral-projects', label: 'Viral Projects' },
+  { to: '/intro-video', label: 'Intro video' },
 ];
 
 const ORDER_ITEMS = [
@@ -132,6 +133,7 @@ function isCourseDashboardPath(pathname: string): boolean {
     pathname.startsWith('/categories/') ||
     pathname === '/special-offers' ||
     pathname.startsWith('/special-offers/') ||
+    pathname === '/intro-video' ||
     pathname === '/viral-projects' ||
     pathname.startsWith('/viral-projects/')
   );

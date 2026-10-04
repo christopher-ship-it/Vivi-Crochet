@@ -71,6 +71,7 @@ public sealed class ViviDbContext : DbContext
     public DbSet<LaunchOfferCounter> LaunchOfferCounters => Set<LaunchOfferCounter>();
     public DbSet<LaunchMembership> LaunchMemberships => Set<LaunchMembership>();
     public DbSet<StudentCode> StudentCodes => Set<StudentCode>();
+    public DbSet<IntroVideo> IntroVideos => Set<IntroVideo>();
     public DbSet<EmailNotification> EmailNotifications => Set<EmailNotification>();
     public DbSet<OrderDeliveryUpdate> OrderDeliveryUpdates => Set<OrderDeliveryUpdate>();
     public DbSet<LiveWeek> LiveWeeks => Set<LiveWeek>();
@@ -719,6 +720,18 @@ public sealed class ViviDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Screen).HasMaxLength(200).IsRequired();
             entity.HasIndex(x => new { x.Screen, x.Col, x.Row }).IsUnique();
+        });
+
+        modelBuilder.Entity<IntroVideo>(entity =>
+        {
+            entity.ToTable("IntroVideos");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OriginalBlobPath).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.FileName).HasMaxLength(260).IsRequired();
+            entity.Property(x => x.ContentType).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.BlobPath).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.TranscodeStatus).HasConversion<int>();
+            entity.Property(x => x.TranscodeError).HasMaxLength(1000);
         });
 
         modelBuilder.Entity<VideoProgress>(entity =>

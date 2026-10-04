@@ -78,7 +78,17 @@ public sealed class VideoTranscodeService
             video.UpdatedAt = DateTime.UtcNow;
         }
 
-        if (interrupted.Count > 0)
+        var interruptedIntro = await _db.IntroVideos
+            .Where(v => v.TranscodeStatus == VideoTranscodeStatus.Processing && v.UploadConfirmed)
+            .ToListAsync(cancellationToken);
+        foreach (var intro in interruptedIntro)
+        {
+            intro.TranscodeStatus = VideoTranscodeStatus.Queued;
+            intro.TranscodeError = null;
+            intro.UpdatedAt = DateTime.UtcNow;
+        }
+
+        if (interrupted.Count > 0 || interruptedIntro.Count > 0)
         {
             await _db.SaveChangesAsync(cancellationToken);
             _logger.LogWarning(
@@ -98,7 +108,7 @@ public sealed class VideoTranscodeService
             .FirstOrDefaultAsync(cancellationToken);
 
         if (video is null)
-            return false;
+            return await ProcessIntroAsync(cancellationToken);
 
         // Testing: mark Ready without ffmpeg (no real media bytes).
         if (IsTestingEnvironment())
@@ -182,6 +192,97 @@ public sealed class VideoTranscodeService
             catch (Exception cleanupEx)
             {
                 _logger.LogWarning(cleanupEx, "Failed to clean transcode temp dir {Dir}", jobDir);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compresses the app's welcome video once it has been uploaded. The previous playable file keeps being
+    /// served until the new one is ready, and stays in place if compression fails.
+    /// </summary>
+    private async Task<bool> ProcessIntroAsync(CancellationToken cancellationToken)
+    {
+        var intro = await _db.IntroVideos
+            .Where(v => v.TranscodeStatus == VideoTranscodeStatus.Queued && v.UploadConfirmed)
+            .OrderBy(v => v.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (intro is null)
+            return false;
+
+        if (IsTestingEnvironment())
+        {
+            intro.BlobPath = intro.OriginalBlobPath;
+            intro.PlayableFileSizeBytes = intro.FileSizeBytes;
+            intro.Version++;
+            intro.TranscodeStatus = VideoTranscodeStatus.Ready;
+            intro.TranscodeError = null;
+            intro.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+
+        intro.TranscodeStatus = VideoTranscodeStatus.Processing;
+        intro.TranscodeError = null;
+        intro.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        var jobDir = Path.Combine(ResolveTempRoot(), "intro-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(jobDir);
+        var originalName = Path.GetFileName(intro.OriginalBlobPath);
+        var inputPath = Path.Combine(jobDir, string.IsNullOrWhiteSpace(originalName) ? "source.bin" : originalName);
+        var outputPath = Path.Combine(jobDir, "intro.mp4");
+        var playablePath = VideoFileRules.BuildIntroPlayableBlobPath(Guid.NewGuid());
+        var previousPlayable = intro.BlobPath;
+
+        try
+        {
+            if (_ffmpeg.TryResolveExecutable() is null)
+                throw new InvalidOperationException("ffmpeg was not found. Install ffmpeg or set FFmpeg:ExecutablePath.");
+
+            _logger.LogInformation("Compressing intro video from {Original}", intro.OriginalBlobPath);
+            await _blob.DownloadToFileAsync(intro.OriginalBlobPath, inputPath, cancellationToken);
+            if (!File.Exists(inputPath) || new FileInfo(inputPath).Length == 0)
+                throw new InvalidOperationException("The uploaded file downloaded empty or missing.");
+
+            await _ffmpeg.RunTranscodeAsync(inputPath, outputPath, cancellationToken);
+            await _blob.UploadFromFileAsync(playablePath, outputPath, "video/mp4", cancellationToken);
+
+            intro.BlobPath = playablePath;
+            intro.PlayableFileSizeBytes = new FileInfo(outputPath).Length;
+            intro.Version++;
+            intro.TranscodeStatus = VideoTranscodeStatus.Ready;
+            intro.TranscodeError = null;
+            intro.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Intro video ready: {Bytes} bytes", intro.PlayableFileSizeBytes);
+
+            if (!string.IsNullOrWhiteSpace(previousPlayable) && previousPlayable != playablePath)
+            {
+                try { await _blob.DeleteAsync(previousPlayable, cancellationToken); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Could not remove the old intro video file."); }
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Intro video compression failed");
+            intro.TranscodeStatus = VideoTranscodeStatus.Failed;
+            intro.TranscodeError = Truncate(ex.Message, 1000);
+            intro.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(jobDir))
+                    Directory.Delete(jobDir, recursive: true);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogWarning(cleanupEx, "Failed to clean intro temp dir {Dir}", jobDir);
             }
         }
     }

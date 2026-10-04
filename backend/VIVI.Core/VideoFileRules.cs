@@ -72,6 +72,12 @@ public static class VideoFileRules
     public static string BuildPlayableBlobPath(Guid courseId, Guid videoId)
         => $"courses/{courseId:D}/videos/{videoId:D}/playable/lesson.mp4";
 
+    public static string BuildIntroOriginalBlobPath(Guid id, string sanitizedFileName)
+        => $"intro/{id:D}/original/{sanitizedFileName}";
+
+    public static string BuildIntroPlayableBlobPath(Guid id)
+        => $"intro/{id:D}/playable/intro.mp4";
+
     /// <summary>Extra quality renditions (short side in px) offered besides the base 720p lesson.mp4.</summary>
     public static readonly int[] ExtraQualities = { 1080, 2160 };
 
