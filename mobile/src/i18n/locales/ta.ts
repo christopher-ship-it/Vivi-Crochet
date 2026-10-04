@@ -132,6 +132,7 @@ export const ta: EnTranslations = {
     cart: 'வண்டி',
     cartItems: 'வண்டி, {{count}} பொருட்கள்',
     introPlay: 'அறிமுக வீடியோவைப் பாருங்கள்',
+    introLabel: 'அறிமுகம் பார்க்க',
     introTitle: 'VIVI-க்கு வரவேற்கிறோம்',
     introWatch: 'பாருங்கள்',
     introSkip: 'தவிர்',
