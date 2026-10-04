@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { getOtpStats } from '../api/otpStats';
+import { getOtpHistory, getOtpStats } from '../api/otpStats';
 import { ApiClientError } from '../api/client';
-import type { OtpStats } from '../types';
+import type { OtpHistory, OtpStats } from '../types';
+import { downloadOtpExcel } from '../utils/exportOtpExcel';
 import { formatDate } from '../utils/format';
 
 function percent(part: number, whole: number): string {
@@ -16,6 +17,9 @@ function dayLabel(iso: string): string {
 /** Sign-in OTPs the app has generated: totals, a 30-day chart, busiest numbers and the latest requests. */
 export function OtpStatsSection() {
   const [stats, setStats] = useState<OtpStats | null>(null);
+  const [history, setHistory] = useState<OtpHistory | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -23,8 +27,11 @@ export function OtpStatsSection() {
     let cancelled = false;
     (async () => {
       try {
-        const result = await getOtpStats();
-        if (!cancelled) setStats(result);
+        const [result, all] = await Promise.all([getOtpStats(), getOtpHistory()]);
+        if (!cancelled) {
+          setStats(result);
+          setHistory(all);
+        }
       } catch (err) {
         if (!cancelled) setError(err instanceof ApiClientError ? err.message : 'Could not load OTP numbers.');
       } finally {
@@ -36,13 +43,36 @@ export function OtpStatsSection() {
     };
   }, []);
 
+  async function handleExport() {
+    if (!stats || !history) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadOtpExcel(stats, history);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Could not create the Excel file.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <section className="section-block dashboard-section">
       <div className="section-block__head">
         <h2 className="section-title" style={{ marginBottom: 0 }}>Phone OTPs</h2>
-        {stats?.firstRequestedAt && (
-          <span className="form-hint">Tracked since {formatDate(stats.firstRequestedAt)}</span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {stats?.firstRequestedAt && (
+            <span className="form-hint">Tracked since {formatDate(stats.firstRequestedAt)}</span>
+          )}
+          <button
+            type="button"
+            className="btn"
+            disabled={!stats || !history || exporting}
+            onClick={() => void handleExport()}
+          >
+            {exporting ? 'Preparing…' : 'Download Excel'}
+          </button>
+        </div>
       </div>
 
       {loading && (
@@ -57,6 +87,8 @@ export function OtpStatsSection() {
           <p>{error}</p>
         </div>
       )}
+
+      {exportError && <div className="form-error">{exportError}</div>}
 
       {stats && (
         <>
@@ -86,6 +118,8 @@ export function OtpStatsSection() {
           </div>
 
           <DailyChart days={stats.daily} />
+
+          {history && <SummaryTables history={history} />}
 
           <div className="table-wrap" style={{ marginTop: 16 }}>
             <table className="data-table">
@@ -188,5 +222,75 @@ function DailyChart({ days }: { days: OtpStats['daily'] }) {
         <span className="form-hint">{dayLabel(days[days.length - 1]?.date ?? '')}</span>
       </div>
     </div>
+  );
+}
+
+function monthTitle(month: string): string {
+  const [year, m] = month.split('-').map(Number);
+  return new Date(year, m - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+/** Month-wise totals (all months) and day-wise totals (last 30 days, newest first). */
+function SummaryTables({ history }: { history: OtpHistory }) {
+  const months = [...history.monthly].reverse();
+  const days = [...history.daily].slice(-30).reverse();
+  return (
+    <>
+      <div className="table-wrap" style={{ marginTop: 16 }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Monthly summary</th>
+              <th>Requested</th>
+              <th>Used</th>
+              <th>Used %</th>
+              <th>Phones</th>
+              <th>Days with OTPs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {months.length === 0 ? (
+              <tr><td colSpan={6}>No OTPs requested yet.</td></tr>
+            ) : (
+              months.map((m) => (
+                <tr key={m.month}>
+                  <td className="cell-strong">{monthTitle(m.month)}</td>
+                  <td>{m.requested}</td>
+                  <td>{m.verified}</td>
+                  <td>{percent(m.verified, m.requested)}</td>
+                  <td>{m.uniquePhones}</td>
+                  <td>{m.activeDays}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="table-wrap" style={{ marginTop: 16 }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Day-wise, last 30 days</th>
+              <th>Requested</th>
+              <th>Used</th>
+              <th>Used %</th>
+              <th>Phones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((d) => (
+              <tr key={d.date}>
+                <td>{d.date}</td>
+                <td>{d.requested}</td>
+                <td>{d.verified}</td>
+                <td>{percent(d.verified, d.requested)}</td>
+                <td>{d.uniquePhones}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

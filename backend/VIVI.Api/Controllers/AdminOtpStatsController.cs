@@ -99,6 +99,73 @@ public sealed class AdminOtpStatsController : ControllerBase
         });
     }
 
+    /// <summary>Day-wise and month-wise totals plus every request, for the Excel download.</summary>
+    [HttpGet("history")]
+    [ProducesResponseType(typeof(OtpHistoryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<OtpHistoryResponse>> History(CancellationToken cancellationToken)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var rows = await _db.OtpChallenges
+            .AsNoTracking()
+            .OrderByDescending(o => o.CreatedAt)
+            .Select(o => new { o.CreatedAt, o.Phone, o.VerifiedAt, o.ExpiresAt, o.AttemptCount })
+            .ToListAsync(cancellationToken);
+
+        var today = (nowUtc + IndiaOffset).Date;
+        var byDay = rows.GroupBy(o => (o.CreatedAt + IndiaOffset).Date).ToDictionary(g => g.Key, g => g.ToList());
+
+        var daily = new List<OtpDayHistory>();
+        var monthly = new List<OtpMonthHistory>();
+        if (rows.Count > 0)
+        {
+            var first = (rows[^1].CreatedAt + IndiaOffset).Date;
+            for (var day = first; day <= today; day = day.AddDays(1))
+            {
+                byDay.TryGetValue(day, out var list);
+                list ??= [];
+                daily.Add(new OtpDayHistory
+                {
+                    Date = day.ToString("yyyy-MM-dd"),
+                    Requested = list.Count,
+                    Verified = list.Count(o => o.VerifiedAt != null),
+                    UniquePhones = list.Select(o => o.Phone).Distinct().Count()
+                });
+            }
+
+            for (var month = new DateTime(first.Year, first.Month, 1);
+                 month <= new DateTime(today.Year, today.Month, 1);
+                 month = month.AddMonths(1))
+            {
+                var inMonth = rows.Where(o =>
+                {
+                    var d = (o.CreatedAt + IndiaOffset).Date;
+                    return d.Year == month.Year && d.Month == month.Month;
+                }).ToList();
+                monthly.Add(new OtpMonthHistory
+                {
+                    Month = month.ToString("yyyy-MM"),
+                    Requested = inMonth.Count,
+                    Verified = inMonth.Count(o => o.VerifiedAt != null),
+                    UniquePhones = inMonth.Select(o => o.Phone).Distinct().Count(),
+                    ActiveDays = inMonth.Select(o => (o.CreatedAt + IndiaOffset).Date).Distinct().Count()
+                });
+            }
+        }
+
+        return Ok(new OtpHistoryResponse
+        {
+            Daily = daily,
+            Monthly = monthly,
+            Requests = rows.Select(o => new OtpRecentRequest
+            {
+                RequestedAt = o.CreatedAt,
+                Phone = Mask(o.Phone),
+                Status = o.VerifiedAt != null ? "Verified" : o.ExpiresAt > nowUtc ? "Pending" : "Expired",
+                Attempts = o.AttemptCount
+            }).ToList()
+        });
+    }
+
     private static string Mask(string phone)
         => phone.Length <= 4 ? phone : new string('•', phone.Length - 4) + phone[^4..];
 }

@@ -748,3 +748,26 @@ export interface OtpStats {
   topPhonesLast7Days: OtpPhoneCount[];
   recent: OtpRecentRequest[];
 }
+
+export interface OtpDayHistory {
+  /** yyyy-MM-dd, India calendar day. */
+  date: string;
+  requested: number;
+  verified: number;
+  uniquePhones: number;
+}
+
+export interface OtpMonthHistory {
+  /** yyyy-MM. */
+  month: string;
+  requested: number;
+  verified: number;
+  uniquePhones: number;
+  activeDays: number;
+}
+
+export interface OtpHistory {
+  daily: OtpDayHistory[];
+  monthly: OtpMonthHistory[];
+  requests: OtpRecentRequest[];
+}

@@ -83,6 +83,31 @@ public sealed class OtpStatsTests
     }
 
     [Fact]
+    public async Task History_has_every_day_and_month_and_matches_the_totals()
+    {
+        var client = _factory.CreateClient();
+        AuthTests.WithToken(client, await AuthTests.LoginAsync(client));
+        var stats = await StatsAsync();
+        var history = (await client.GetFromJsonAsync<OtpHistoryResponse>("/api/admin/otp-stats/history", AuthTests.Json))!;
+
+        Assert.Equal(stats.TotalAllTime, history.Requests.Count);
+        Assert.Equal(stats.TotalAllTime, history.Daily.Sum(d => d.Requested));
+        Assert.Equal(stats.TotalAllTime, history.Monthly.Sum(m => m.Requested));
+        Assert.Equal(stats.VerifiedAllTime, history.Monthly.Sum(m => m.Verified));
+
+        // No gaps: one row per day, and one per month, in order.
+        var days = history.Daily.Select(d => DateTime.Parse(d.Date)).ToList();
+        for (var i = 1; i < days.Count; i++)
+            Assert.Equal(days[i - 1].AddDays(1), days[i]);
+        var months = history.Monthly.Select(m => DateTime.Parse(m.Month + "-01")).ToList();
+        for (var i = 1; i < months.Count; i++)
+            Assert.Equal(months[i - 1].AddMonths(1), months[i]);
+
+        // Phones stay masked in the export.
+        Assert.All(history.Requests, r => Assert.StartsWith("••••", r.Phone));
+    }
+
+    [Fact]
     public async Task Requires_an_admin_login()
     {
         var response = await _factory.CreateClient().GetAsync("/api/admin/otp-stats");
