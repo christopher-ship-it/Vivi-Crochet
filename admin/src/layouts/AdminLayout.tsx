@@ -8,6 +8,7 @@ type IconName =
   | 'dashboard'
   | 'shop'
   | 'customers'
+  | 'phone'
   | 'bell'
   | 'support'
   | 'health'
@@ -24,6 +25,7 @@ const ICON_PATHS: Record<IconName, string> = {
   dashboard: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z',
   shop: 'M6 7h12l-1 13H7L6 7zM9 7a3 3 0 0 1 6 0',
   customers: 'M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.15a3.5 3.5 0 0 1 0 6.7',
+  phone: 'M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2',
   bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
   support: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z',
   health: 'M3 12h4l3-8 4 16 3-8h4',
@@ -80,6 +82,7 @@ const NAV_ITEMS: { to: string; label: string; icon: IconName; end?: boolean }[] 
   { to: '/products', label: 'Shop products', icon: 'shop' },
   { to: '/payments', label: 'Payments', icon: 'payments' },
   { to: '/customers', label: 'Customers', icon: 'customers' },
+  { to: '/phone-otps', label: 'Phone OTPs', icon: 'phone' },
   { to: '/notifications', label: 'Notifications', icon: 'bell' },
   { to: '/support', label: 'Support', icon: 'support' },
   { to: '/app-health', label: 'App health', icon: 'health' },
