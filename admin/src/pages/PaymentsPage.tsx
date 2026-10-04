@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listAdminPayments } from '../api/payments';
+import { deleteAdminOrder } from '../api/orders';
 import { ApiClientError } from '../api/client';
 import type { AdminPaymentListItem, AdminPaymentsResponse, PaymentSource, PaymentStatus } from '../types';
 import { formatDate, formatMoney, parseApiDate } from '../utils/format';
@@ -57,6 +58,7 @@ export function PaymentsPage() {
   const [status, setStatus] = useState<PaymentStatus | ''>('');
   const [query, setQuery] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -108,6 +110,23 @@ export function PaymentsPage() {
       card('Live classes', 'Live'),
     ];
   }, [data]);
+
+  async function handleDelete(p: AdminPaymentListItem) {
+    const ok = window.confirm(
+      `Delete test transaction ${p.orderNumber}?\n\nThis permanently removes the order and its payments, so it no longer counts in revenue. This cannot be undone.`,
+    );
+    if (!ok) return;
+    setDeletingId(p.id);
+    setError(null);
+    try {
+      await deleteAdminOrder(p.orderId);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to delete the transaction.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleExport() {
     setExporting(true);
@@ -249,6 +268,7 @@ export function PaymentsPage() {
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Payment ID</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -272,6 +292,16 @@ export function PaymentsPage() {
                   </td>
                   <td className="col-clip" title={p.providerPaymentId ?? undefined}>
                     {displayOrDash(p.providerPaymentId)}
+                  </td>
+                  <td className="col-nowrap">
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      disabled={deletingId === p.id}
+                      onClick={() => void handleDelete(p)}
+                    >
+                      {deletingId === p.id ? 'Deleting…' : 'Delete'}
+                    </button>
                   </td>
                 </tr>
               ))}
