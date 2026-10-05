@@ -89,6 +89,7 @@ const COLUMNS: ColumnDef[] = [
 ];
 
 const ACTIONS_WIDTH = 60;
+const ALWAYS_EXPORT = ['phone', 'title', 'quantity'];
 
 /** Plain values written to Excel for each column id (numbers stay numeric). */
 const EXCEL_VALUE: Record<string, (o: AdminOrderListItem) => string | number | null> = {
@@ -96,7 +97,7 @@ const EXCEL_VALUE: Record<string, (o: AdminOrderListItem) => string | number | n
   customer: (o) => o.customerName,
   email: (o) => o.customerEmail ?? null,
   phone: (o) => o.customerPhone,
-  title: (o) => o.titleSummary ?? null,
+  title: (o) => o.itemsDetail || o.titleSummary || null,
   productId: (o) => o.productCodes ?? null,
   quantity: (o) => (o.hasPhysicalItems ? (o.productQuantity ?? null) : null),
   category: (o) => (o.productRoom ? ROOM_LABEL[o.productRoom] ?? o.productRoom : null),
@@ -145,6 +146,7 @@ export function OrderList({
   const [hidden, setHidden] = useState<string[]>(() => readHidden(storageKey));
   const [pickerOpen, setPickerOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [windowDate, setWindowDate] = useState('');
   const pickerRef = useRef<HTMLDivElement>(null);
 
   // Columns this page can offer (delivery + shop columns only apply to physical orders).
@@ -224,15 +226,29 @@ export function OrderList({
   }
 
   // Only orders whose payment went through; abandoned or failed checkouts stay out of the list.
-  const visibleOrders = orders.filter(
+  const paidOrders = orders.filter(
     (o) => (o.paymentStatus === 'Captured' || o.paymentStatus === 'Refunded') && filter(o),
   );
+
+  // Cut-off window: picking a day shows orders placed from that day 5:00 PM to the next day 5:00 PM (local time).
+  const windowRange = useMemo(() => {
+    if (!windowDate) return null;
+    const [y, m, d] = windowDate.split('-').map(Number);
+    return { from: new Date(y, m - 1, d, 17, 0, 0, 0), to: new Date(y, m - 1, d + 1, 17, 0, 0, 0) };
+  }, [windowDate]);
+  const visibleOrders = windowRange
+    ? paidOrders.filter((o) => {
+        const t = parseApiDate(o.createdAt);
+        return t >= windowRange.from && t < windowRange.to;
+      })
+    : paidOrders;
 
   async function handleExport() {
     setExporting(true);
     try {
       const sheetColumns: ExcelColumn<AdminOrderListItem>[] = [
-        ...columns.map((c) => ({
+        // Phone, title and quantity are always exported, even when hidden in the table.
+        ...available.filter((c) => c.locked || !hidden.includes(c.id) || ALWAYS_EXPORT.includes(c.id)).map((c) => ({
           header: c.label,
           width: Math.max(10, Math.round(c.width / 7)),
           value: EXCEL_VALUE[c.id],
@@ -256,7 +272,7 @@ export function OrderList({
         </div>
       </header>
 
-      {!loading && visibleOrders.length > 0 && (
+      {!loading && paidOrders.length > 0 && (
         <div className="page-toolbar">
           <div className="column-picker" ref={pickerRef}>
             <button
@@ -289,6 +305,20 @@ export function OrderList({
               </div>
             )}
           </div>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>Orders 5 PM to next 5 PM, from</span>
+            <input
+              type="date"
+              value={windowDate}
+              onChange={(e) => setWindowDate(e.target.value)}
+              style={{ padding: '6px 8px' }}
+            />
+          </label>
+          {windowDate ? (
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setWindowDate('')}>
+              Clear
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn btn--secondary btn--sm"
@@ -315,8 +345,8 @@ export function OrderList({
 
       {!loading && !error && visibleOrders.length === 0 && (
         <div className="empty-state">
-          <h3>{emptyTitle}</h3>
-          <p>{emptyMessage}</p>
+          <h3>{windowRange ? 'No orders in this window' : emptyTitle}</h3>
+          <p>{windowRange ? 'Nothing was placed between 5 PM that day and 5 PM the next day.' : emptyMessage}</p>
         </div>
       )}
 

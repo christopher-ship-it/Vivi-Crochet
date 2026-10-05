@@ -352,6 +352,8 @@ export interface AdminOrderListItem {
   customerPhone: string;
   /** Snapshot-based line title(s), e.g. "Pink Yarn + 2 more". */
   titleSummary?: string | null;
+  /** Every line as "Name × qty", joined with "; ". */
+  itemsDetail?: string | null;
   /** Product codes of the shop items, comma separated. */
   productCodes?: string | null;
   /** Total units across shop items. */

@@ -145,6 +145,9 @@ public static class CommerceMapper
             CustomerEmail = order.Customer?.Email ?? string.Empty,
             CustomerPhone = order.Customer?.PhoneNumber ?? order.ShipPhone ?? string.Empty,
             TitleSummary = BuildTitleSummary(order.Items),
+            ItemsDetail = string.Join("; ", order.Items
+                .Where(i => !string.IsNullOrWhiteSpace(i.ItemNameSnapshot))
+                .Select(i => $"{i.ItemNameSnapshot!.Trim()} × {i.Quantity}")),
             ProductCodes = string.Join(", ", productLines
                 .Select(i => i.Product?.ProductCode?.Trim())
                 .Where(c => !string.IsNullOrEmpty(c))
