@@ -334,6 +334,19 @@ export function ProductFormPage() {
     }
   }
 
+  async function handleDeleteAllVariants() {
+    if (!await confirmDialog(`Delete all ${variants.length} variants? This cannot be undone.`)) return;
+    setVariantActionId('all');
+    try {
+      for (const variant of variants) await deleteProduct(variant.id);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not delete all variants.');
+    } finally {
+      await reloadVariants();
+      setVariantActionId(null);
+    }
+  }
+
   /** Shows the zoom/drag dialog; resolves with the framed photo, or null if cancelled. */
   function askForCrop(file: File): Promise<File | null> {
     return new Promise((resolve) => setCropRequest({ file, resolve }));
@@ -914,9 +927,21 @@ export function ProductFormPage() {
                 Each row is a sellable SKU (own code, price, stock, photo). Shoppers pick one on the product page.
               </p>
             </div>
-            <Link to={`/products/new?type=Resell&parent=${id}`} className="btn btn--primary btn--sm">
-              + Add variant
-            </Link>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {variants.length > 0 ? (
+                <button
+                  type="button"
+                  className="btn btn--danger btn--sm"
+                  disabled={variantActionId !== null}
+                  onClick={() => void handleDeleteAllVariants()}
+                >
+                  Delete all variants
+                </button>
+              ) : null}
+              <Link to={`/products/new?type=Resell&parent=${id}`} className="btn btn--primary btn--sm">
+                + Add variant
+              </Link>
+            </div>
           </div>
           {variants.length === 0 ? (
             <p className="form-hint">No variants yet. Add colours such as Red (DIS039), Black (DIS014).</p>
