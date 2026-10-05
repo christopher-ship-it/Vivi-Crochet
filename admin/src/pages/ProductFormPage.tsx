@@ -22,6 +22,23 @@ import { convertHeicToJpeg, isHeicImage, PRODUCT_IMAGE_EDGE_PX } from '../utils/
 import { uploadToBlob, type UploadProgress } from '../utils/videoUpload';
 import { confirmDialog } from '../components/AppDialog';
 import { ProductImageCropModal } from '../components/ProductImageCropModal';
+import { RowActionsMenu } from '../components/RowActionsMenu';
+
+function VariantEditIcon({ to, label }: { to: string; label: string }) {
+  return (
+    <Link
+      to={to}
+      aria-label={label}
+      title={label}
+      style={{ display: 'inline-flex', color: 'var(--vivi-muted, #8a7f85)' }}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    </Link>
+  );
+}
 
 const MAX_PHOTOS = 5;
 /** Original photos can be big (phone cameras); the saved 1200×1200 result is still checked against 5 MB. */
@@ -984,8 +1001,18 @@ export function ProductFormPage() {
                           <span>{variant.colourName ?? '—'}</span>
                         </div>
                       </td>
-                      <td>{formatInr(variant.price)}</td>
-                      <td>{variant.availableStock <= 0 ? 'OUT OF STOCK' : variant.availableStock}</td>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          {formatInr(variant.price)}
+                          <VariantEditIcon to={`/products/${variant.id}/edit`} label={`Edit price of ${variant.colourName ?? 'variant'}`} />
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          {variant.availableStock <= 0 ? 'OUT OF STOCK' : variant.availableStock}
+                          <VariantEditIcon to={`/products/${variant.id}/edit`} label={`Edit stock of ${variant.colourName ?? 'variant'}`} />
+                        </span>
+                      </td>
                       <td>
                         <span className={`badge badge--${variant.status.toLowerCase()}`}>
                           {variant.status}
@@ -993,23 +1020,24 @@ export function ProductFormPage() {
                       </td>
                       <td>
                         <div className="data-table__actions">
-                          <Link to={`/products/${variant.id}/edit`} className="btn btn--ghost btn--sm">Edit</Link>
-                          <button
-                            type="button"
-                            className="btn btn--ghost btn--sm"
-                            disabled={variantActionId === variant.id}
-                            onClick={() => void handleVariantPublishToggle(variant)}
-                          >
-                            {variant.status === 'Published' ? 'Unpublish' : 'Publish'}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn--danger btn--sm"
-                            disabled={variantActionId === variant.id}
-                            onClick={() => void handleVariantDelete(variant)}
-                          >
-                            Delete
-                          </button>
+                          <RowActionsMenu
+                            label={`Actions for ${variant.colourName ?? 'variant'}`}
+                            disabled={variantActionId !== null}
+                            items={[
+                              { id: 'edit', label: 'Edit', to: `/products/${variant.id}/edit` },
+                              {
+                                id: 'publish',
+                                label: variant.status === 'Published' ? 'Unpublish' : 'Publish',
+                                onClick: () => void handleVariantPublishToggle(variant),
+                              },
+                              {
+                                id: 'delete',
+                                label: 'Delete',
+                                danger: true,
+                                onClick: () => void handleVariantDelete(variant),
+                              },
+                            ]}
+                          />
                         </div>
                       </td>
                     </tr>
