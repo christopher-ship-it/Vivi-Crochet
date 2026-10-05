@@ -204,6 +204,7 @@ export function ProductFormPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [busyImageId, setBusyImageId] = useState<string | null>(null);
   const [variantActionId, setVariantActionId] = useState<string | null>(null);
+  const [bulkPrice, setBulkPrice] = useState('');
 
   const isVariant = Boolean(form.parentProductId);
   const isEssentialsParent = form.productType === 'Resell' && !isVariant;
@@ -246,7 +247,7 @@ export function ProductFormPage() {
           productType: parent.productType ?? 'Resell',
           parentProductId: parent.id,
           variantOptionName: null,
-          price: '',
+          price: parent.variants?.[0]?.price ?? '',
           availableStock: '',
           productCode: '',
           colourName: '',
@@ -424,6 +425,27 @@ export function ProductFormPage() {
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Could not update variant.');
       throw err;
+    }
+  }
+
+  async function handleApplyPriceToAll() {
+    const price = Number(bulkPrice);
+    if (bulkPrice.trim() === '' || !Number.isFinite(price) || price < 0) {
+      setError('Enter a valid price (₹) to apply to all variants.');
+      return;
+    }
+    if (!await confirmDialog(`Set the price of all ${variants.length} variants to ${formatInr(price)}?`)) return;
+    setVariantActionId('all');
+    setError(null);
+    try {
+      for (const variant of variants) {
+        if (variant.price !== price) await handleVariantFieldSave(variant, 'price', price);
+      }
+      setBulkPrice('');
+    } catch {
+      /* error already shown by handleVariantFieldSave */
+    } finally {
+      setVariantActionId(null);
     }
   }
 
@@ -1062,6 +1084,31 @@ export function ProductFormPage() {
               </Link>
             </div>
           </div>
+          {variants.length > 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '0 0 12px' }}>
+              <label htmlFor="bulkPrice" style={{ fontWeight: 600 }}>Price for all variants (₹)</label>
+              <input
+                id="bulkPrice"
+                type="number"
+                min={0}
+                step="any"
+                value={bulkPrice}
+                placeholder="e.g. 100"
+                disabled={variantActionId !== null}
+                style={{ width: 110, padding: '6px 8px' }}
+                onChange={(e) => setBulkPrice(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleApplyPriceToAll(); } }}
+              />
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                disabled={variantActionId !== null || bulkPrice.trim() === ''}
+                onClick={() => void handleApplyPriceToAll()}
+              >
+                Apply to all
+              </button>
+            </div>
+          ) : null}
           {variants.length === 0 ? (
             <p className="form-hint">No variants yet. Add colours such as Red (DIS039), Black (DIS014).</p>
           ) : (
