@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listAdminPayments } from '../api/payments';
+import { listAdminPayments, syncAdminPayment } from '../api/payments';
 import { deleteAdminOrder } from '../api/orders';
 import { ApiClientError } from '../api/client';
 import type { AdminPaymentListItem, AdminPaymentsResponse, PaymentSource, PaymentStatus } from '../types';
@@ -73,6 +73,7 @@ export function PaymentsPage() {
   const [query, setQuery] = useState('');
   const [exporting, setExporting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -141,6 +142,26 @@ export function PaymentsPage() {
       setError(err instanceof ApiClientError ? err.message : 'Failed to delete the transaction.');
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleSync(p: AdminPaymentListItem) {
+    const entered = window.prompt(
+      `Paid in Razorpay but still unpaid here?
+
+Enter the Razorpay payment ID for ${p.orderNumber} (starts with pay_). It is checked against Razorpay, then the order is confirmed and the purchase unlocked.`,
+      p.providerPaymentId ?? '',
+    );
+    if (!entered?.trim()) return;
+    setSyncingId(p.id);
+    setError(null);
+    try {
+      await syncAdminPayment(p.id, entered.trim());
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not sync this payment.');
+    } finally {
+      setSyncingId(null);
     }
   }
 
@@ -273,9 +294,9 @@ export function PaymentsPage() {
 
       {!loading && rows.length > 0 && (
         <div className="table-wrap">
-          <table className="data-table data-table--orders" style={{ minWidth: 1500 }}>
+          <table className="data-table data-table--orders" style={{ minWidth: 1570 }}>
             <colgroup>
-              {[150, 210, 130, 230, 220, 100, 170, 190, 100].map((w, i) => (
+              {[150, 210, 130, 230, 220, 100, 170, 190, 170].map((w, i) => (
                 <col key={i} style={{ width: w }} />
               ))}
             </colgroup>
@@ -315,6 +336,17 @@ export function PaymentsPage() {
                     {displayOrDash(p.providerPaymentId)}
                   </td>
                   <td className="col-nowrap">
+                    {p.status !== 'Captured' && p.status !== 'Refunded' && p.status !== 'Failed' && (
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        style={{ marginRight: 6 }}
+                        disabled={syncingId === p.id}
+                        onClick={() => void handleSync(p)}
+                      >
+                        {syncingId === p.id ? 'Syncing…' : 'Sync'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn btn--secondary btn--sm"

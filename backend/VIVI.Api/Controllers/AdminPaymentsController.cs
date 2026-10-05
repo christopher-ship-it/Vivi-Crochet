@@ -5,6 +5,9 @@ using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Orders;
 using VIVI.Api.Mapping;
 using VIVI.Core.Enums;
+using VIVI.Core.Exceptions;
+using VIVI.Core.Interfaces;
+using VIVI.Infrastructure.Commerce;
 using VIVI.Infrastructure.Data;
 
 namespace VIVI.Api.Controllers;
@@ -15,8 +18,18 @@ namespace VIVI.Api.Controllers;
 public sealed class AdminPaymentsController : ControllerBase
 {
     private readonly ViviDbContext _db;
+    private readonly IRazorpayPaymentGateway _razorpay;
+    private readonly PaymentFulfillmentService _fulfillment;
 
-    public AdminPaymentsController(ViviDbContext db) => _db = db;
+    public AdminPaymentsController(
+        ViviDbContext db,
+        IRazorpayPaymentGateway razorpay,
+        PaymentFulfillmentService fulfillment)
+    {
+        _db = db;
+        _razorpay = razorpay;
+        _fulfillment = fulfillment;
+    }
 
     /// <summary>
     /// Every payment attempt with the order it belongs to, tagged Product / Course / Live,
@@ -78,4 +91,44 @@ public sealed class AdminPaymentsController : ControllerBase
 
         return Ok(new AdminPaymentsResponse { Payments = rows, Totals = totals });
     }
+
+    /// <summary>
+    /// Recovers a payment Razorpay captured but our server never recorded (missed verify call or
+    /// webhook). Checks the Razorpay payment really belongs to this payment's order and amount,
+    /// then runs the normal idempotent fulfillment (confirms the order, unlocks courses, emails).
+    /// </summary>
+    [HttpPost("{id:guid}/sync")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Sync(
+        Guid id,
+        [FromBody] SyncPaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var razorpayPaymentId = request.RazorpayPaymentId?.Trim();
+        if (string.IsNullOrEmpty(razorpayPaymentId) || !razorpayPaymentId.StartsWith("pay_", StringComparison.Ordinal))
+            throw new ViviException("INVALID_PAYMENT_ID", "Enter the Razorpay payment ID (starts with pay_).");
+
+        var payment = await _db.Payments
+            .Include(p => p.Order)
+            .SingleOrDefaultAsync(p => p.Id == id, cancellationToken)
+            ?? throw ViviException.NotFound("PAYMENT_NOT_FOUND", "Payment record was not found.");
+
+        var remote = await _razorpay.FetchPaymentAsync(razorpayPaymentId, cancellationToken)
+            ?? throw ViviException.Conflict("PAYMENT_NOT_FOUND", "Razorpay could not find that payment.");
+
+        if (!string.Equals(remote.RazorpayOrderId, payment.ProviderOrderId, StringComparison.Ordinal))
+            throw ViviException.Conflict("PAYMENT_ORDER_MISMATCH", "That Razorpay payment belongs to a different order.");
+
+        var expectedPaise = (int)Math.Round(payment.Order!.TotalAmount * 100m, MidpointRounding.AwayFromZero);
+        if (remote.AmountPaise != expectedPaise)
+            throw ViviException.Conflict("AMOUNT_MISMATCH", "Paid amount does not match the order total.");
+
+        await _fulfillment.ProcessWebhookPaymentAsync(payment.ProviderOrderId, razorpayPaymentId, cancellationToken);
+        return NoContent();
+    }
+}
+
+public sealed class SyncPaymentRequest
+{
+    public string? RazorpayPaymentId { get; set; }
 }
