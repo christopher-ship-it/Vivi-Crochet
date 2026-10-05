@@ -140,10 +140,18 @@ public static class CommerceMapper
             Status = order.Status,
             PaymentStatus = payment?.Status,
             TotalAmount = order.TotalAmount,
+            ShippingAmount = order.ShippingAmount,
             Currency = order.Currency,
             CustomerName = DisplayCustomerName(order.Customer, order.ShipFullName),
             CustomerEmail = order.Customer?.Email ?? string.Empty,
             CustomerPhone = order.Customer?.PhoneNumber ?? order.ShipPhone ?? string.Empty,
+            ShippingAddress = string.Join(",", new[]
+                {
+                    order.ShipAddressLine1, order.ShipAddressLine2, order.ShipLandmark,
+                    order.ShipCity, order.ShipState, order.ShipPinCode, order.ShipCountry
+                }
+                .Where(part => !string.IsNullOrWhiteSpace(part))
+                .Select(part => part!.Trim())),
             TitleSummary = BuildTitleSummary(order.Items),
             ItemsDetail = string.Join("; ", order.Items
                 .Where(i => !string.IsNullOrWhiteSpace(i.ItemNameSnapshot))

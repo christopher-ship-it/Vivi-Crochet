@@ -345,11 +345,15 @@ export interface AdminOrderListItem {
   status: OrderStatus;
   paymentStatus?: PaymentStatus | null;
   totalAmount: number;
+  /** Delivery charge included in totalAmount. */
+  shippingAmount?: number;
   /** Currency of totalAmount (INR or USD). */
   currency?: string;
   customerName: string;
   customerEmail?: string | null;
   customerPhone: string;
+  /** Single-line delivery address; empty for digital-only orders. */
+  shippingAddress?: string | null;
   /** Snapshot-based line title(s), e.g. "Pink Yarn + 2 more". */
   titleSummary?: string | null;
   /** Every line as "Name × qty", joined with "; ". */

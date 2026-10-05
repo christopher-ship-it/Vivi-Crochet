@@ -273,7 +273,12 @@ export function PaymentsPage() {
 
       {!loading && rows.length > 0 && (
         <div className="table-wrap">
-          <table className="data-table data-table--orders" style={{ minWidth: 1180 }}>
+          <table className="data-table data-table--orders" style={{ minWidth: 1500 }}>
+            <colgroup>
+              {[150, 210, 130, 230, 220, 100, 170, 190, 100].map((w, i) => (
+                <col key={i} style={{ width: w }} />
+              ))}
+            </colgroup>
             <thead>
               <tr>
                 <th>Date</th>

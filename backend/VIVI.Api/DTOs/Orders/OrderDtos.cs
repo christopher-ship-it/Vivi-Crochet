@@ -142,11 +142,15 @@ public sealed class AdminOrderListItemResponse
     public OrderStatus Status { get; set; }
     public PaymentStatus? PaymentStatus { get; set; }
     public decimal TotalAmount { get; set; }
+    /// <summary>Delivery charge included in <see cref="TotalAmount"/>.</summary>
+    public decimal ShippingAmount { get; set; }
     /// <summary>Currency of <see cref="TotalAmount"/> (INR or USD).</summary>
     public string Currency { get; set; } = "INR";
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerEmail { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
+    /// <summary>Single-line delivery address of the order (empty for digital-only orders).</summary>
+    public string ShippingAddress { get; set; } = string.Empty;
     /// <summary>Display title from order item name snapshots (e.g. first item + "N more").</summary>
     public string TitleSummary { get; set; } = string.Empty;
     /// <summary>Every line as "Name × qty", joined with "; " (used by the Excel export).</summary>

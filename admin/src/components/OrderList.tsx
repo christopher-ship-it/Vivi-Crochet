@@ -68,6 +68,7 @@ const COLUMNS: ColumnDef[] = [
     render: (o) => (o.productRoom ? ROOM_LABEL[o.productRoom] ?? o.productRoom : '—'),
   },
   { id: 'amount', label: 'Amount', width: 104, render: (o) => formatMoney(o.totalAmount, o.currency) },
+  { id: 'shipping', label: 'Delivery charge', width: 130, shopOnly: true, render: (o) => (o.hasPhysicalItems ? formatMoney(o.shippingAmount ?? 0, o.currency) : '—') },
   { id: 'payment', label: 'Payment', width: 110, render: (o) => o.paymentStatus ?? '—' },
   {
     id: 'status', label: 'Status', width: 160,
@@ -89,7 +90,7 @@ const COLUMNS: ColumnDef[] = [
 ];
 
 const ACTIONS_WIDTH = 60;
-const ALWAYS_EXPORT = ['phone', 'title', 'quantity'];
+const ALWAYS_EXPORT = ['phone', 'title', 'quantity', 'shipping'];
 
 /** Plain values written to Excel for each column id (numbers stay numeric). */
 const EXCEL_VALUE: Record<string, (o: AdminOrderListItem) => string | number | null> = {
@@ -102,6 +103,7 @@ const EXCEL_VALUE: Record<string, (o: AdminOrderListItem) => string | number | n
   quantity: (o) => (o.hasPhysicalItems ? (o.productQuantity ?? null) : null),
   category: (o) => (o.productRoom ? ROOM_LABEL[o.productRoom] ?? o.productRoom : null),
   amount: (o) => o.totalAmount,
+  shipping: (o) => (o.hasPhysicalItems ? (o.shippingAmount ?? 0) : null),
   payment: (o) => o.paymentStatus ?? null,
   status: (o) => (o.status === 'Shipped' ? 'Dispatched' : o.status === 'InProduction' ? 'In production' : o.status),
   delivery: (o) =>
@@ -253,6 +255,9 @@ export function OrderList({
           width: Math.max(10, Math.round(c.width / 7)),
           value: EXCEL_VALUE[c.id],
         })),
+        ...(showDelivery
+          ? [{ header: 'Address', width: 48, value: (o: AdminOrderListItem) => o.shippingAddress || null }]
+          : []),
         { header: 'Placed on', width: 20, value: (o: AdminOrderListItem) => parseApiDate(o.createdAt) },
       ];
       await downloadExcel(showDelivery ? 'product-orders' : 'course-orders', 'Orders', sheetColumns, visibleOrders);
