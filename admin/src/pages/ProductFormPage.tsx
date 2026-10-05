@@ -24,19 +24,84 @@ import { confirmDialog } from '../components/AppDialog';
 import { ProductImageCropModal } from '../components/ProductImageCropModal';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 
-function VariantEditIcon({ to, label }: { to: string; label: string }) {
+type VariantField = 'price' | 'availableStock';
+
+function VariantInlineCell({
+  display,
+  value,
+  label,
+  integer,
+  onSave,
+}: {
+  display: string | number;
+  value: number;
+  label: string;
+  integer?: boolean;
+  onSave: (next: number) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function commit() {
+    const n = Number(draft);
+    if (draft.trim() === '' || !Number.isFinite(n) || n < 0) return;
+    const next = integer ? Math.floor(n) : n;
+    if (next === value) { setEditing(false); return; }
+    setBusy(true);
+    try {
+      await onSave(next);
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const iconBtn: React.CSSProperties = {
+    display: 'inline-flex', background: 'none', border: 0, padding: 2, cursor: 'pointer',
+    color: 'var(--vivi-muted, #8a7f85)',
+  };
+
+  if (editing) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <input
+          type="number"
+          min={0}
+          step={integer ? 1 : 'any'}
+          autoFocus
+          value={draft}
+          disabled={busy}
+          aria-label={label}
+          style={{ width: 80, padding: '4px 6px' }}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); void commit(); }
+            if (e.key === 'Escape') setEditing(false);
+          }}
+        />
+        <button type="button" style={{ ...iconBtn, color: '#1f8a52' }} aria-label="Save" title="Save" disabled={busy} onClick={() => void commit()}>✓</button>
+        <button type="button" style={iconBtn} aria-label="Cancel" title="Cancel" disabled={busy} onClick={() => setEditing(false)}>✕</button>
+      </span>
+    );
+  }
+
   return (
-    <Link
-      to={to}
-      aria-label={label}
-      title={label}
-      style={{ display: 'inline-flex', color: 'var(--vivi-muted, #8a7f85)' }}
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 20h9" />
-        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-      </svg>
-    </Link>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      {display}
+      <button
+        type="button"
+        style={iconBtn}
+        aria-label={label}
+        title={label}
+        onClick={() => { setDraft(String(value)); setEditing(true); }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+      </button>
+    </span>
   );
 }
 
@@ -323,6 +388,43 @@ export function ProductFormPage() {
     if (!id || isVariant) return;
     const product = await getProduct(id);
     setVariants(product.variants ?? []);
+  }
+
+  async function handleVariantFieldSave(variant: ProductVariantSummary, field: VariantField, value: number) {
+    try {
+      const p = await getProduct(variant.id);
+      const payload: ProductRequest = {
+        name: p.name,
+        productCode: p.productCode ?? null,
+        category: p.category,
+        description: p.description ?? null,
+        price: p.price,
+        mrp: p.mrp ?? null,
+        spec1: p.spec1 ?? null,
+        spec2: p.spec2 ?? null,
+        ballWeight: p.ballWeight ?? null,
+        yarnLength: p.yarnLength ?? null,
+        crochetHookSize: p.crochetHookSize ?? null,
+        fibreBlend: p.fibreBlend ?? null,
+        yarnWeight: p.yarnWeight ?? null,
+        needleSize: p.needleSize ?? null,
+        colourName: p.colourName ?? null,
+        colourHex: p.colourHex ?? null,
+        parentProductId: p.parentProductId ?? null,
+        variantOptionName: p.variantOptionName ?? null,
+        courseId: p.courseId ?? null,
+        sortOrder: p.sortOrder,
+        productType: p.productType ?? 'Resell',
+        availableStock: p.availableStock ?? 0,
+        recommendedEssentialIds: (p.recommendedEssentials ?? []).map((e) => e.id),
+        [field]: value,
+      };
+      await updateProduct(variant.id, payload);
+      await reloadVariants();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not update variant.');
+      throw err;
+    }
   }
 
   async function handleVariantPublishToggle(variant: ProductVariantSummary) {
@@ -1002,16 +1104,21 @@ export function ProductFormPage() {
                         </div>
                       </td>
                       <td>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          {formatInr(variant.price)}
-                          <VariantEditIcon to={`/products/${variant.id}/edit`} label={`Edit price of ${variant.colourName ?? 'variant'}`} />
-                        </span>
+                        <VariantInlineCell
+                          display={formatInr(variant.price)}
+                          value={variant.price}
+                          label={`Edit price of ${variant.colourName ?? 'variant'}`}
+                          onSave={(n) => handleVariantFieldSave(variant, 'price', n)}
+                        />
                       </td>
                       <td>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          {variant.availableStock <= 0 ? 'OUT OF STOCK' : variant.availableStock}
-                          <VariantEditIcon to={`/products/${variant.id}/edit`} label={`Edit stock of ${variant.colourName ?? 'variant'}`} />
-                        </span>
+                        <VariantInlineCell
+                          display={variant.availableStock <= 0 ? 'OUT OF STOCK' : variant.availableStock}
+                          value={variant.availableStock}
+                          label={`Edit stock of ${variant.colourName ?? 'variant'}`}
+                          integer
+                          onSave={(n) => handleVariantFieldSave(variant, 'availableStock', n)}
+                        />
                       </td>
                       <td>
                         <span className={`badge badge--${variant.status.toLowerCase()}`}>
