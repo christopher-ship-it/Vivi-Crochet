@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { deleteAdminOrder, getAdminOrder, updateOrderDeliveryDate, updateOrderStatus } from '../api/orders';
+import { cancelAndRefundOrder, deleteAdminOrder, getAdminOrder, updateOrderDeliveryDate, updateOrderStatus } from '../api/orders';
 import { ApiClientError } from '../api/client';
 import type { AdminOrderDetail, OrderStatus } from '../types';
 import { formatDate, formatDay, formatMoney, parseApiDate } from '../utils/format';
@@ -64,6 +64,7 @@ export function OrderDetailPage() {
   const [saving, setSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [refunding, setRefunding] = useState(false);
   const [nextStatus, setNextStatus] = useState<OrderStatus | ''>('');
 
   async function load() {
@@ -157,6 +158,26 @@ export function OrderDetailPage() {
     }
   }
 
+  async function handleCancelRefund() {
+    if (!id || !order) return;
+    const ok = await confirmDialog(
+      `Cancel order ${order.orderNumber} and refund the customer?
+
+The full amount is refunded through Razorpay to the original payment method, product stock is restored, and any course access from this order is removed. This cannot be undone.`,
+    );
+    if (!ok) return;
+
+    setRefunding(true);
+    setError(null);
+    try {
+      setOrder(await cancelAndRefundOrder(id));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not cancel and refund this order.');
+    } finally {
+      setRefunding(false);
+    }
+  }
+
   async function handleDelete() {
     if (!id || !order) return;
     const ok = await confirmDialog(
@@ -223,10 +244,20 @@ export function OrderDetailPage() {
         </div>
         <div className="page-header__actions">
           <Link to={backTo} className="btn btn--ghost btn--sm">← {backLabel}</Link>
+          {(order.status === 'Paid' || order.status === 'Confirmed' || order.status === 'InProduction' || order.status === 'Shipped') && (
+            <button
+              type="button"
+              className="btn btn--danger btn--sm"
+              disabled={refunding || deleting}
+              onClick={() => void handleCancelRefund()}
+            >
+              {refunding ? 'Refunding…' : 'Cancel & refund'}
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--danger btn--sm"
-            disabled={deleting}
+            disabled={deleting || refunding}
             onClick={() => void handleDelete()}
           >
             {deleting ? 'Deleting…' : 'Delete order'}

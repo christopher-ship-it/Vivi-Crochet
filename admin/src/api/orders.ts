@@ -36,3 +36,8 @@ export async function updateOrderStatus(
 export async function deleteAdminOrder(id: string): Promise<void> {
   await apiRequest<void>(`/api/admin/orders/${id}`, { method: 'DELETE' });
 }
+
+/** Refunds the order in full through Razorpay, cancels it, restores stock and removes course access. */
+export async function cancelAndRefundOrder(id: string): Promise<AdminOrderDetail> {
+  return apiRequest<AdminOrderDetail>(`/api/admin/orders/${id}/cancel-refund`, { method: 'POST' });
+}

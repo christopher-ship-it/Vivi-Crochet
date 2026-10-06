@@ -24,17 +24,20 @@ public sealed class AdminOrdersController : ControllerBase
     private readonly IDeliveryEstimateService _delivery;
     private readonly TransactionalEmailService _emails;
     private readonly AdminDataCleanupService _cleanup;
+    private readonly OrderCancellationService _cancellation;
 
     public AdminOrdersController(
         ViviDbContext db,
         IDeliveryEstimateService delivery,
         TransactionalEmailService emails,
-        AdminDataCleanupService cleanup)
+        AdminDataCleanupService cleanup,
+        OrderCancellationService cancellation)
     {
         _db = db;
         _delivery = delivery;
         _emails = emails;
         _cleanup = cleanup;
+        _cancellation = cancellation;
     }
 
     [HttpGet]
@@ -142,6 +145,19 @@ public sealed class AdminOrdersController : ControllerBase
 
         await _db.SaveChangesAsync(cancellationToken);
         order = await LoadAdminOrderAsync(id, cancellationToken);
+        return Ok(order.ToAdminDetail(_delivery));
+    }
+
+    /// <summary>
+    /// Refunds a paid order in full through Razorpay, marks it Cancelled, restores product stock
+    /// and removes the course access it granted.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel-refund")]
+    [ProducesResponseType(typeof(AdminOrderDetailResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminOrderDetailResponse>> CancelAndRefund(Guid id, CancellationToken cancellationToken)
+    {
+        await _cancellation.CancelAndRefundAsync(id, cancellationToken);
+        var order = await LoadAdminOrderAsync(id, cancellationToken);
         return Ok(order.ToAdminDetail(_delivery));
     }
 

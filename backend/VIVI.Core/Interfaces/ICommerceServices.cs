@@ -15,6 +15,8 @@ public sealed record RazorpayPaymentDetails(
     string Currency,
     string Status);
 
+public sealed record RazorpayRefundResult(string RefundId, string Status);
+
 public interface IRazorpayPaymentGateway
 {
     Task<RazorpayOrderResult> CreateOrderAsync(
@@ -25,6 +27,13 @@ public interface IRazorpayPaymentGateway
 
     Task<RazorpayPaymentDetails?> FetchPaymentAsync(
         string razorpayPaymentId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Refunds the given amount. A payment that is already fully refunded counts as success.</summary>
+    Task<RazorpayRefundResult> RefundPaymentAsync(
+        string razorpayPaymentId,
+        int amountPaise,
+        string receipt,
         CancellationToken cancellationToken);
 }
 

@@ -102,6 +102,7 @@ builder.Services.AddScoped<LaunchOfferService>();
 builder.Services.AddScoped<IDeliveryEstimateService, DeliveryEstimateService>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<AdminDataCleanupService>();
+builder.Services.AddScoped<OrderCancellationService>();
 builder.Services.AddScoped<LiveCalendarService>();
 builder.Services.AddScoped<ProductImportService>();
 builder.Services.AddScoped<LiveBookingService>();

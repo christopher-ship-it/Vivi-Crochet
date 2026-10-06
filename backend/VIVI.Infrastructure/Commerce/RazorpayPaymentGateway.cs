@@ -88,6 +88,51 @@ public sealed class RazorpayPaymentGateway : IRazorpayPaymentGateway
             root.GetProperty("status").GetString() ?? "created");
     }
 
+    public async Task<RazorpayRefundResult> RefundPaymentAsync(
+        string razorpayPaymentId,
+        int amountPaise,
+        string receipt,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.KeyId) || string.IsNullOrWhiteSpace(_options.KeySecret))
+            throw new InvalidOperationException("Razorpay credentials are not configured.");
+
+        var payload = new { amount = amountPaise, speed = "normal", receipt };
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"{_options.BaseUrl.TrimEnd('/')}/payments/{razorpayPaymentId}/refund");
+        request.Headers.Authorization = CreateBasicAuthHeader();
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            if (body.Contains("fully refunded", StringComparison.OrdinalIgnoreCase))
+                return new RazorpayRefundResult(string.Empty, "already_refunded");
+
+            _logger.LogError("Razorpay refund failed for {PaymentId}: {Status} {Body}", razorpayPaymentId, response.StatusCode, body);
+            var reason = "Razorpay rejected the refund.";
+            try
+            {
+                using var err = JsonDocument.Parse(body);
+                if (err.RootElement.TryGetProperty("error", out var e) && e.TryGetProperty("description", out var d))
+                    reason = d.GetString() ?? reason;
+            }
+            catch (JsonException)
+            {
+            }
+            throw new VIVI.Core.Exceptions.ViviException("REFUND_FAILED", reason, 409);
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        return new RazorpayRefundResult(
+            root.GetProperty("id").GetString()!,
+            root.TryGetProperty("status", out var st) ? st.GetString() ?? "processed" : "processed");
+    }
+
     private AuthenticationHeaderValue CreateBasicAuthHeader()
     {
         var token = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_options.KeyId}:{_options.KeySecret}"));

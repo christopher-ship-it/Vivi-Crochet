@@ -34,6 +34,13 @@ public sealed class FakeRazorpayPaymentGateway : IRazorpayPaymentGateway
         new RazorpayPaymentDetails(orderId, razorpayPaymentId, order.Amount, order.Currency, "captured"));
   }
 
+  public Task<RazorpayRefundResult> RefundPaymentAsync(
+      string razorpayPaymentId,
+      int amountPaise,
+      string receipt,
+      CancellationToken cancellationToken)
+    => Task.FromResult(new RazorpayRefundResult($"rfnd_fake_{Guid.NewGuid():N}", "processed"));
+
   public static string BuildTestPaymentId(string razorpayOrderId) => $"pay_fake_{razorpayOrderId}";
 
   public static string BuildTestSignature(string razorpayOrderId, string razorpayPaymentId)
