@@ -21,17 +21,20 @@ public sealed class OrdersController : ControllerBase
     private readonly CustomerResolver _customers;
     private readonly OrderCheckoutService _checkout;
     private readonly IDeliveryEstimateService _delivery;
+    private readonly OrderCancellationService _cancellation;
 
     public OrdersController(
         ViviDbContext db,
         CustomerResolver customers,
         OrderCheckoutService checkout,
-        IDeliveryEstimateService delivery)
+        IDeliveryEstimateService delivery,
+        OrderCancellationService cancellation)
     {
         _db = db;
         _customers = customers;
         _checkout = checkout;
         _delivery = delivery;
+        _cancellation = cancellation;
     }
 
     /// <summary>Returns a server-calculated delivery estimate without creating an order.</summary>
@@ -90,7 +93,7 @@ public sealed class OrdersController : ControllerBase
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(cancellationToken);
 
-        return Ok(orders.Select(o => o.ToDto(_delivery)).ToList());
+        return Ok(orders.Select(o => WithCancel(o.ToDto(_delivery), o)).ToList());
     }
 
     /// <summary>Returns one order owned by the authenticated customer.</summary>
@@ -106,6 +109,31 @@ public sealed class OrdersController : ControllerBase
             .SingleOrDefaultAsync(o => o.Id == id && o.CustomerId == customer.Id, cancellationToken)
             ?? throw ViviException.NotFound("ORDER_NOT_FOUND", "Order was not found.");
 
-        return Ok(order.ToDto(_delivery));
+        return Ok(WithCancel(order.ToDto(_delivery), order));
+    }
+
+    /// <summary>
+    /// Cancels the customer's own paid physical order (full Razorpay refund) while the server-side
+    /// daily cutoff has not passed.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<OrderResponse>> Cancel(Guid id, CancellationToken cancellationToken)
+    {
+        var customer = await _customers.ResolveForUserAsync(User.GetUserId(), cancellationToken);
+        await _cancellation.CancelByCustomerAsync(customer.Id, id, cancellationToken);
+
+        var order = await _db.Orders
+            .AsNoTracking()
+            .Include(o => o.Items)
+            .Include(o => o.Payments)
+            .SingleAsync(o => o.Id == id && o.CustomerId == customer.Id, cancellationToken);
+        return Ok(WithCancel(order.ToDto(_delivery), order));
+    }
+
+    private OrderResponse WithCancel(OrderResponse dto, VIVI.Core.Entities.Order order)
+    {
+        dto.CanCancel = _cancellation.CanCustomerCancel(order);
+        return dto;
     }
 }

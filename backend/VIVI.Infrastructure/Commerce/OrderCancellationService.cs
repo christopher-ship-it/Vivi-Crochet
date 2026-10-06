@@ -1,8 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
 using VIVI.Core.Interfaces;
+using VIVI.Infrastructure.Configuration;
 using VIVI.Infrastructure.Data;
+using VIVI.Infrastructure.Email;
 
 namespace VIVI.Infrastructure.Commerce;
 
@@ -12,12 +16,63 @@ public sealed class OrderCancellationService
     private readonly ViviDbContext _db;
     private readonly IRazorpayPaymentGateway _razorpay;
     private readonly InventoryService _inventory;
+    private readonly TransactionalEmailService _emails;
+    private readonly OrderCancellationOptions _options;
 
-    public OrderCancellationService(ViviDbContext db, IRazorpayPaymentGateway razorpay, InventoryService inventory)
+    private static readonly TimeSpan IstOffset = TimeSpan.FromMinutes(330);
+
+    public OrderCancellationService(
+        ViviDbContext db,
+        IRazorpayPaymentGateway razorpay,
+        InventoryService inventory,
+        TransactionalEmailService emails,
+        IOptions<OrderCancellationOptions> options)
     {
         _db = db;
         _razorpay = razorpay;
         _inventory = inventory;
+        _emails = emails;
+        _options = options.Value;
+    }
+
+    /// <summary>First daily cutoff (India time) after the order was paid, as UTC. Null while unpaid.</summary>
+    public DateTime? CustomerCancelDeadlineUtc(Order order)
+    {
+        if (order.PaidAt is not { } paidUtc)
+            return null;
+
+        var hour = Math.Clamp(_options.CutoffHourIst, 0, 23);
+        var paidIst = DateTime.SpecifyKind(paidUtc, DateTimeKind.Utc) + IstOffset;
+        var cutoffIst = paidIst.Date.AddHours(hour);
+        if (paidIst >= cutoffIst)
+            cutoffIst = cutoffIst.AddDays(1);
+        return cutoffIst - IstOffset;
+    }
+
+    /// <summary>True when the customer may still cancel: paid physical-only order, not yet in production, before the cutoff.</summary>
+    public bool CanCustomerCancel(Order order, DateTime? nowUtc = null)
+    {
+        if (order.Status is not (OrderStatus.Paid or OrderStatus.Confirmed))
+            return false;
+        if (order.Items.Count == 0 || order.Items.Any(i => i.ItemType != OrderItemType.Product))
+            return false;
+        var deadline = CustomerCancelDeadlineUtc(order);
+        return deadline is not null && (nowUtc ?? DateTime.UtcNow) < deadline.Value;
+    }
+
+    /// <summary>Customer-initiated cancellation: own order, before the daily cutoff, then the full refund.</summary>
+    public async Task CancelByCustomerAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken)
+    {
+        var order = await _db.Orders
+            .AsNoTracking()
+            .Include(o => o.Items)
+            .SingleOrDefaultAsync(o => o.Id == orderId && o.CustomerId == customerId, cancellationToken)
+            ?? throw ViviException.NotFound("ORDER_NOT_FOUND", "Order was not found.");
+
+        if (!CanCustomerCancel(order))
+            throw ViviException.Conflict("CANCEL_NOT_ALLOWED", "This order can no longer be cancelled.");
+
+        await CancelAndRefundAsync(orderId, cancellationToken);
     }
 
     public async Task CancelAndRefundAsync(Guid orderId, CancellationToken cancellationToken)
@@ -75,5 +130,7 @@ public sealed class OrderCancellationService
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        await _emails.NotifyOrderCancelledAsync(order.Id, payment.Amount, cancellationToken);
     }
 }

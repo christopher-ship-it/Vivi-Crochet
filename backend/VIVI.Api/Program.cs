@@ -45,6 +45,7 @@ builder.Services.PostConfigure<BlobStorageOptions>(options =>
 builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(DatabaseOptions.SectionName));
 builder.Services.Configure<TwoFactorOptions>(builder.Configuration.GetSection(TwoFactorOptions.SectionName));
 builder.Services.Configure<LiveStudioOptions>(builder.Configuration.GetSection(LiveStudioOptions.SectionName));
+builder.Services.Configure<OrderCancellationOptions>(builder.Configuration.GetSection(OrderCancellationOptions.SectionName));
 builder.Services.Configure<RazorpayOptions>(builder.Configuration.GetSection(RazorpayOptions.SectionName));
 builder.Services.Configure<PushOptions>(opts =>
 {

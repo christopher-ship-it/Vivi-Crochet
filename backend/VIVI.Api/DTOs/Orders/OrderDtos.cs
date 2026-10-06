@@ -133,6 +133,9 @@ public class OrderResponse
     public IReadOnlyList<OrderItemResponse> Items { get; set; } = Array.Empty<OrderItemResponse>();
     public ShippingAddressResponse? ShippingAddress { get; set; }
     public OrderDeliveryResponse? Delivery { get; set; }
+
+    /// <summary>Server-decided: the customer may cancel this order right now. The cutoff time itself is never exposed.</summary>
+    public bool CanCancel { get; set; }
 }
 
 public sealed class AdminOrderListItemResponse

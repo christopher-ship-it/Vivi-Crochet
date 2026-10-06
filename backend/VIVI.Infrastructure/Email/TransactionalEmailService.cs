@@ -14,6 +14,7 @@ public sealed class TransactionalEmailService
     public const string CourseActivationKeyPrefix = "course-activation:";
     public const string CourseExpiryReminderKeyPrefix = "course-expiry-reminder:";
     public const string DeliveryDateUpdatedKeyPrefix = "delivery-date-updated:";
+    public const string OrderCancelledKeyPrefix = "order-cancelled:";
     public const string LiveBookingConfirmationKeyPrefix = "live-booking-confirmation:";
     public const string LaunchMembershipConfirmationKeyPrefix = "launch-membership-confirmation:";
 
@@ -114,6 +115,38 @@ public sealed class TransactionalEmailService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delivery-date update email failed for order {OrderId}", orderId);
+        }
+    }
+
+    public async Task NotifyOrderCancelledAsync(Guid orderId, decimal refundAmount, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var order = await _db.Orders
+                .AsNoTracking()
+                .SingleOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+            if (order is null)
+                return;
+
+            var customer = await _db.Customers
+                .AsNoTracking()
+                .SingleAsync(c => c.Id == order.CustomerId, cancellationToken);
+
+            var (subject, html, text) = OrderCancelledEmail.Render(customer, order, refundAmount);
+            await SendIdempotentAsync(
+                $"{OrderCancelledKeyPrefix}{order.Id}",
+                EmailNotificationType.OrderCancelled,
+                customer.Email,
+                subject,
+                html,
+                text,
+                orderId: order.Id,
+                enrollmentId: null,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Order cancellation email failed for order {OrderId}", orderId);
         }
     }
 

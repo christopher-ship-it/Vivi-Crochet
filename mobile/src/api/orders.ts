@@ -113,6 +113,8 @@ export interface OrderResponse {
   items: OrderItemResponse[];
   shippingAddress?: ShippingAddress | null;
   delivery?: OrderDelivery | null;
+  /** Decided by the server; true while the customer may still cancel this order. */
+  canCancel?: boolean;
 }
 
 export async function quoteDelivery(
@@ -153,4 +155,9 @@ export async function getOrder(orderId: string): Promise<OrderResponse> {
 
 export async function listMyOrders(): Promise<OrderResponse[]> {
   return apiRequest<OrderResponse[]>('/api/orders');
+}
+
+/** Cancels the customer's own paid order and refunds it in full. */
+export async function cancelOrder(orderId: string): Promise<OrderResponse> {
+  return apiRequest<OrderResponse>(`/api/orders/${orderId}/cancel`, { method: 'POST' });
 }

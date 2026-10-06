@@ -366,6 +366,32 @@ Open the VIVI app to view your order.
     }
 }
 
+public static class OrderCancelledEmail
+{
+    public static (string Subject, string Html, string Text) Render(Customer customer, Order order, decimal refundAmount)
+    {
+        var amount = $"{order.Currency} {refundAmount:0.##}";
+        var body = $"""
+<p>Hi {WebUtility.HtmlEncode(customer.FullName)},</p>
+<p>Your VIVI Crochet order has been cancelled and a full refund has been started.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;font-size:14px;">
+  <tr><td><strong>Order number</strong></td><td align="right">{WebUtility.HtmlEncode(order.OrderNumber)}</td></tr>
+  <tr><td><strong>Refund</strong></td><td align="right">{WebUtility.HtmlEncode(amount)}</td></tr>
+</table>
+<p style="margin:16px 0 0 0;">The money returns to your original payment method, usually within 5 to 7 working days.</p>
+""";
+
+        var text = $"""
+Hi {customer.FullName},
+
+Your order {order.OrderNumber} has been cancelled and a full refund of {amount} has been started.
+The money returns to your original payment method, usually within 5 to 7 working days.
+""";
+
+        return ("Your VIVI Crochet order has been cancelled", EmailLayout.Wrap("Order cancelled", body), text);
+    }
+}
+
 public static class LiveBookingConfirmationEmail
 {
     public static (string Subject, string Html, string Text) Render(

@@ -1,8 +1,8 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getOrder, type OrderResponse } from '../../src/api/orders';
+import { cancelOrder, getOrder, type OrderResponse } from '../../src/api/orders';
 import { ApiClientError } from '../../src/api/client';
 import { OrderPipeline } from '../../src/components/OrderPipeline';
 import { OrderStatusBadge } from '../../src/components/OrderStatusBadge';
@@ -23,6 +23,7 @@ export default function OrderDetailScreen() {
   const [order, setOrder] = useState<OrderResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -41,6 +42,35 @@ export default function OrderDetailScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const confirmCancel = useCallback(() => {
+    if (!id) return;
+    Alert.alert(
+      'Cancel this order?',
+      'Your full payment will be refunded to your original payment method, usually within 5 to 7 working days.',
+      [
+        { text: 'Keep order', style: 'cancel' },
+        {
+          text: 'Cancel order',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              setOrder(await cancelOrder(id));
+            } catch (err) {
+              Alert.alert(
+                'Could not cancel',
+                err instanceof ApiClientError ? err.message : 'Please try again in a moment.',
+              );
+              void load();
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [id, load]);
 
   if (loading) return <LoadingView message="Loading order…" />;
   if (error || !order) {
@@ -142,6 +172,21 @@ export default function OrderDetailScreen() {
 
         <Text style={styles.sectionTitle}>Production status</Text>
         <OrderPipeline steps={pipeline} />
+
+        {order.canCancel ? (
+          <Pressable
+            style={[styles.cancelButton, cancelling && styles.cancelButtonDisabled]}
+            onPress={confirmCancel}
+            disabled={cancelling}
+            accessibilityRole="button"
+          >
+            {cancelling ? (
+              <ActivityIndicator color={colors.pink} />
+            ) : (
+              <Text style={styles.cancelButtonText}>Cancel order</Text>
+            )}
+          </Pressable>
+        ) : null}
 
         <Text style={styles.note}>
           Every piece is crocheted by hand after your order is placed, so dispatch follows our
@@ -306,6 +351,23 @@ const styles = StyleSheet.create({
   },
   addressTextLast: {
     marginBottom: 0,
+  },
+  cancelButton: {
+    marginTop: spacing.md,
+    minHeight: 46,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.pink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonDisabled: {
+    opacity: 0.6,
+  },
+  cancelButtonText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 14,
+    color: colors.pink,
   },
   note: {
     fontFamily: fonts.regular,
