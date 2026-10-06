@@ -114,10 +114,18 @@ export const TERMS_DOCUMENT: LegalDocument = {
         'VIVI confirms the order.',
       ],
     },
-    { type: 'subheading', text: '3.2 Orders Cannot Be Cancelled' },
+    { type: 'subheading', text: '3.2 Order Cancellation' },
     {
       type: 'paragraph',
-      text: 'Orders placed through VIVI cannot be cancelled by the customer after successful order placement.',
+      text: 'Because every piece is handmade to order, a paid product order can be cancelled only for a short period after it is placed, and only while the Cancel order option is shown on the order page in the application.',
+    },
+    {
+      type: 'paragraph',
+      text: 'Once VIVI begins production or dispatch, or once the Cancel order option is no longer shown, the order cannot be cancelled by the customer. Orders for courses, videos, and live classes are not cancellable.',
+    },
+    {
+      type: 'paragraph',
+      text: 'When an order is cancelled through the application, the full amount paid is refunded to the original payment method, usually within 5 to 7 working days.',
     },
     { type: 'paragraph', text: 'Please carefully review:' },
     {
