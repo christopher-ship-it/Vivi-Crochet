@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Dimensions, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { isOutOfStock } from '../cart/stock';
 import { useI18n } from '../i18n';
@@ -24,6 +24,9 @@ export const PRODUCT_CARD_GAP = spacing.md;
 /** Square image well — matches product photo normalize (1200×1200). */
 const IMAGE_ASPECT_RATIO = 1;
 const RAIL_IMAGE_ASPECT_RATIO = 1;
+
+/** Max colour dots on a grid card; the rest collapse into "+N". */
+const MAX_SWATCHES = 5;
 
 function imageHeightForWidth(width: number, ratio: number): number {
   return Math.round(width / ratio);
@@ -74,6 +77,11 @@ export function ProductCard({
     .map((v) => v?.trim())
     .filter(Boolean)
     .join(' · ');
+  const swatchVariants = !isRail && !dense && variantCount > 1 ? (product.variants ?? []) : [];
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const previewVariant = swatchVariants.find((v) => v.id === previewId) ?? null;
+  const shownSwatches = swatchVariants.slice(0, MAX_SWATCHES);
+  const extraSwatches = swatchVariants.length - shownSwatches.length;
   const imageHeight = isRail ? imageHeightForWidth(RAIL_CARD_WIDTH, RAIL_IMAGE_ASPECT_RATIO) : null;
   const stock = product.availableStock ?? 0;
   const outOfStock = isOutOfStock(stock);
@@ -96,7 +104,7 @@ export function ProductCard({
 
   const imageBlock = (
     <ProductImageFrame
-      uri={product.imageUrl}
+      uri={previewVariant?.imageUrl ?? product.imageUrl}
       style={[
         styles.imageWell,
         isRail
@@ -164,9 +172,32 @@ export function ProductCard({
       >
         {product.name}
       </Text>
-      {!isRail && !dense && metaLine ? (
+      {shownSwatches.length > 0 ? (
+        <View style={styles.swatchRow}>
+          {shownSwatches.map((v) => {
+            const active = v.id === previewId;
+            return (
+              <Pressable
+                key={v.id}
+                onPress={() => setPreviewId(active ? null : v.id)}
+                hitSlop={4}
+                style={[
+                  styles.swatch,
+                  { backgroundColor: v.colourHex || colors.border },
+                  active && styles.swatchActive,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={v.colourName ?? v.productCode ?? 'Shade'}
+              />
+            );
+          })}
+          {extraSwatches > 0 ? <Text style={styles.swatchMore}>+{extraSwatches}</Text> : null}
+        </View>
+      ) : null}
+      {!isRail && !dense && (previewVariant?.colourName || metaLine) ? (
         <Text style={styles.metaLine} numberOfLines={1}>
-          {metaLine}
+          {previewVariant?.colourName ?? metaLine}
         </Text>
       ) : null}
       <View
@@ -374,6 +405,28 @@ function createStyles(fonts: UiFonts) {
       paddingTop: 5,
       paddingBottom: 7,
       paddingHorizontal: 6,
+    },
+    swatchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 6,
+    },
+    swatch: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(0, 0, 0, 0.25)',
+    },
+    swatchActive: {
+      borderWidth: 2,
+      borderColor: colors.pink,
+    },
+    swatchMore: {
+      fontFamily: fonts.semiBold,
+      fontSize: 11,
+      color: colors.muted,
     },
     metaLine: {
       fontFamily: fonts.regular,
