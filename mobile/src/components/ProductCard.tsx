@@ -10,6 +10,7 @@ import type { Product } from '../types';
 import { colors, spacing } from '../theme';
 import { formatInr } from '../utils/format';
 import { useWishlist } from '../wishlist/WishlistContext';
+import { AppImage } from './AppImage';
 import { ProductImageFrame } from './ProductImageFrame';
 import { InStockLabel } from './InStockLabel';
 
@@ -192,7 +193,11 @@ export function ProductCard({
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={v.colourName ?? v.productCode ?? 'Shade'}
-              />
+              >
+                {!v.colourHex && v.imageUrl ? (
+                  <AppImage uri={v.imageUrl} style={styles.swatchImage} contentFit="cover" />
+                ) : null}
+              </Pressable>
             );
           })}
           {extraSwatches > 0 ? <Text style={styles.swatchMore}>+{extraSwatches}</Text> : null}
@@ -415,7 +420,12 @@ function createStyles(fonts: UiFonts) {
       gap: 6,
       marginTop: 6,
     },
+    swatchImage: {
+      width: '100%',
+      height: '100%',
+    },
     swatch: {
+      overflow: 'hidden',
       width: 16,
       height: 16,
       borderRadius: 8,
