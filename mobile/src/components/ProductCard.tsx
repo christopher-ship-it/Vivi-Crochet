@@ -27,6 +27,8 @@ const RAIL_IMAGE_ASPECT_RATIO = 1;
 
 /** Max colour dots on a grid card; the rest collapse into "+N". */
 const MAX_SWATCHES = 5;
+/** Three-per-row cards are narrower. */
+const MAX_SWATCHES_DENSE = 4;
 
 function imageHeightForWidth(width: number, ratio: number): number {
   return Math.round(width / ratio);
@@ -77,10 +79,10 @@ export function ProductCard({
     .map((v) => v?.trim())
     .filter(Boolean)
     .join(' · ');
-  const swatchVariants = !isRail && !dense && variantCount > 1 ? (product.variants ?? []) : [];
+  const swatchVariants = !isRail && variantCount > 1 ? (product.variants ?? []) : [];
   const [previewId, setPreviewId] = useState<string | null>(null);
   const previewVariant = swatchVariants.find((v) => v.id === previewId) ?? null;
-  const shownSwatches = swatchVariants.slice(0, MAX_SWATCHES);
+  const shownSwatches = swatchVariants.slice(0, dense ? MAX_SWATCHES_DENSE : MAX_SWATCHES);
   const extraSwatches = swatchVariants.length - shownSwatches.length;
   const imageHeight = isRail ? imageHeightForWidth(RAIL_CARD_WIDTH, RAIL_IMAGE_ASPECT_RATIO) : null;
   const stock = product.availableStock ?? 0;
@@ -173,7 +175,7 @@ export function ProductCard({
         {product.name}
       </Text>
       {shownSwatches.length > 0 ? (
-        <View style={styles.swatchRow}>
+        <View style={[styles.swatchRow, dense && styles.swatchRowDense]}>
           {shownSwatches.map((v) => {
             const active = v.id === previewId;
             return (
@@ -183,6 +185,7 @@ export function ProductCard({
                 hitSlop={4}
                 style={[
                   styles.swatch,
+                  dense && styles.swatchDense,
                   { backgroundColor: v.colourHex || colors.border },
                   active && styles.swatchActive,
                 ]}
@@ -418,6 +421,15 @@ function createStyles(fonts: UiFonts) {
       borderRadius: 8,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: 'rgba(0, 0, 0, 0.25)',
+    },
+    swatchRowDense: {
+      gap: 4,
+      marginTop: 4,
+    },
+    swatchDense: {
+      width: 13,
+      height: 13,
+      borderRadius: 7,
     },
     swatchActive: {
       borderWidth: 2,
