@@ -46,6 +46,7 @@ import { colors, radii, spacing } from '../../src/theme';
 import { formatInr } from '../../src/utils/format';
 import { MarketNotice } from '../../src/components/MarketNotice';
 import { usePreferences } from '../../src/preferences/PreferencesContext';
+import { buildLiveShareUrl, shareLink } from '../../src/utils/share';
 import { applyStatusBar } from '../../src/utils/statusBar';
 import {
   isUsableCustomerEmail,
@@ -584,6 +585,21 @@ export default function LiveScreen() {
             <Text style={styles.heroBrandSub}>{t('live.brandSub')}</Text>
           </View>
 
+          <Pressable
+            style={[styles.heroShareBtn, { top: insets.top + 6 }]}
+            onPress={() =>
+              void shareLink(
+                `Live crochet classes with Vivi${packagePrice != null ? ` — ${formatInr(packagePrice)}` : ''} · VIVI Crochet`,
+                buildLiveShareUrl(),
+              )
+            }
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Share live classes"
+          >
+            <Ionicons name="share-outline" size={20} color={colors.ink} />
+          </Pressable>
+
           <Text style={styles.heroTitle}>
             {t('live.crochetWithVivi')},{' '}
             <Text style={styles.heroTitleLive}>{t('live.heroLive')}</Text>
@@ -945,6 +961,14 @@ function createStyles(fonts: UiFonts) {
     letterSpacing: 1.2,
     color: colors.ink,
     opacity: 0.72,
+  },
+  heroShareBtn: {
+    position: 'absolute',
+    right: spacing.lg,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroTitle: {
     fontFamily: fonts.display,
