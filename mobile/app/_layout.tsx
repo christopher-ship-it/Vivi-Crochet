@@ -24,6 +24,7 @@ import { PreferencesProvider } from '../src/preferences/PreferencesContext';
 import { CartProvider } from '../src/cart/CartContext';
 import { WishlistProvider } from '../src/wishlist/WishlistContext';
 import { AppUpdateCard } from '../src/components/AppUpdateCard';
+import { ForceUpdateGate } from '../src/components/ForceUpdateGate';
 import { BackButton } from '../src/components/BackButton';
 import { GradientBackground } from '../src/components/GradientBackground';
 import { HeaderBackground } from '../src/components/HeaderBackground';
@@ -212,6 +213,7 @@ export default function RootLayout() {
                 <TelemetryHost />
                 <AppStack />
                 <AppUpdateCard />
+                <ForceUpdateGate />
               </TapCapture>
             </GradientBackground>
           </WishlistProvider>
