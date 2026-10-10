@@ -9,11 +9,11 @@ import {
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { buildShareUrl, shareLink } from '../../src/utils/share';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProduct } from '../../src/api/products';
@@ -290,9 +290,10 @@ export default function ProductDetailScreen() {
     if (!product || !display) return;
     try {
       const colourBit = display.colourName ? ` · ${display.colourName}` : '';
-      await Share.share({
-        message: `${product.name}${colourBit} — ${formatInr(display.price)} · VIVI Crochet`,
-      });
+      await shareLink(
+        `${product.name}${colourBit} — ${formatInr(display.price)} · VIVI Crochet`,
+        buildShareUrl('product', product.id),
+      );
     } catch {
       // User cancelled or share unavailable.
     }

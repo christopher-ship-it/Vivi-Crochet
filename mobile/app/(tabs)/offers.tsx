@@ -34,6 +34,7 @@ import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, radii, spacing } from '../../src/theme';
 import type { Course } from '../../src/types';
 import { formatMoney } from '../../src/utils/format';
+import { buildShareUrl, shareLink } from '../../src/utils/share';
 import { resolveCollectionOwnership } from '../../src/utils/mainCourses';
 import { applyStatusBar } from '../../src/utils/statusBar';
 
@@ -405,6 +406,22 @@ export default function OffersScreen() {
       >
         <View style={styles.topBar}>
           <BrandWordmark />
+          {course ? (
+            <Pressable
+              style={styles.shareBtn}
+              onPress={() =>
+                void shareLink(
+                  `${title} — ${money(displayPrice)} · VIVI Crochet`,
+                  buildShareUrl('course', course.id),
+                )
+              }
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Share offer"
+            >
+              <Ionicons name="share-outline" size={20} color={colors.ink} />
+            </Pressable>
+          ) : null}
         </View>
 
         <Animated.Text style={[styles.screenTitle, fadeUp(titleAnim)]}>
@@ -668,8 +685,17 @@ function createStyles(fonts: UiFonts) {
     },
     topBar: {
       alignItems: 'center',
+      justifyContent: 'center',
       paddingHorizontal: spacing.lg,
       marginBottom: spacing.md,
+    },
+    shareBtn: {
+      position: 'absolute',
+      right: spacing.lg,
+      width: 36,
+      height: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     screenTitle: {
       fontFamily: fonts.extraBold,

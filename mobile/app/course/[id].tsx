@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -53,6 +54,7 @@ import { HeroGradient } from '../../src/components/HeroGradient';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
 import type { Course, CourseLesson } from '../../src/types';
 import { colors, fonts, radii, shadows, spacing } from '../../src/theme';
+import { buildShareUrl, shareLink } from '../../src/utils/share';
 import {
   COURSE_TYPE_LABELS,
   formatCourseMeta,
@@ -620,6 +622,23 @@ export default function CourseDetailScreen() {
     );
   }
 
+  const ShareButton = () => (
+    <Pressable
+      style={styles.shareBtn}
+      onPress={() =>
+        void shareLink(
+          `${course.name} — ${money(displayPrice)} · Learn crochet on VIVI Crochet`,
+          buildShareUrl('course', course.id),
+        )
+      }
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Share course"
+    >
+      <Ionicons name="share-outline" size={20} color={colors.ink} />
+    </Pressable>
+  );
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -635,7 +654,7 @@ export default function CourseDetailScreen() {
                 <View style={styles.topBar}>
                   <BackButton fallbackHref="/(tabs)/learn" />
                   <BrandWordmark size="sm" />
-                  <View style={styles.topBarSpacer} />
+                  <ShareButton />
                 </View>
                 <View style={styles.unlockedHero}>
                   <Text style={styles.unlockedTitle}>{course.name}</Text>
@@ -715,7 +734,7 @@ export default function CourseDetailScreen() {
                 <View style={styles.topBar}>
                   <BackButton fallbackHref="/(tabs)/learn" />
                   <BrandWordmark size="sm" />
-                  <View style={styles.topBarSpacer} />
+                  <ShareButton />
                 </View>
                 <View style={styles.hero}>
                   <Text style={styles.type}>{COURSE_TYPE_LABELS[course.type] ?? course.type}</Text>
@@ -1010,6 +1029,12 @@ const styles = StyleSheet.create({
   },
   topBarSpacer: {
     width: 36,
+  },
+  shareBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   unlockedHero: {
     paddingHorizontal: spacing.md,

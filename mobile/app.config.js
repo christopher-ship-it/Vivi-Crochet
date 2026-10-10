@@ -78,6 +78,7 @@ module.exports = ({ config }) => {
       supportsTablet: true,
       bundleIdentifier: 'in.vivicrochet.app',
       buildNumber: '18',
+      associatedDomains: ['applinks:go.vivicrochet01.com'],
       infoPlist: {
         UIBackgroundModes: ['remote-notification'],
       },
@@ -93,6 +94,17 @@ module.exports = ({ config }) => {
         monochromeImage: './assets/android-icon-monochrome.png',
       },
       predictiveBackGestureEnabled: false,
+      intentFilters: [
+        {
+          action: 'VIEW',
+          autoVerify: true,
+          data: [
+            { scheme: 'https', host: 'go.vivicrochet01.com', pathPrefix: '/p/' },
+            { scheme: 'https', host: 'go.vivicrochet01.com', pathPrefix: '/c/' },
+          ],
+          category: ['BROWSABLE', 'DEFAULT'],
+        },
+      ],
       softwareKeyboardLayoutMode: 'resize',
       permissions: ['RECEIVE_BOOT_COMPLETED', 'VIBRATE'],
     },
