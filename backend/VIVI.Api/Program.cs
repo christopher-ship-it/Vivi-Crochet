@@ -193,6 +193,7 @@ builder.Services.AddScoped(sp =>
         AdminEmail = section["AdminEmail"] ?? "admin@vivicrochet.local",
         AdminPassword = section["AdminPassword"] ?? string.Empty,
         AdminName = section["AdminName"] ?? "Vivi Priya",
+        DemoProducts = section.GetValue("DemoProducts", true),
         TestAccount = new TestAccountSettings
         {
             Enabled = testAccount.GetValue("Enabled", false),

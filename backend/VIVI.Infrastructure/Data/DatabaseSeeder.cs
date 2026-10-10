@@ -13,6 +13,9 @@ public sealed class SeedSettings
     public string AdminPassword { get; set; } = string.Empty;
     public string AdminName { get; set; } = "Vivi Priya";
     public TestAccountSettings TestAccount { get; set; } = new();
+
+    /// <summary>Adds the sample shop products when the catalogue is empty. Off in Production.</summary>
+    public bool DemoProducts { get; set; } = true;
 }
 
 /// <summary>
@@ -391,6 +394,9 @@ public sealed class DatabaseSeeder
 
     private async Task SeedProductsAsync(CancellationToken cancellationToken)
     {
+        if (!_settings.DemoProducts)
+            return;
+
         if (await _db.Products.AnyAsync(cancellationToken))
             return;
 
