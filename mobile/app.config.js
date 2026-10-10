@@ -101,6 +101,7 @@ module.exports = ({ config }) => {
           data: [
             { scheme: 'https', host: 'go.vivicrochet01.com', pathPrefix: '/p/' },
             { scheme: 'https', host: 'go.vivicrochet01.com', pathPrefix: '/c/' },
+            { scheme: 'https', host: 'go.vivicrochet01.com', pathPrefix: '/live' },
           ],
           category: ['BROWSABLE', 'DEFAULT'],
         },

@@ -7,6 +7,10 @@ export function buildShareUrl(kind: 'product' | 'course', id: string): string {
   return `${SHARE_ORIGIN}/${kind === 'product' ? 'p' : 'c'}/${id}`;
 }
 
+export function buildLiveShareUrl(): string {
+  return `${SHARE_ORIGIN}/live`;
+}
+
 export async function shareLink(message: string, url: string): Promise<void> {
   try {
     await Share.share({ message: `${message}\n${url}`, url });

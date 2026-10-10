@@ -63,6 +63,12 @@ public sealed class ShareController : ControllerBase
         return Page(c.Name, $"₹{c.Price:N0} · {desc}", image, $"/c/{id}", $"vivi://course/{id}");
     }
 
+    [HttpGet("/live")]
+    public IActionResult Live() =>
+        Page("Live crochet classes with Vivi",
+            "Learn crochet live with Vivi: weekday classes, a Saturday replacement class and small circles. Book your seat in the VIVI Crochet app.",
+            null, "/live", "vivi://live");
+
     [HttpGet("/.well-known/assetlinks.json")]
     public IActionResult AssetLinks()
     {
@@ -93,7 +99,7 @@ public sealed class ShareController : ControllerBase
                 apps = Array.Empty<string>(),
                 details = new[]
                 {
-                    new { appID = $"{team}.{IosBundleId}", paths = new[] { "/p/*", "/c/*" } },
+                    new { appID = $"{team}.{IosBundleId}", paths = new[] { "/p/*", "/c/*", "/live" } },
                 },
             },
         });
