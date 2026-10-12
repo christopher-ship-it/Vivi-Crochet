@@ -24,6 +24,11 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.4" />
   </ItemGroup>
 
+  <!-- Fallback preview image for share links that have no product/course image -->
+  <ItemGroup>
+    <Content Include="Assets\share-default.jpg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- Optional: ship static ffmpeg next to the app for Azure Linux App Service -->
   <ItemGroup>
     <Content Include="..\tools\ffmpeg\ffmpeg" Condition="Exists('..\tools\ffmpeg\ffmpeg')">

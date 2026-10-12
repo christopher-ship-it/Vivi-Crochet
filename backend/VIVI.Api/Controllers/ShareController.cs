@@ -26,12 +26,14 @@ public sealed class ShareController : ControllerBase
     private readonly ViviDbContext _db;
     private readonly IBlobStorageService _blob;
     private readonly IConfiguration _config;
+    private readonly IHttpClientFactory _http;
 
-    public ShareController(ViviDbContext db, IBlobStorageService blob, IConfiguration config)
+    public ShareController(ViviDbContext db, IBlobStorageService blob, IConfiguration config, IHttpClientFactory http)
     {
         _db = db;
         _blob = blob;
         _config = config;
+        _http = http;
     }
 
     private string SiteUrl => (_config["Share:SiteUrl"] ?? "https://go.vivicrochet01.com").TrimEnd('/');
@@ -46,9 +48,8 @@ public sealed class ShareController : ControllerBase
 
         var imageRaw = p.Images.OrderByDescending(i => i.IsMain).ThenBy(i => i.SortOrder)
             .Select(i => i.BlobPath).FirstOrDefault() ?? p.ImageUrl;
-        var image = await ProductImageResolver.ResolveAsync(imageRaw, _blob, ct);
         var desc = string.IsNullOrWhiteSpace(p.Description) ? "Handmade crochet & yarn from VIVI Crochet." : p.Description!;
-        return Page(p.Name, $"₹{p.Price:N0} · {desc}", image, $"/p/{id}", $"vivi://product/{id}");
+        return Page(p.Name, $"₹{p.Price:N0} · {desc}", $"{SiteUrl}/share-img/p/{id}", $"/p/{id}", $"vivi://product/{id}");
     }
 
     [HttpGet("/c/{id:guid}")]
@@ -58,16 +59,79 @@ public sealed class ShareController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id && x.Status == CourseStatus.Published, ct);
         if (c is null) return NotFoundPage();
 
-        var image = await ProductImageResolver.ResolveAsync(c.ThumbnailUrl, _blob, ct);
         var desc = string.IsNullOrWhiteSpace(c.Description) ? "Learn crochet step by step with VIVI Crochet." : c.Description!;
-        return Page(c.Name, $"₹{c.Price:N0} · {desc}", image, $"/c/{id}", $"vivi://course/{id}");
+        return Page(c.Name, $"₹{c.Price:N0} · {desc}", $"{SiteUrl}/share-img/c/{id}", $"/c/{id}", $"vivi://course/{id}");
+    }
+
+    /// <summary>
+    /// Preview image for a product. Served from our own domain (a stable, absolute URL that crawlers
+    /// can always fetch, unlike an expiring blob SAS link); falls back to the VIVI brand card.
+    /// </summary>
+    [HttpGet("/share-img/p/{id:guid}")]
+    public async Task<IActionResult> ProductImage(Guid id, CancellationToken ct)
+    {
+        var raw = await _db.Products.AsNoTracking()
+            .Where(x => x.Id == id && x.Status == ProductStatus.Published)
+            .Select(x => x.Images.OrderByDescending(i => i.IsMain).ThenBy(i => i.SortOrder)
+                .Select(i => i.BlobPath).FirstOrDefault() ?? x.ImageUrl)
+            .FirstOrDefaultAsync(ct);
+        return await ImageOrDefaultAsync(raw, ct);
+    }
+
+    [HttpGet("/share-img/c/{id:guid}")]
+    public async Task<IActionResult> CourseImage(Guid id, CancellationToken ct)
+    {
+        var raw = await _db.Courses.AsNoTracking()
+            .Where(x => x.Id == id && x.Status == CourseStatus.Published)
+            .Select(x => x.ThumbnailUrl)
+            .FirstOrDefaultAsync(ct);
+
+        // Bundles (e.g. Crochet Circle) often have no thumbnail of their own: use an included course's.
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            raw = await _db.CourseBundleItems.AsNoTracking()
+                .Where(b => b.BundleCourseId == id && b.IncludedCourse!.ThumbnailUrl != null)
+                .OrderBy(b => b.SortOrder)
+                .Select(b => b.IncludedCourse!.ThumbnailUrl)
+                .FirstOrDefaultAsync(ct);
+        }
+        return await ImageOrDefaultAsync(raw, ct);
+    }
+
+    private async Task<IActionResult> ImageOrDefaultAsync(string? raw, CancellationToken ct)
+    {
+        try
+        {
+            var url = await ProductImageResolver.ResolveAsync(raw, _blob, ct);
+            if (!string.IsNullOrEmpty(url))
+            {
+                var resp = await _http.CreateClient().GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+                if (resp.IsSuccessStatusCode)
+                {
+                    var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
+                    Response.Headers.CacheControl = "public, max-age=86400";
+                    return File(bytes, resp.Content.Headers.ContentType?.MediaType ?? "image/jpeg");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            // fall through to the brand image
+        }
+
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "share-default.jpg");
+        Response.Headers.CacheControl = "public, max-age=3600";
+        return System.IO.File.Exists(path) ? PhysicalFile(path, "image/jpeg") : NotFound();
     }
 
     [HttpGet("/live")]
     public IActionResult Live() =>
         Page("Live crochet classes with Vivi",
             "Learn crochet live with Vivi: weekday classes, a Saturday replacement class and small circles. Book your seat in the VIVI Crochet app.",
-            null, "/live", "vivi://live");
+            $"{SiteUrl}/share-img/default", "/live", "vivi://live");
+
+    [HttpGet("/share-img/default")]
+    public Task<IActionResult> DefaultImage(CancellationToken ct) => ImageOrDefaultAsync(null, ct);
 
     [HttpGet("/.well-known/assetlinks.json")]
     public IActionResult AssetLinks()
