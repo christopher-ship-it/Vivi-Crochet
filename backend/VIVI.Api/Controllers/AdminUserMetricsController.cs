@@ -14,7 +14,8 @@ namespace VIVI.Api.Controllers;
 [Authorize(Roles = AuthRoles.Console)]
 public sealed class AdminUserMetricsController : ControllerBase
 {
-    private const int DaysShown = 30;
+    /// <summary>Tracking starts here; nothing earlier is shown.</summary>
+    private static readonly DateTime FirstDay = new(2026, 10, 1);
     private static readonly TimeSpan IndiaOffset = TimeSpan.FromHours(5.5);
 
     private readonly ViviDbContext _db;
@@ -27,7 +28,7 @@ public sealed class AdminUserMetricsController : ControllerBase
     {
         var nowUtc = DateTime.UtcNow;
         var todayIndia = (nowUtc + IndiaOffset).Date;
-        var firstDay = todayIndia.AddDays(-(DaysShown - 1));
+        var firstDay = todayIndia < FirstDay ? todayIndia : FirstDay;
         var windowStartUtc = firstDay - IndiaOffset;
         DateTime DayOf(DateTime utc) => (utc + IndiaOffset).Date;
 
@@ -128,8 +129,14 @@ public sealed class AdminUserMetricsController : ControllerBase
 
         var rows = await query
             .OrderByDescending(c => c.CreatedAt)
-            .Select(c => new UserMetricsUser { Name = c.FullName, Email = c.Email })
+            .Select(c => new { c.FullName, c.Email, c.PhoneNumber })
             .ToListAsync(cancellationToken);
-        return Ok(rows);
+        return Ok(rows.Select(c => new UserMetricsUser
+        {
+            Name = c.FullName,
+            // Phone-OTP signups get a generated customer.<phone>@vivicrochet.dev address; it is not a real email.
+            Email = c.Email.EndsWith("@vivicrochet.dev", StringComparison.OrdinalIgnoreCase) ? string.Empty : c.Email,
+            Phone = c.PhoneNumber ?? string.Empty,
+        }).ToList());
     }
 }

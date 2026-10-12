@@ -3,6 +3,12 @@ import { getUserMetrics, getUserMetricsUsers } from '../api/userMetrics';
 import { ApiClientError } from '../api/client';
 import type { UserMetrics, UserMetricsUser } from '../types';
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 const nf = new Intl.NumberFormat('en-IN');
 
 function dayLabel(iso: string): string {
@@ -91,15 +97,15 @@ export function UserMetricsSection() {
               <span className="card__value">{nf.format(metrics.liveClassUsers)}</span>
             </div>
             <div className="card card--stat">
-              <span className="card__label">Growth ({metrics.daily.length} days)</span>
+              <span className="card__label">Growth since 1 Oct</span>
               <span className="card__value">
                 {metrics.growthPercent === null ? '—' : `${metrics.growthPercent > 0 ? '+' : ''}${metrics.growthPercent}%`}
               </span>
             </div>
           </div>
 
-          <div className="table-wrap" style={{ marginTop: 16, maxWidth: 560 }}>
-            <table className="data-table">
+          <div className="table-wrap" style={{ marginTop: 16, width: 'fit-content' }}>
+            <table className="data-table data-table--compact">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -130,7 +136,7 @@ export function UserMetricsSection() {
             role="dialog"
             aria-modal="true"
             aria-label={KIND_LABEL[picked.kind]}
-            style={{ maxWidth: 560 }}
+            style={{ maxWidth: users && users.length > 14 ? 900 : 560 }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal__header">
@@ -141,20 +147,25 @@ export function UserMetricsSection() {
             {usersError && <p>{usersError}</p>}
             {!users && !usersError && <p>Loading…</p>}
             {users && (
-              <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr><th>Name</th><th>Email</th></tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u, i) => (
-                      <tr key={`${u.email}-${i}`}>
-                        <td>{u.name || '—'}</td>
-                        <td>{u.email || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                {/* Long lists are split side by side so the dialog stays short enough not to scroll. */}
+                {chunk(users, users.length > 14 ? Math.ceil(users.length / 2) : Math.max(users.length, 1)).map((part, n) => (
+                  <div key={n} className="table-wrap" style={{ flex: '1 1 0', minWidth: 0 }}>
+                    <table className="data-table data-table--compact" style={{ width: '100%' }}>
+                      <thead>
+                        <tr><th>Name</th><th>Email / phone</th></tr>
+                      </thead>
+                      <tbody>
+                        {part.map((u, i) => (
+                          <tr key={`${u.email}${u.phone}-${i}`}>
+                            <td>{u.name || '—'}</td>
+                            <td>{u.email || u.phone || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
               </div>
             )}
             <div className="modal__footer">

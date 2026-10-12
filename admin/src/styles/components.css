@@ -757,6 +757,19 @@ label.btn {
   min-width: 0;
 }
 
+/* Small tables sized to their content, with tight rows. */
+.data-table--compact {
+  width: auto;
+  min-width: 0;
+  table-layout: auto;
+}
+
+.data-table--compact th,
+.data-table--compact td {
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+
 /* Plain tables (no per-column widths): size columns to their content so
    headers and cells line up, instead of equal-width fixed columns. */
 .data-table:not([class*="data-table--"]) {

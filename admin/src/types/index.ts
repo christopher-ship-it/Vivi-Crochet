@@ -821,4 +821,5 @@ export interface UserMetrics {
 export interface UserMetricsUser {
   name: string;
   email: string;
+  phone: string;
 }
