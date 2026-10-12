@@ -43,6 +43,14 @@ function withDefaultTime(previous: string, next: string): string {
   return !previous && next ? `${next.slice(0, 10)}T17:00` : next;
 }
 
+/** Local `datetime-local` value for 5 PM, `dayOffset` days from today. */
+function localFivePm(dayOffset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T17:00`;
+}
+
 function displayOrDash(value: string | null | undefined): string {
   const trimmed = (value ?? '').trim();
   return trimmed.length > 0 ? trimmed : '—';
@@ -173,8 +181,9 @@ export function OrderList({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   // Default window: orders received 12 Oct 5:00 PM to 13 Oct 5:00 PM (local time); Clear shows every date.
-  const [fromValue, setFromValue] = useState('2026-10-12T17:00');
-  const [toValue, setToValue] = useState('2026-10-13T17:00');
+  // Default window: yesterday 5 PM to today 5 PM.
+  const [fromValue, setFromValue] = useState(() => localFivePm(-1));
+  const [toValue, setToValue] = useState(() => localFivePm(0));
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('completed');
   const pickerRef = useRef<HTMLDivElement>(null);
 
