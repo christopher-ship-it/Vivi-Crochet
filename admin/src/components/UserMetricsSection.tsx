@@ -9,6 +9,9 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+/** Tracking starts on this day; nothing earlier is shown. */
+const FIRST_DAY = '2026-10-01';
+
 const nf = new Intl.NumberFormat('en-IN');
 
 function dayLabel(iso: string): string {
@@ -52,19 +55,23 @@ export function UserMetricsSection() {
   const KIND_LABEL = { new: 'New users', active: 'Active users', total: 'Total users' } as const;
 
   function count(date: string, kind: 'new' | 'active' | 'total', n: number) {
-    return n === 0 ? '0' : (
-      <button type="button" className="cell-link" style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
-        onClick={() => openUsers(date, kind)}>
+    return n === 0 ? (
+      <span className="um-zero">0</span>
+    ) : (
+      <button type="button" className="um-num" onClick={() => openUsers(date, kind)}>
         {nf.format(n)}
       </button>
     );
   }
 
+  const days = metrics ? metrics.daily.filter((d) => d.date >= FIRST_DAY) : [];
+  const today = days[0];
+
   return (
-    <section className="section-block dashboard-section">
-      <div className="section-block__head">
-        <p className="card__subtitle">
-          Active = watched a lesson, placed an order or booked a Live class that day.
+    <section className="um">
+      <div className="um__bar">
+        <p className="um__hint">
+          Active = watched a lesson, placed an order or booked a Live class that day. Click a number to see who.
         </p>
         <button type="button" className="btn btn--ghost btn--sm" disabled={loading} onClick={() => void load()}>
           {loading ? 'Loading…' : 'Refresh'}
@@ -79,48 +86,58 @@ export function UserMetricsSection() {
 
       {metrics && (
         <>
-          <div className="stat-grid">
+          <div className="um__cards">
             <div className="card card--stat">
               <span className="card__label">Total users</span>
               <span className="card__value">{nf.format(metrics.totalUsers)}</span>
+              <span className="um__sub">{today ? `+${nf.format(today.newUsers)} today` : 'All registered accounts'}</span>
             </div>
             <div className="card card--stat">
               <span className="card__label">Offer class users</span>
               <span className="card__value">{nf.format(metrics.offerClassUsers)}</span>
+              <span className="um__sub">Active founding members</span>
             </div>
             <div className="card card--stat">
               <span className="card__label">Other course users</span>
               <span className="card__value">{nf.format(metrics.otherCourseUsers)}</span>
+              <span className="um__sub">Active, outside the offer</span>
             </div>
             <div className="card card--stat">
               <span className="card__label">Live class users</span>
               <span className="card__value">{nf.format(metrics.liveClassUsers)}</span>
+              <span className="um__sub">Booked this week or later</span>
             </div>
             <div className="card card--stat">
-              <span className="card__label">Growth since 1 Oct</span>
-              <span className="card__value">
-                {metrics.growthPercent === null ? '—' : `${metrics.growthPercent > 0 ? '+' : ''}${metrics.growthPercent}%`}
-              </span>
+              <span className="card__label">Active today</span>
+              <span className="card__value">{nf.format(today?.activeUsers ?? 0)}</span>
+              <span className="um__sub">So far today</span>
             </div>
           </div>
 
-          <div className="table-wrap" style={{ marginTop: 16, width: 'fit-content' }}>
-            <table className="data-table data-table--compact">
+          <div className="um__panel">
+            <div className="um__panel-head">
+              <h2 className="um__panel-title">Daily breakdown</h2>
+              <span className="um__panel-note">Since 1 Oct 2026</span>
+            </div>
+            <table className="um__table">
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th style={{ textAlign: 'right' }}>New users</th>
-                  <th style={{ textAlign: 'right' }}>Active users</th>
-                  <th style={{ textAlign: 'right' }}>Total users</th>
+                  <th>New users</th>
+                  <th>Active users</th>
+                  <th>Total users</th>
                 </tr>
               </thead>
               <tbody>
-                {metrics.daily.map((d) => (
-                  <tr key={d.date}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{dayLabel(d.date)}</td>
-                    <td style={{ textAlign: 'right' }}>{count(d.date, 'new', d.newUsers)}</td>
-                    <td style={{ textAlign: 'right' }}>{count(d.date, 'active', d.activeUsers)}</td>
-                    <td style={{ textAlign: 'right' }}>{count(d.date, 'total', d.totalUsers)}</td>
+                {days.map((d, n) => (
+                  <tr key={d.date} className={n === 0 ? 'um__today' : undefined}>
+                    <td>
+                      {dayLabel(d.date)}
+                      {n === 0 && <span className="um__pill">Today</span>}
+                    </td>
+                    <td>{count(d.date, 'new', d.newUsers)}</td>
+                    <td>{count(d.date, 'active', d.activeUsers)}</td>
+                    <td>{count(d.date, 'total', d.totalUsers)}</td>
                   </tr>
                 ))}
               </tbody>

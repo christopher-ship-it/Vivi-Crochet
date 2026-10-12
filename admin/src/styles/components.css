@@ -4317,3 +4317,131 @@ label.btn {
   overflow: hidden;
   overflow-wrap: anywhere;
 }
+
+/* —— Daily user metrics page —— */
+.um {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.um__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.um__hint {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--vivi-muted);
+}
+
+.um__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+
+.um__sub {
+  font-size: 12.5px;
+  color: var(--vivi-muted);
+}
+
+.um__panel {
+  max-width: 760px;
+  background: #fff;
+  border: var(--rule);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.um__panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 18px 24px 14px;
+}
+
+.um__panel-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.um__panel-note {
+  font-size: 12.5px;
+  color: var(--vivi-muted);
+}
+
+.um__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.um__table th,
+.um__table td {
+  padding: 11px 24px;
+  text-align: right;
+  font-size: var(--text-table);
+  border-top: 1px solid var(--vivi-border-softer);
+  white-space: nowrap;
+}
+
+.um__table th {
+  background: #faf6f7;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vivi-muted);
+}
+
+.um__table th:first-child,
+.um__table td:first-child {
+  text-align: left;
+}
+
+.um__table tbody tr:hover {
+  background: #fdf8f9;
+}
+
+.um__today {
+  background: #fff5f8;
+}
+
+.um__pill {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vivi-pink-dark);
+  background: #fde4ec;
+}
+
+.um__zero {
+  color: var(--vivi-muted);
+  opacity: 0.6;
+}
+
+.um__num {
+  min-width: 36px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  color: var(--vivi-ink);
+  cursor: pointer;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.um__num:hover {
+  background: #fde4ec;
+  color: var(--vivi-pink-dark);
+}
