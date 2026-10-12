@@ -19,6 +19,25 @@ interface OrderListProps {
   loadErrorMessage: string;
 }
 
+type StatusFilter = 'all' | 'completed' | 'pending' | 'cancelled';
+
+const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
+  { id: 'completed', label: 'Completed (paid)' },
+  { id: 'pending', label: 'Pending payment' },
+  { id: 'cancelled', label: 'Cancelled' },
+  { id: 'all', label: 'All orders' },
+];
+
+function matchesStatus(o: AdminOrderListItem, f: StatusFilter): boolean {
+  const paid = o.paymentStatus === 'Captured' || o.paymentStatus === 'Refunded';
+  switch (f) {
+    case 'completed': return paid && o.status !== 'Cancelled';
+    case 'pending': return o.status === 'PendingPayment';
+    case 'cancelled': return o.status === 'Cancelled';
+    default: return true;
+  }
+}
+
 function displayOrDash(value: string | null | undefined): string {
   const trimmed = (value ?? '').trim();
   return trimmed.length > 0 ? trimmed : '—';
@@ -148,7 +167,10 @@ export function OrderList({
   const [hidden, setHidden] = useState<string[]>(() => readHidden(storageKey));
   const [pickerOpen, setPickerOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [windowDate, setWindowDate] = useState('');
+  // Default window: orders received 12 Oct 5:00 PM to 13 Oct 5:00 PM (local time); Clear shows every date.
+  const [fromValue, setFromValue] = useState('2026-10-12T17:00');
+  const [toValue, setToValue] = useState('2026-10-13T17:00');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('completed');
   const pickerRef = useRef<HTMLDivElement>(null);
 
   // Columns this page can offer (delivery + shop columns only apply to physical orders).
@@ -227,23 +249,19 @@ export function OrderList({
     }
   }
 
-  // Only orders whose payment went through; abandoned or failed checkouts stay out of the list.
-  const paidOrders = orders.filter(
-    (o) => (o.paymentStatus === 'Captured' || o.paymentStatus === 'Refunded') && filter(o),
-  );
+  const pageOrders = orders.filter(filter);
 
-  // Cut-off window: picking a day shows orders placed from that day 5:00 PM to the next day 5:00 PM (local time).
+  // Received window, local time. Empty bounds are open-ended.
   const windowRange = useMemo(() => {
-    if (!windowDate) return null;
-    const [y, m, d] = windowDate.split('-').map(Number);
-    return { from: new Date(y, m - 1, d, 17, 0, 0, 0), to: new Date(y, m - 1, d + 1, 17, 0, 0, 0) };
-  }, [windowDate]);
-  const visibleOrders = windowRange
-    ? paidOrders.filter((o) => {
-        const t = parseApiDate(o.createdAt);
-        return t >= windowRange.from && t < windowRange.to;
-      })
-    : paidOrders;
+    const from = fromValue ? new Date(fromValue) : null;
+    const to = toValue ? new Date(toValue) : null;
+    return from || to ? { from, to } : null;
+  }, [fromValue, toValue]);
+  const visibleOrders = pageOrders.filter((o) => {
+    if (!matchesStatus(o, statusFilter)) return false;
+    const t = parseApiDate(o.createdAt);
+    return !(windowRange?.from && t < windowRange.from) && !(windowRange?.to && t >= windowRange.to);
+  });
 
   async function handleExport() {
     setExporting(true);
@@ -277,7 +295,7 @@ export function OrderList({
         </div>
       </header>
 
-      {!loading && paidOrders.length > 0 && (
+      {!loading && pageOrders.length > 0 && (
         <div className="page-toolbar">
           <div className="column-picker" ref={pickerRef}>
             <button
@@ -311,17 +329,42 @@ export function OrderList({
             )}
           </div>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span>Orders 5 PM to next 5 PM, from</span>
+            <span>Status</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              style={{ padding: '6px 8px' }}
+            >
+              {STATUS_FILTERS.map((f) => (
+                <option key={f.id} value={f.id}>{f.label}</option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>Received from</span>
             <input
-              type="date"
-              value={windowDate}
-              onChange={(e) => setWindowDate(e.target.value)}
+              type="datetime-local"
+              value={fromValue}
+              onChange={(e) => setFromValue(e.target.value)}
               style={{ padding: '6px 8px' }}
             />
           </label>
-          {windowDate ? (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setWindowDate('')}>
-              Clear
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>to</span>
+            <input
+              type="datetime-local"
+              value={toValue}
+              onChange={(e) => setToValue(e.target.value)}
+              style={{ padding: '6px 8px' }}
+            />
+          </label>
+          {fromValue || toValue ? (
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => { setFromValue(''); setToValue(''); }}
+            >
+              Clear dates
             </button>
           ) : null}
           <button
@@ -350,8 +393,8 @@ export function OrderList({
 
       {!loading && !error && visibleOrders.length === 0 && (
         <div className="empty-state">
-          <h3>{windowRange ? 'No orders in this window' : emptyTitle}</h3>
-          <p>{windowRange ? 'Nothing was placed between 5 PM that day and 5 PM the next day.' : emptyMessage}</p>
+          <h3>{pageOrders.length > 0 ? 'No orders match these filters' : emptyTitle}</h3>
+          <p>{pageOrders.length > 0 ? 'Try another status or widen the date range.' : emptyMessage}</p>
         </div>
       )}
 
