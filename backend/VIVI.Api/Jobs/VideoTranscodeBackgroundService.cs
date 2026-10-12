@@ -64,8 +64,8 @@ public sealed class VideoTranscodeBackgroundService : BackgroundService
 
             try
             {
-                // Poll quickly when the queue is busy; idle every 15s.
-                await Task.Delay(didWork ? TimeSpan.FromSeconds(2) : TimeSpan.FromSeconds(15), stoppingToken);
+                // Poll quickly when the queue is busy; idle every 60s (keeps DB load and cost low).
+                await Task.Delay(didWork ? TimeSpan.FromSeconds(2) : TimeSpan.FromSeconds(60), stoppingToken);
             }
             catch (OperationCanceledException)
             {
