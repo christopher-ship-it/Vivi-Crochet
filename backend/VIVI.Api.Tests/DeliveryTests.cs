@@ -238,6 +238,38 @@ public sealed class DeliveryTests
     }
 
     [Fact]
+    public async Task Admin_can_revert_physical_order_status_one_step()
+    {
+        var (customer, orderId) = await PlacePhysicalOrderAsync("Coimbatore", ProductType.Handmade);
+        await PayAsync(customer, orderId);
+
+        var admin = _factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+
+        async Task<HttpResponseMessage> SetAsync(string status)
+            => await admin.PutAsJsonAsync($"/api/admin/orders/{orderId}/status", new { status });
+
+        (await SetAsync("InProduction")).EnsureSuccessStatusCode();
+        (await SetAsync("Shipped")).EnsureSuccessStatusCode();
+
+        // One step back is allowed, and the customer sees it.
+        var reverted = await SetAsync("InProduction");
+        reverted.EnsureSuccessStatusCode();
+        var body = await reverted.Content.ReadFromJsonAsync<AdminOrderDetailResponse>(AuthTests.Json);
+        Assert.Equal(OrderStatus.InProduction, body!.Status);
+        var customerView = await customer.GetFromJsonAsync<OrderResponse>($"/api/orders/{orderId}", AuthTests.Json);
+        Assert.Equal(OrderStatus.InProduction, customerView!.Status);
+
+        (await SetAsync("Confirmed")).EnsureSuccessStatusCode();
+
+        // Delivered can be undone back to Dispatched, but not further in one go.
+        (await SetAsync("Shipped")).EnsureSuccessStatusCode();
+        (await SetAsync("Delivered")).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Conflict, (await SetAsync("InProduction")).StatusCode);
+        (await SetAsync("Shipped")).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
     public async Task Same_customer_paid_orders_get_delivery_dates_two_days_apart()
     {
         var productId = await PublishProductAsync("Repeat Buyer", ProductType.Handmade);

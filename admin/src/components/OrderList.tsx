@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { deleteAdminOrder, listAdminOrders } from '../api/orders';
+import { deleteAdminOrder, listAdminOrders, updateOrderStatus } from '../api/orders';
 import { ApiClientError } from '../api/client';
-import type { AdminOrderListItem } from '../types';
+import type { AdminOrderListItem, OrderStatus } from '../types';
 import { formatMoney, parseApiDate } from '../utils/format';
 import { downloadExcel, type ExcelColumn } from '../utils/exportExcel';
 import { RowActionsMenu } from './RowActionsMenu';
@@ -42,6 +42,27 @@ function matchesStatus(o: AdminOrderListItem, f: StatusFilter): boolean {
 function withDefaultTime(previous: string, next: string): string {
   return !previous && next ? `${next.slice(0, 10)}T17:00` : next;
 }
+
+const STATUS_NAMES: Partial<Record<OrderStatus, string>> = {
+  Confirmed: 'Confirmed',
+  InProduction: 'In production',
+  Shipped: 'Dispatched',
+  Delivered: 'Delivered',
+};
+
+/** Forward steps offered in the row menu for a physical order. */
+const NEXT_STATUSES: Partial<Record<OrderStatus, OrderStatus[]>> = {
+  Confirmed: ['InProduction', 'Shipped'],
+  InProduction: ['Shipped', 'Delivered'],
+  Shipped: ['Delivered'],
+};
+
+/** One step back, to undo a status set by mistake. */
+const PREVIOUS_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
+  InProduction: 'Confirmed',
+  Shipped: 'InProduction',
+  Delivered: 'Shipped',
+};
 
 /** Local `datetime-local` value for 5 PM, `dayOffset` days from today. */
 function localFivePm(dayOffset: number): string {
@@ -175,6 +196,7 @@ export function OrderList({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
 
   const storageKey = `vivi.admin.orderColumns.${showDelivery ? 'shop' : 'digital'}`;
   const [hidden, setHidden] = useState<string[]>(() => readHidden(storageKey));
@@ -261,6 +283,47 @@ export function OrderList({
     } finally {
       setDeletingId(null);
     }
+  }
+
+  async function handleStatusChange(order: AdminOrderListItem, status: OrderStatus, revert = false) {
+    if (revert) {
+      const ok = await confirmDialog(
+        `Revert order ${order.orderNumber} from "${STATUS_NAMES[order.status]}" back to "${STATUS_NAMES[status]}"?\n\nThe customer will see the earlier status again.`,
+      );
+      if (!ok) return;
+    }
+
+    setStatusUpdatingId(order.id);
+    setError(null);
+    try {
+      const updated = await updateOrderStatus(order.id, { status });
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: updated.status } : o)));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not update order status.');
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  }
+
+  function statusMenuItems(order: AdminOrderListItem) {
+    if (!order.hasPhysicalItems) return [];
+    const busy = statusUpdatingId === order.id;
+    const forward = (NEXT_STATUSES[order.status] ?? []).map((status) => ({
+      id: `status-${status}`,
+      label: status === 'InProduction' ? 'Mark in production' : status === 'Shipped' ? 'Mark dispatched' : 'Mark delivered',
+      disabled: busy,
+      onClick: () => void handleStatusChange(order, status),
+    }));
+    const previous = PREVIOUS_STATUS[order.status];
+    const revert = previous
+      ? [{
+          id: 'status-revert',
+          label: `Revert to ${STATUS_NAMES[previous]?.toLowerCase()}`,
+          disabled: busy,
+          onClick: () => void handleStatusChange(order, previous, true),
+        }]
+      : [];
+    return [...forward, ...revert];
   }
 
   const pageOrders = orders.filter(filter);
@@ -448,9 +511,10 @@ export function OrderList({
                     <div className="data-table__actions">
                       <RowActionsMenu
                         label={`Actions for order ${order.orderNumber}`}
-                        disabled={deletingId === order.id}
+                        disabled={deletingId === order.id || statusUpdatingId === order.id}
                         items={[
                           { id: 'view', label: 'View order', to: `/orders/${order.id}` },
+                          ...statusMenuItems(order),
                           {
                             id: 'delete',
                             label: deletingId === order.id ? 'Deleting…' : 'Delete order',

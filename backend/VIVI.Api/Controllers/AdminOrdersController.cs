@@ -174,7 +174,8 @@ public sealed class AdminOrdersController : ControllerBase
     }
 
     /// <summary>
-    /// Forward-only fulfillment flow for handmade/resell product orders.
+    /// Fulfillment flow for handmade/resell product orders: forward steps, plus a single step back
+    /// so an admin can undo a status that was set by mistake.
     /// Shipped is the admin "Dispatched" step shown to customers.
     /// </summary>
     private static bool IsAllowedStatusTransition(OrderStatus from, OrderStatus to) =>
@@ -185,6 +186,10 @@ public sealed class AdminOrdersController : ControllerBase
             (OrderStatus.InProduction, OrderStatus.Shipped) => true,
             (OrderStatus.InProduction, OrderStatus.Delivered) => true,
             (OrderStatus.Shipped, OrderStatus.Delivered) => true,
+            // Revert one step.
+            (OrderStatus.InProduction, OrderStatus.Confirmed) => true,
+            (OrderStatus.Shipped, OrderStatus.InProduction) => true,
+            (OrderStatus.Delivered, OrderStatus.Shipped) => true,
             _ => false
         };
 
