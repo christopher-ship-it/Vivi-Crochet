@@ -527,6 +527,9 @@ public sealed class ProductsController : ControllerBase
             return 0;
         if (key.Contains("rose"))
             return 1;
+        // Yarn leads the Crochet Essentials list, ahead of hooks, bag rings and the rest.
+        if (key.Contains("yarn"))
+            return 2;
         return 50;
     }
 
