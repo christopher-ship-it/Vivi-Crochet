@@ -29,7 +29,10 @@ export function ProductVariantPicker({ product, selectedId, onSelect }: ProductV
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>
-        {optionLabel}: <Text style={styles.labelValue}>{selected?.colourName ?? '—'}</Text>
+        {optionLabel}: <Text style={styles.labelValue}>
+          {selected?.colourName ?? '—'}
+          {selected?.productCode ? ` (${selected.productCode})` : ''}
+        </Text>
       </Text>
       <ScrollView
         horizontal={false}
@@ -80,6 +83,11 @@ function VariantCard({
           ) : null}
         </View>
       )}
+      {variant.productCode ? (
+        <Text style={styles.code} numberOfLines={1}>
+          {variant.productCode}
+        </Text>
+      ) : null}
       <Text style={styles.price}>{formatInr(variant.price)}</Text>
       {variant.mrp && variant.mrp > variant.price ? (
         <Text style={styles.mrp}>{formatInr(variant.mrp)}</Text>
@@ -143,6 +151,14 @@ function createStyles(fonts: UiFonts) {
       fontFamily: fonts.heading,
       fontSize: 18,
       color: colors.muted,
+    },
+    code: {
+      fontFamily: fonts.heading,
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.ink,
+      textAlign: 'center',
+      marginBottom: 2,
     },
     price: {
       fontFamily: fonts.extraBold,
