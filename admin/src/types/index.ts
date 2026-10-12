@@ -800,3 +800,20 @@ export interface IntroVideoUploadTicket {
   blobPath: string;
   maxFileSizeBytes: number;
 }
+
+export interface UserMetricsDay {
+  /** yyyy-MM-dd, India calendar day. */
+  date: string;
+  newUsers: number;
+  activeUsers: number;
+  totalUsers: number;
+}
+
+export interface UserMetrics {
+  totalUsers: number;
+  offerClassUsers: number;
+  otherCourseUsers: number;
+  liveClassUsers: number;
+  growthPercent: number | null;
+  daily: UserMetricsDay[];
+}
