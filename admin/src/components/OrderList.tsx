@@ -38,6 +38,11 @@ function matchesStatus(o: AdminOrderListItem, f: StatusFilter): boolean {
   }
 }
 
+/** Picking a date on an empty datetime field makes the browser use the current time; use 5 PM instead. */
+function withDefaultTime(previous: string, next: string): string {
+  return !previous && next ? `${next.slice(0, 10)}T17:00` : next;
+}
+
 function displayOrDash(value: string | null | undefined): string {
   const trimmed = (value ?? '').trim();
   return trimmed.length > 0 ? trimmed : '—';
@@ -345,7 +350,7 @@ export function OrderList({
             <input
               type="datetime-local"
               value={fromValue}
-              onChange={(e) => setFromValue(e.target.value)}
+              onChange={(e) => setFromValue(withDefaultTime(fromValue, e.target.value))}
               style={{ padding: '6px 8px' }}
             />
           </label>
@@ -354,7 +359,7 @@ export function OrderList({
             <input
               type="datetime-local"
               value={toValue}
-              onChange={(e) => setToValue(e.target.value)}
+              onChange={(e) => setToValue(withDefaultTime(toValue, e.target.value))}
               style={{ padding: '6px 8px' }}
             />
           </label>
