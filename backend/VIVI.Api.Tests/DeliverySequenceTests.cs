@@ -142,17 +142,17 @@ public sealed class DeliverySequenceTests
         await PlaceAsync(At(9, 30)); // handmade, effective 2 Oct
         var (_, essentials) = await PlaceAsync(At(10, 1), ProductType.Resell);
         Assert.False(essentials.IsRepeatOrder);
-        Assert.Equal(Day(10, 2), essentials.Dates.From); // 1 Oct + 1
-        Assert.Equal(Day(10, 3), essentials.Dates.To);   // 1 Oct + 2
+        Assert.Equal(Day(10, 4), essentials.Dates.From); // 1 Oct + 3
+        Assert.Equal(Day(10, 5), essentials.Dates.To);   // 1 Oct + 4
     }
 
     [Fact]
-    public async Task Essentials_delivery_is_one_to_two_days_everywhere_and_never_chains()
+    public async Task Essentials_delivery_is_three_to_four_days_everywhere_and_never_chains()
     {
         var (_, first) = await PlaceAsync(At(9, 30), ProductType.Resell, coimbatore: false);
         var (_, second) = await PlaceAsync(At(9, 30), ProductType.Resell, coimbatore: false);
-        Assert.Equal(Day(10, 1), first.Dates.From);
-        Assert.Equal(Day(10, 2), first.Dates.To);
+        Assert.Equal(Day(10, 3), first.Dates.From);
+        Assert.Equal(Day(10, 4), first.Dates.To);
         Assert.Equal(first.Dates, second.Dates);
     }
 

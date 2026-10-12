@@ -55,14 +55,14 @@ public sealed class DeliveryEstimateService : IDeliveryEstimateService
 
     /// <summary>
     /// Standard window. Handmade: Coimbatore 1–2 days, elsewhere 2–3 days.
-    /// Crochet Essentials (Resell): 1–2 days everywhere (unchanged).
+    /// Crochet Essentials (Resell): 3–4 days everywhere.
     /// </summary>
     public DeliveryWindow WindowFor(ProductType productType, bool isCoimbatore)
         => productType switch
         {
             ProductType.Handmade when isCoimbatore => new DeliveryWindow(1, 2),
             ProductType.Handmade => new DeliveryWindow(2, 3),
-            _ => new DeliveryWindow(1, 2)
+            _ => new DeliveryWindow(3, 4)
         };
 
     public DateTime IstDate(DateTime utcAnchor) => ToIstDate(utcAnchor);

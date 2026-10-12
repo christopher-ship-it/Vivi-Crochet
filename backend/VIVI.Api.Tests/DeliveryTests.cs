@@ -40,22 +40,22 @@ public sealed class DeliveryTests
     }
 
     [Fact]
-    public async Task Resell_coimbatore_is_one_to_two_days()
+    public async Task Resell_coimbatore_is_three_to_four_days()
     {
         var quote = await QuoteAsync(await PublishProductAsync("Resell", ProductType.Resell), "Coimbatore");
         Assert.True(quote.IsCoimbatore);
-        Assert.Equal(1, quote.MinDays);
-        Assert.Equal(2, quote.MaxDays);
-        Assert.Equal("1–2 days", quote.Summary);
+        Assert.Equal(3, quote.MinDays);
+        Assert.Equal(4, quote.MaxDays);
+        Assert.Equal("3–4 days", quote.Summary);
     }
 
     [Fact]
-    public async Task Resell_outside_coimbatore_is_one_to_two_days()
+    public async Task Resell_outside_coimbatore_is_three_to_four_days()
     {
         var quote = await QuoteAsync(await PublishProductAsync("Resell Out", ProductType.Resell), "Madurai");
         Assert.False(quote.IsCoimbatore);
-        Assert.Equal(1, quote.MinDays);
-        Assert.Equal(2, quote.MaxDays);
+        Assert.Equal(3, quote.MinDays);
+        Assert.Equal(4, quote.MaxDays);
     }
 
     [Fact]
@@ -75,8 +75,8 @@ public sealed class DeliveryTests
         });
         quote.EnsureSuccessStatusCode();
         var body = await quote.Content.ReadFromJsonAsync<DeliveryQuoteResponse>(AuthTests.Json);
-        Assert.Equal(1, body!.MinDays);
-        Assert.Equal(2, body.MaxDays);
+        Assert.Equal(3, body!.MinDays);
+        Assert.Equal(4, body.MaxDays);
 
         var outside = await customer.PostAsJsonAsync("/api/orders/delivery-quote", new
         {
@@ -88,8 +88,8 @@ public sealed class DeliveryTests
             shippingAddress = Address("Chennai")
         });
         var outsideBody = await outside.Content.ReadFromJsonAsync<DeliveryQuoteResponse>(AuthTests.Json);
-        Assert.Equal(2, outsideBody!.MinDays);
-        Assert.Equal(3, outsideBody.MaxDays);
+        Assert.Equal(3, outsideBody!.MinDays);
+        Assert.Equal(4, outsideBody.MaxDays);
     }
 
     [Theory]
