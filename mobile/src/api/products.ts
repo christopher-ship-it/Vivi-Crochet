@@ -1,11 +1,13 @@
 import { apiRequest } from './client';
 import type { Product, ProductType } from '../types';
 
-/** Preferred shop order: T-Shirt Yarn first (fills a full row), then Rose, then others. */
+/** Preferred shop order: T-Shirt Yarn first (fills a full row), then Rose, then other yarn, then the rest. */
 function categoryRank(category: string): number {
   const key = category.trim().toLowerCase();
   if (key.includes('t-shirt') || key.includes('tshirt')) return 0;
   if (key.includes('rose')) return 1;
+  // Every other yarn category comes next, ahead of hooks, bag rings and the rest.
+  if (key.includes('yarn')) return 2;
   return 50;
 }
 
