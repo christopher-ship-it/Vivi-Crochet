@@ -82,6 +82,7 @@ const NAV_ITEMS: { to: string; label: string; icon: IconName; end?: boolean }[] 
   { to: '/products', label: 'Shop products', icon: 'shop' },
   { to: '/payments', label: 'Payments', icon: 'payments' },
   { to: '/customers', label: 'Customers', icon: 'customers' },
+  { to: '/user-metrics', label: 'Daily user metrics', icon: 'customers' },
   { to: '/phone-otps', label: 'Phone OTPs', icon: 'phone' },
   { to: '/notifications', label: 'Notifications', icon: 'bell' },
   { to: '/support', label: 'Support', icon: 'support' },

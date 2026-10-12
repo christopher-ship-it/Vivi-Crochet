@@ -817,3 +817,8 @@ export interface UserMetrics {
   growthPercent: number | null;
   daily: UserMetricsDay[];
 }
+
+export interface UserMetricsUser {
+  name: string;
+  email: string;
+}

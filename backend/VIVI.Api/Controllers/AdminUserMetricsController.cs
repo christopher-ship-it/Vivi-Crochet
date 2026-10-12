@@ -91,4 +91,45 @@ public sealed class AdminUserMetricsController : ControllerBase
             Daily = daily,
         });
     }
+
+    /// <summary>The customers behind one number in the daily table. <c>kind</c> is new, active or total.</summary>
+    [HttpGet("users")]
+    [ProducesResponseType(typeof(IReadOnlyList<UserMetricsUser>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<UserMetricsUser>>> Users(
+        [FromQuery] string date,
+        [FromQuery] string kind,
+        CancellationToken cancellationToken)
+    {
+        if (!DateTime.TryParseExact(date, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var day))
+            return BadRequest("date must be yyyy-MM-dd.");
+
+        var startUtc = day - IndiaOffset;
+        var endUtc = startUtc.AddDays(1);
+        var customers = _db.Customers.AsNoTracking();
+
+        IQueryable<VIVI.Core.Entities.Customer> query;
+        switch (kind)
+        {
+            case "new":
+                query = customers.Where(c => c.CreatedAt >= startUtc && c.CreatedAt < endUtc);
+                break;
+            case "total":
+                query = customers.Where(c => c.CreatedAt < endUtc);
+                break;
+            case "active":
+                var ids = _db.VideoProgress.AsNoTracking().Where(v => v.UpdatedAt >= startUtc && v.UpdatedAt < endUtc).Select(v => v.CustomerId)
+                    .Union(_db.Orders.AsNoTracking().Where(o => o.CreatedAt >= startUtc && o.CreatedAt < endUtc).Select(o => o.CustomerId))
+                    .Union(_db.LiveBookings.AsNoTracking().Where(b => b.CreatedAt >= startUtc && b.CreatedAt < endUtc).Select(b => b.CustomerId));
+                query = customers.Where(c => ids.Contains(c.Id));
+                break;
+            default:
+                return BadRequest("kind must be new, active or total.");
+        }
+
+        var rows = await query
+            .OrderByDescending(c => c.CreatedAt)
+            .Select(c => new UserMetricsUser { Name = c.FullName, Email = c.Email })
+            .ToListAsync(cancellationToken);
+        return Ok(rows);
+    }
 }

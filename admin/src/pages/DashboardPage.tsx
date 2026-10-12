@@ -5,7 +5,6 @@ import { listVideos } from '../api/videos';
 import { listSpecialOffers } from '../api/specialOffers';
 import { ApiClientError } from '../api/client';
 import type { AdminSpecialOffer, Course, Video } from '../types';
-import { UserMetricsSection } from '../components/UserMetricsSection';
 import { formatDate, formatInr, formatMoney, parseApiDate } from '../utils/format';
 
 export function DashboardPage() {
@@ -82,8 +81,6 @@ export function DashboardPage() {
           <Link to="/courses/new" className="btn btn--primary">New course</Link>
         </div>
       </header>
-
-      <UserMetricsSection />
 
       <div className="stat-grid">
         <div className="card card--stat">

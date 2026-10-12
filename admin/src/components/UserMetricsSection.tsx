@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getUserMetrics } from '../api/userMetrics';
+import { getUserMetrics, getUserMetricsUsers } from '../api/userMetrics';
 import { ApiClientError } from '../api/client';
-import type { UserMetrics } from '../types';
+import type { UserMetrics, UserMetricsUser } from '../types';
 
 const nf = new Intl.NumberFormat('en-IN');
 
@@ -30,15 +30,36 @@ export function UserMetricsSection() {
 
   useEffect(() => { void load(); }, []);
 
+  const [picked, setPicked] = useState<{ date: string; kind: 'new' | 'active' | 'total' } | null>(null);
+  const [users, setUsers] = useState<UserMetricsUser[] | null>(null);
+  const [usersError, setUsersError] = useState<string | null>(null);
+
+  function openUsers(date: string, kind: 'new' | 'active' | 'total') {
+    setPicked({ date, kind });
+    setUsers(null);
+    setUsersError(null);
+    getUserMetricsUsers(date, kind)
+      .then(setUsers)
+      .catch((err) => setUsersError(err instanceof ApiClientError ? err.message : 'Failed to load users.'));
+  }
+
+  const KIND_LABEL = { new: 'New users', active: 'Active users', total: 'Total users' } as const;
+
+  function count(date: string, kind: 'new' | 'active' | 'total', n: number) {
+    return n === 0 ? '0' : (
+      <button type="button" className="cell-link" style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
+        onClick={() => openUsers(date, kind)}>
+        {nf.format(n)}
+      </button>
+    );
+  }
+
   return (
     <section className="section-block dashboard-section">
       <div className="section-block__head">
-        <div>
-          <h2 className="section-title" style={{ marginBottom: 0 }}>Daily user metrics</h2>
-          <p className="card__subtitle">
-            Sign-ups, active users and paid users. Active = watched a lesson, placed an order or booked a Live class that day.
-          </p>
-        </div>
+        <p className="card__subtitle">
+          Active = watched a lesson, placed an order or booked a Live class that day.
+        </p>
         <button type="button" className="btn btn--ghost btn--sm" disabled={loading} onClick={() => void load()}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
@@ -77,7 +98,7 @@ export function UserMetricsSection() {
             </div>
           </div>
 
-          <div className="table-wrap" style={{ marginTop: 16 }}>
+          <div className="table-wrap" style={{ marginTop: 16, maxWidth: 560 }}>
             <table className="data-table">
               <thead>
                 <tr>
@@ -90,16 +111,57 @@ export function UserMetricsSection() {
               <tbody>
                 {metrics.daily.map((d) => (
                   <tr key={d.date}>
-                    <td>{dayLabel(d.date)}</td>
-                    <td style={{ textAlign: 'right' }}>{nf.format(d.newUsers)}</td>
-                    <td style={{ textAlign: 'right' }}>{nf.format(d.activeUsers)}</td>
-                    <td style={{ textAlign: 'right' }}>{nf.format(d.totalUsers)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{dayLabel(d.date)}</td>
+                    <td style={{ textAlign: 'right' }}>{count(d.date, 'new', d.newUsers)}</td>
+                    <td style={{ textAlign: 'right' }}>{count(d.date, 'active', d.activeUsers)}</td>
+                    <td style={{ textAlign: 'right' }}>{count(d.date, 'total', d.totalUsers)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </>
+      )}
+
+      {picked && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setPicked(null)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={KIND_LABEL[picked.kind]}
+            style={{ maxWidth: 560 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal__header">
+              <h2 className="modal__title">
+                {KIND_LABEL[picked.kind]} · {dayLabel(picked.date)}{users ? ` (${users.length})` : ''}
+              </h2>
+            </div>
+            {usersError && <p>{usersError}</p>}
+            {!users && !usersError && <p>Loading…</p>}
+            {users && (
+              <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr><th>Name</th><th>Email</th></tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u, i) => (
+                      <tr key={`${u.email}-${i}`}>
+                        <td>{u.name || '—'}</td>
+                        <td>{u.email || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="modal__footer">
+              <button type="button" className="btn btn--secondary" onClick={() => setPicked(null)}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

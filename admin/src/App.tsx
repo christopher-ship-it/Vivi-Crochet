@@ -28,6 +28,7 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { SupportPage } from './pages/SupportPage';
 import { AppHealthPage } from './pages/AppHealthPage';
 import { PhoneOtpsPage } from './pages/PhoneOtpsPage';
+import { UserMetricsPage } from './pages/UserMetricsPage';
 import { IntroVideoPage } from './pages/IntroVideoPage';
 import { AccountPage } from './pages/AccountPage';
 import { DeleteAccountPage } from './pages/DeleteAccountPage';
@@ -70,6 +71,7 @@ export default function App() {
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="support" element={<SupportPage />} />
               <Route path="phone-otps" element={<PhoneOtpsPage />} />
+              <Route path="user-metrics" element={<UserMetricsPage />} />
               <Route path="app-health" element={<AppHealthPage />} />
               <Route path="products" element={<ProductsPage />} />
               <Route path="products/import" element={<ProductImportPage />} />

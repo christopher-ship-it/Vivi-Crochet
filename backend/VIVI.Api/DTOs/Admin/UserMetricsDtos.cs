@@ -23,3 +23,9 @@ public sealed class UserMetricsDay
     public int ActiveUsers { get; set; }
     public int TotalUsers { get; set; }
 }
+
+public sealed class UserMetricsUser
+{
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+}
