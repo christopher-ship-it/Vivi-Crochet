@@ -62,6 +62,7 @@ export default function OffersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openLevel, setOpenLevel] = useState<number | null>(null);
 
   const titleAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
@@ -170,6 +171,7 @@ export default function OffersScreen() {
       applyStatusBar('dark');
       void load();
       return () => {
+        setOpenLevel(null);
         bannerBreath.stopAnimation();
         bannerBreath.setValue(1);
       };
@@ -600,7 +602,15 @@ export default function OffersScreen() {
               {includedCourses.map((name, index) => {
                 const curriculum = OFFER_CURRICULUM[index];
                 if (curriculum) {
-                  return <LevelCurriculumCard key={name} curriculum={curriculum} courseName={name} />;
+                  return (
+                    <LevelCurriculumCard
+                      key={name}
+                      curriculum={curriculum}
+                      courseName={name}
+                      expanded={openLevel === index}
+                      onToggle={() => setOpenLevel(openLevel === index ? null : index)}
+                    />
+                  );
                 }
                 const thumb = includedCourseDetails[index]?.thumbnailUrl?.trim();
                 return (
