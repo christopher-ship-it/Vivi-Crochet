@@ -37,12 +37,14 @@ export function LevelCurriculumCard({ curriculum, expanded, onToggle }: Props) {
           end={{ x: 1, y: 1 }}
           style={styles.head}
         >
-          <View style={styles.levelBadge}>
-            <Text style={styles.levelBadgeText}>LEVEL {curriculum.level}</Text>
+          <View style={styles.headText}>
+            <Text style={styles.label} numberOfLines={1}>
+              {curriculum.shortName}
+            </Text>
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelBadgeText}>LEVEL {curriculum.level}</Text>
+            </View>
           </View>
-          <Text style={styles.label} numberOfLines={1}>
-            {curriculum.emoji} {curriculum.shortName}
-          </Text>
           <View style={styles.pill}>
             <Text style={styles.pillText}>What you learn</Text>
             <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={13} color={colors.pinkDark} />
@@ -83,7 +85,12 @@ function createStyles(fonts: UiFonts) {
       alignItems: 'center',
       gap: 8,
       paddingHorizontal: spacing.md,
-      paddingVertical: 11,
+      paddingVertical: 10,
+    },
+    headText: {
+      flex: 1,
+      alignItems: 'flex-start',
+      gap: 4,
     },
     levelBadge: {
       backgroundColor: colors.yellow,
@@ -98,7 +105,6 @@ function createStyles(fonts: UiFonts) {
       color: colors.ink,
     },
     label: {
-      flex: 1,
       fontFamily: fonts.extraBold,
       fontSize: 15,
       color: colors.white,
