@@ -36,6 +36,8 @@ import type { Course } from '../../src/types';
 import { formatMoney } from '../../src/utils/format';
 import { buildShareUrl, shareLink } from '../../src/utils/share';
 import { resolveCollectionOwnership } from '../../src/utils/mainCourses';
+import { LevelCurriculumCard } from '../../src/components/LevelCurriculumCard';
+import { OFFER_CURRICULUM } from '../../src/utils/offerCurriculum';
 import { applyStatusBar } from '../../src/utils/statusBar';
 
 const LESSON_COUNT = 27;
@@ -596,9 +598,13 @@ export default function OffersScreen() {
               <Text style={styles.includedTitle}>{t('offers.whatsIncluded')}</Text>
 
               {includedCourses.map((name, index) => {
+                const curriculum = OFFER_CURRICULUM[index];
+                if (curriculum) {
+                  return <LevelCurriculumCard key={name} curriculum={curriculum} courseName={name} />;
+                }
                 const thumb = includedCourseDetails[index]?.thumbnailUrl?.trim();
                 return (
-                  <View key={name} style={styles.includedRow}>
+                  <View key={name} style={[styles.includedRow, styles.includedCard]}>
                     <View style={styles.includedIcon}>
                       {thumb ? (
                         <AppImage
@@ -944,11 +950,13 @@ function createStyles(fonts: UiFonts) {
       color: colors.ink,
       marginBottom: spacing.md,
     },
+    includedCard: {
+      marginBottom: 12,
+    },
     includedRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-      marginBottom: 12,
     },
     includedIcon: {
       width: 40,

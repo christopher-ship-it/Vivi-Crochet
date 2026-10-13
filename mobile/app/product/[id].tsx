@@ -301,7 +301,7 @@ export default function ProductDetailScreen() {
 
   async function handleAddToCart() {
     if (!sellableProduct || outOfStock) return;
-    if ((product.variants?.length ?? 0) > 0 && !selectedVariant) {
+    if ((product?.variants?.length ?? 0) > 0 && !selectedVariant) {
       setCartError('Choose a colour before adding to cart.');
       return;
     }
@@ -326,7 +326,7 @@ export default function ProductDetailScreen() {
 
   async function handleBuyNow() {
     if (!sellableProduct || outOfStock) return;
-    if ((product.variants?.length ?? 0) > 0 && !selectedVariant) {
+    if ((product?.variants?.length ?? 0) > 0 && !selectedVariant) {
       setCartError('Choose a colour before buying.');
       return;
     }

@@ -150,6 +150,12 @@ export function getMainCourseWhatYouGetKey(
   return null;
 }
 
+/** 0 = Foundation, 1 = Signature, 2 = Master; null for any other course. */
+export function getMainCourseLevelIndex(course: Pick<Course, 'id' | 'name'>): number | null {
+  const index = MAIN_COURSE_CATALOG.findIndex((entry) => matchesCatalogEntry(course as Course, entry));
+  return index === -1 ? null : index;
+}
+
 /**
  * Returns the three main structured courses in fixed order.
  * Extra API courses (bundle, viral, tests, etc.) are excluded — not deleted.

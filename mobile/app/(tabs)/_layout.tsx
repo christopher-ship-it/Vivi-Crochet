@@ -42,7 +42,7 @@ export default function TabLayout() {
         headerTintColor: colors.pink,
         headerShadowVisible: false,
         tabBarShowLabel: false,
-        sceneContainerStyle: { backgroundColor: 'transparent' },
+        sceneStyle: { backgroundColor: 'transparent' },
         freezeOnBlur: true,
       }}
     >

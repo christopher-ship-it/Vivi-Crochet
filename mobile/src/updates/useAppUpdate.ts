@@ -6,23 +6,24 @@ export function useAppUpdate() {
   const [ready, setReady] = useState(false);
   const [applying, setApplying] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const { isUpdatePending } = Updates.useUpdates();
+
+  // Already downloaded (e.g. previous session) — prompt to apply.
+  useEffect(() => {
+    if (!isUpdatePending) return;
+    setReady(true);
+    setDismissed(false);
+  }, [isUpdatePending]);
 
   const check = useCallback(async () => {
     if (__DEV__ || !Updates.isEnabled) return;
 
     try {
-      // Already downloaded (e.g. previous session) — prompt to apply.
-      if (Updates.isUpdatePending) {
-        setReady(true);
-        setDismissed(false);
-        return;
-      }
-
       const result = await Updates.checkForUpdateAsync();
       if (!result.isAvailable) return;
 
       const fetched = await Updates.fetchUpdateAsync();
-      if (fetched.isNew || Updates.isUpdatePending) {
+      if (fetched.isNew) {
         setReady(true);
         setDismissed(false);
       }
