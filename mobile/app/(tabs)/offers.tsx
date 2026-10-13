@@ -606,7 +606,6 @@ export default function OffersScreen() {
                     <LevelCurriculumCard
                       key={name}
                       curriculum={curriculum}
-                      courseName={name}
                       expanded={openLevel === index}
                       onToggle={() => setOpenLevel(openLevel === index ? null : index)}
                     />

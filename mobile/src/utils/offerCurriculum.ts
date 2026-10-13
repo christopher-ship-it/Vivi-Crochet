@@ -2,6 +2,7 @@
 export interface OfferCurriculum {
   level: number;
   label: string;
+  shortName: string;
   emoji: string;
   tagline: string;
   items: string[];
@@ -11,6 +12,7 @@ export const OFFER_CURRICULUM: OfferCurriculum[] = [
   {
     level: 1,
     label: 'FOUNDATION COURSE',
+    shortName: 'Foundation',
     emoji: '🧶',
     tagline: 'Start your crochet journey from scratch!',
     items: [
@@ -28,6 +30,7 @@ export const OFFER_CURRICULUM: OfferCurriculum[] = [
   {
     level: 2,
     label: 'SIGNATURE COURSE',
+    shortName: 'Signature',
     emoji: '🎀',
     tagline: 'Create beautiful and useful handmade products!',
     items: [
@@ -41,6 +44,7 @@ export const OFFER_CURRICULUM: OfferCurriculum[] = [
   {
     level: 3,
     label: 'MASTERY COURSE',
+    shortName: 'Mastery',
     emoji: '👑',
     tagline: 'Take your crochet skills to the next level!',
     items: [
