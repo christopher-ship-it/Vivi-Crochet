@@ -156,6 +156,8 @@ public sealed class AdminOrderListItemResponse
     public string ShippingAddress { get; set; } = string.Empty;
     /// <summary>Display title from order item name snapshots (e.g. first item + "N more").</summary>
     public string TitleSummary { get; set; } = string.Empty;
+    /// <summary>Course/bundle names only, for the course &amp; video orders list.</summary>
+    public string CourseTitleSummary { get; set; } = string.Empty;
     /// <summary>Every line as "Name × qty", joined with "; " (used by the Excel export).</summary>
     public string ItemsDetail { get; set; } = string.Empty;
     /// <summary>Product codes of the physical items, comma separated (items without a code are skipped).</summary>

@@ -211,7 +211,11 @@ export function OrderList({
 
   // Columns this page can offer (delivery + shop columns only apply to physical orders).
   const available = useMemo(
-    () => COLUMNS.filter((c) => (showDelivery ? true : !c.shopOnly && c.id !== 'delivery')),
+    () => COLUMNS.filter((c) => (showDelivery ? true : !c.shopOnly && c.id !== 'delivery')).map((c) => {
+      if (showDelivery || c.id !== 'title') return c;
+      const courseTitle = (o: AdminOrderListItem) => displayOrDash(o.courseTitleSummary || o.titleSummary);
+      return { ...c, render: courseTitle, title: courseTitle };
+    }),
     [showDelivery],
   );
   const columns = available.filter((c) => c.locked || !hidden.includes(c.id));

@@ -153,6 +153,7 @@ public static class CommerceMapper
                 .Where(part => !string.IsNullOrWhiteSpace(part))
                 .Select(part => part!.Trim())),
             TitleSummary = BuildTitleSummary(order.Items),
+            CourseTitleSummary = BuildTitleSummary(order.Items.Where(i => i.ItemType is OrderItemType.Course or OrderItemType.CourseBundle)),
             ItemsDetail = string.Join("; ", order.Items
                 .Where(i => !string.IsNullOrWhiteSpace(i.ItemNameSnapshot))
                 .Select(i => $"{i.ItemNameSnapshot!.Trim()} × {i.Quantity}")),

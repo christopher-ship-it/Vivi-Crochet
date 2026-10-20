@@ -356,6 +356,7 @@ export interface AdminOrderListItem {
   shippingAddress?: string | null;
   /** Snapshot-based line title(s), e.g. "Pink Yarn + 2 more". */
   titleSummary?: string | null;
+  courseTitleSummary?: string | null;
   /** Every line as "Name × qty", joined with "; ". */
   itemsDetail?: string | null;
   /** Product codes of the shop items, comma separated. */
