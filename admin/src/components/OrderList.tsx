@@ -417,6 +417,7 @@ export function OrderList({
               ))}
             </select>
           </label>
+          {showDelivery && (<>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span>Received from</span>
             <input
@@ -444,6 +445,7 @@ export function OrderList({
               Clear dates
             </button>
           ) : null}
+          </>)}
           <button
             type="button"
             className="btn btn--secondary btn--sm"

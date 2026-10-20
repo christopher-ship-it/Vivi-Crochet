@@ -8,7 +8,7 @@ export function CourseOrdersPage() {
       filter={(order) => {
         // Prefer explicit course flag from API; fall back for older list payloads.
         if (typeof order.hasCourseItems === 'boolean') {
-          return order.hasCourseItems && !order.hasPhysicalItems;
+          return order.hasCourseItems;
         }
         return !order.hasPhysicalItems;
       }}
