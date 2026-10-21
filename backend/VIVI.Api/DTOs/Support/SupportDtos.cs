@@ -21,9 +21,25 @@ public sealed class AdminSupportInquiryListItemResponse
     public string Message { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public bool IsRead { get; set; }
+    public string? Reply { get; set; }
+    public DateTime? RepliedAt { get; set; }
 }
 
 public sealed class SupportUnreadCountResponse
 {
     public int Count { get; set; }
+}
+
+public sealed class ReplySupportInquiryRequest
+{
+    public string Reply { get; set; } = string.Empty;
+}
+
+public sealed class MySupportInquiryResponse
+{
+    public Guid Id { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public string? Reply { get; set; }
+    public DateTime? RepliedAt { get; set; }
 }

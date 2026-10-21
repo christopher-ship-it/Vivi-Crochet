@@ -60,6 +60,27 @@ public sealed class AdminSupportInquiriesController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/reply")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Reply(
+        Guid id,
+        [FromBody] ReplySupportInquiryRequest request,
+        CancellationToken cancellationToken)
+    {
+        var reply = request.Reply?.Trim() ?? string.Empty;
+        if (reply.Length == 0 || reply.Length > 2000)
+            throw new ViviException("SUPPORT_REPLY_INVALID", "Reply must be 1-2000 characters.");
+
+        var inquiry = await _db.SupportInquiries.SingleOrDefaultAsync(i => i.Id == id, cancellationToken)
+            ?? throw ViviException.NotFound("SUPPORT_INQUIRY_NOT_FOUND", "Support inquiry was not found.");
+
+        inquiry.Reply = reply;
+        inquiry.RepliedAt = DateTime.UtcNow;
+        inquiry.IsRead = true;
+        await _db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
     private static AdminSupportInquiryListItemResponse ToDto(Core.Entities.SupportInquiry inquiry)
     {
         var customer = inquiry.Customer;
@@ -76,7 +97,9 @@ public sealed class AdminSupportInquiriesController : ControllerBase
             Email = email,
             Message = inquiry.Message,
             CreatedAt = inquiry.CreatedAt,
-            IsRead = inquiry.IsRead
+            IsRead = inquiry.IsRead,
+            Reply = inquiry.Reply,
+            RepliedAt = inquiry.RepliedAt
         };
     }
 }

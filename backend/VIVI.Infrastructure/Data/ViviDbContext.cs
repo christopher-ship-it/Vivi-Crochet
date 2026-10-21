@@ -689,6 +689,7 @@ public sealed class ViviDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Message).HasMaxLength(2000).IsRequired();
             entity.Property(x => x.IsRead).IsRequired();
+            entity.Property(x => x.Reply).HasMaxLength(2000);
             entity.HasIndex(x => x.CustomerId);
             entity.HasIndex(x => x.CreatedAt);
             entity.HasIndex(x => x.IsRead);

@@ -8,6 +8,7 @@ using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Interfaces;
 using VIVI.Infrastructure.Commerce;
+using Microsoft.EntityFrameworkCore;
 using VIVI.Infrastructure.Data;
 
 namespace VIVI.Api.Controllers;
@@ -35,6 +36,30 @@ public sealed class MeSupportController : ControllerBase
         _email = email;
         _configuration = configuration;
         _logger = logger;
+    }
+
+    /// <summary>The caller's own queries with any admin replies, oldest first.</summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<MySupportInquiryResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<MySupportInquiryResponse>>> List(CancellationToken cancellationToken)
+    {
+        var customer = await _customers.ResolveForUserAsync(User.GetUserId(), cancellationToken);
+        var rows = await _db.SupportInquiries
+            .AsNoTracking()
+            .Where(i => i.CustomerId == customer.Id)
+            .OrderByDescending(i => i.CreatedAt)
+            .Take(50)
+            .Select(i => new MySupportInquiryResponse
+            {
+                Id = i.Id,
+                Message = i.Message,
+                CreatedAt = i.CreatedAt,
+                Reply = i.Reply,
+                RepliedAt = i.RepliedAt
+            })
+            .ToListAsync(cancellationToken);
+        rows.Reverse();
+        return Ok(rows);
     }
 
     /// <summary>Stores a one-shot support query from Contact us chat.</summary>

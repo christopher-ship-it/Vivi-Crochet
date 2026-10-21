@@ -3,6 +3,7 @@ import { ApiClientError } from '../api/client';
 import {
   listSupportInquiries,
   markSupportInquiryRead,
+  replySupportInquiry,
   type AdminSupportInquiry,
 } from '../api/support';
 import { formatDate } from '../utils/format';
@@ -12,6 +13,8 @@ export function SupportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [replyingId, setReplyingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,6 +40,27 @@ export function SupportPage() {
       window.dispatchEvent(new CustomEvent('vivi:support-unread-refresh'));
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Could not mark as read.');
+    } finally {
+      setMarkingId(null);
+    }
+  }
+
+  async function handleReply(id: string) {
+    const reply = draft.trim();
+    if (!reply) return;
+    setMarkingId(id);
+    try {
+      await replySupportInquiry(id, reply);
+      setItems((prev) =>
+        prev.map((row) =>
+          row.id === id ? { ...row, isRead: true, reply, repliedAt: new Date().toISOString() } : row,
+        ),
+      );
+      setReplyingId(null);
+      setDraft('');
+      window.dispatchEvent(new CustomEvent('vivi:support-unread-refresh'));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not send reply.');
     } finally {
       setMarkingId(null);
     }
@@ -104,14 +128,55 @@ export function SupportPage() {
                       {item.email || ''}
                     </div>
                   </td>
-                  <td style={{ maxWidth: 420, whiteSpace: 'pre-wrap' }}>{item.message}</td>
+                  <td style={{ maxWidth: 420, whiteSpace: 'pre-wrap' }}>
+                    {item.message}
+                    {item.reply ? (
+                      <div style={{ marginTop: 8, paddingLeft: 10, borderLeft: '3px solid #e8215b', color: 'var(--muted, #7a6d72)' }}>
+                        <strong>Your reply:</strong> {item.reply}
+                      </div>
+                    ) : null}
+                    {replyingId === item.id ? (
+                      <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                        <textarea
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          maxLength={2000}
+                          rows={3}
+                          placeholder="Type your reply — the customer sees it in the app"
+                          style={{ width: '100%', padding: 8 }}
+                        />
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            type="button"
+                            className="btn btn--primary btn--sm"
+                            disabled={markingId === item.id || !draft.trim()}
+                            onClick={() => void handleReply(item.id)}
+                          >
+                            {markingId === item.id ? 'Sending…' : 'Send reply'}
+                          </button>
+                          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setReplyingId(null)}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </td>
                   <td>{formatDate(item.createdAt)}</td>
                   <td>
                     <span className={`badge ${item.isRead ? 'badge--inactive' : 'badge--pending'}`}>
                       {item.isRead ? 'Read' : 'Unread'}
                     </span>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {replyingId !== item.id ? (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => { setReplyingId(item.id); setDraft(item.reply ?? ''); }}
+                      >
+                        {item.reply ? 'Edit reply' : 'Reply'}
+                      </button>
+                    ) : null}
                     {!item.isRead ? (
                       <button
                         type="button"

@@ -9,6 +9,9 @@ public sealed class SupportInquiry
     public DateTime CreatedAt { get; set; }
     /// <summary>False until an admin opens/marks the inquiry in the console.</summary>
     public bool IsRead { get; set; }
+    /// <summary>Admin's answer, shown to the customer in the app's chat.</summary>
+    public string? Reply { get; set; }
+    public DateTime? RepliedAt { get; set; }
 
     public Customer? Customer { get; set; }
 }

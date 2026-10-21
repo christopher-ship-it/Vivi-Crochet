@@ -9,6 +9,8 @@ export interface AdminSupportInquiry {
   message: string;
   createdAt: string;
   isRead: boolean;
+  reply?: string | null;
+  repliedAt?: string | null;
 }
 
 export async function listSupportInquiries(): Promise<AdminSupportInquiry[]> {
@@ -23,5 +25,12 @@ export async function getSupportUnreadCount(): Promise<number> {
 export async function markSupportInquiryRead(id: string): Promise<void> {
   await apiRequest<void>(`/api/admin/support-inquiries/${id}/read`, {
     method: 'POST',
+  });
+}
+
+export async function replySupportInquiry(id: string, reply: string): Promise<void> {
+  await apiRequest<void>(`/api/admin/support-inquiries/${id}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ reply }),
   });
 }

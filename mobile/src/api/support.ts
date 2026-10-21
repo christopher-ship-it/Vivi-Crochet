@@ -11,3 +11,15 @@ export async function createSupportInquiry(message: string): Promise<SupportInqu
     body: JSON.stringify({ message }),
   });
 }
+
+export interface MySupportInquiry {
+  id: string;
+  message: string;
+  createdAt: string;
+  reply?: string | null;
+  repliedAt?: string | null;
+}
+
+export async function listMySupportInquiries(): Promise<MySupportInquiry[]> {
+  return apiRequest<MySupportInquiry[]>('/api/me/support-inquiries');
+}

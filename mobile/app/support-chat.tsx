@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiClientError } from '../src/api/client';
-import { createSupportInquiry } from '../src/api/support';
+import { createSupportInquiry, listMySupportInquiries } from '../src/api/support';
 import { useShoppingSession } from '../src/auth/SessionContext';
 import { colors, fonts, spacing } from '../src/theme';
 import { realCustomerName } from '../src/utils/validation';
@@ -77,6 +77,27 @@ export default function SupportChatScreen() {
       router.replace({ pathname: '/login', params: { returnTo: '/support-chat' } });
     }
   }, [isAuthenticated, router]);
+
+  // Earlier queries and any admin replies, appended after the welcome message.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    listMySupportInquiries()
+      .then((rows) => {
+        if (cancelled || rows.length === 0) return;
+        const history: ChatBubble[] = rows.flatMap((r) => [
+          { id: `user-${r.id}`, kind: 'user' as const, text: r.message },
+          r.reply
+            ? { id: `bot-${r.id}`, kind: 'bot' as const, text: r.reply }
+            : { id: `bot-${r.id}`, kind: 'bot' as const, text: THANKS },
+        ]);
+        setBubbles((prev) => [prev[0], prev[1], ...history, ...prev.slice(2)]);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
