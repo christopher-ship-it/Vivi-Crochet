@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useI18n } from '../i18n';
 import { uiFonts } from '../i18n/uiFonts';
@@ -11,21 +10,12 @@ interface LoadingViewProps {
 export function LoadingView({ message }: LoadingViewProps) {
   const { t, language } = useI18n();
   const fonts = uiFonts(language);
-  const [slow, setSlow] = useState(false);
   const displayMessage = message ?? t('common.loading');
-
-  useEffect(() => {
-    const id = setTimeout(() => setSlow(true), 3500);
-    return () => clearTimeout(id);
-  }, []);
 
   return (
     <View style={styles.center}>
       <ActivityIndicator size="large" color={colors.pink} />
       <Text style={[styles.text, { fontFamily: fonts.regular }]}>{displayMessage}</Text>
-      {slow && (
-        <Text style={[styles.hint, { fontFamily: fonts.regular }]}>{t('common.serverWaking')}</Text>
-      )}
     </View>
   );
 }

@@ -147,7 +147,7 @@ async function apiRequestOnce<T>(
       throw new ApiClientError(
         0,
         'TIMEOUT',
-        'The server took too long to respond. It may be waking up — pull to refresh and try again.',
+        'This is taking longer than usual. Pull to refresh and try again.',
       );
     }
     throw new ApiClientError(
