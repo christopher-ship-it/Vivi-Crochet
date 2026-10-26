@@ -5,7 +5,7 @@ namespace VIVI.Infrastructure.Commerce;
 /// <summary>Flat delivery charges for Crochet Essentials, in rupees. Configured under <c>Shipping</c>.</summary>
 public sealed class ShippingChargeSettings
 {
-    public const int DefaultTamilNaduInr = 79;
+    public const int DefaultTamilNaduInr = 69;
     public const int DefaultOtherStatesInr = 100;
 
     /// <summary>Charge when the delivery address is in Tamil Nadu.</summary>

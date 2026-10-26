@@ -7,7 +7,7 @@ using Xunit;
 
 namespace VIVI.Api.Tests;
 
-/// <summary>Crochet Essentials delivery charge: Rs 79 inside Tamil Nadu, Rs 100 elsewhere in India.</summary>
+/// <summary>Crochet Essentials delivery charge: Rs 69 inside Tamil Nadu, Rs 100 elsewhere in India.</summary>
 public sealed class ShippingChargeTests
 {
     private const int Price = 799;
@@ -65,9 +65,9 @@ public sealed class ShippingChargeTests
 
         var order = await OrderAsync(factory, "Tamil Nadu", (essentials, 1));
 
-        Assert.Equal(Price + 79, order.TotalAmount);
-        Assert.Equal(79, order.Delivery!.ShippingAmount);
-        Assert.Equal((Price + 79) * 100, order.AmountPaise);
+        Assert.Equal(Price + 69, order.TotalAmount);
+        Assert.Equal(69, order.Delivery!.ShippingAmount);
+        Assert.Equal((Price + 69) * 100, order.AmountPaise);
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class ShippingChargeTests
 
         var order = await OrderAsync(factory, "Tamil Nadu", (a, 3), (b, 2));
 
-        Assert.Equal(Price * 5 + 79, order.TotalAmount);
+        Assert.Equal(Price * 5 + 69, order.TotalAmount);
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class ShippingChargeTests
             return (await response.Content.ReadFromJsonAsync<DeliveryQuoteResponse>(AuthTests.Json))!.ShippingAmount;
         }
 
-        Assert.Equal(79, await QuoteAsync("Tamil Nadu"));
+        Assert.Equal(69, await QuoteAsync("Tamil Nadu"));
         Assert.Equal(100, await QuoteAsync("Maharashtra"));
     }
 
@@ -158,7 +158,7 @@ public sealed class ShippingChargeTests
         var calculator = new ShippingChargeCalculator(new ShippingChargeSettings());
 
         Assert.Equal(0, calculator.ForOrder("USD", [ProductType.Resell], "Tamil Nadu"));
-        Assert.Equal(79, calculator.ForOrder("INR", [ProductType.Resell], "Tamil Nadu"));
+        Assert.Equal(69, calculator.ForOrder("INR", [ProductType.Resell], "Tamil Nadu"));
         Assert.Equal(0, calculator.ForOrder("INR", [ProductType.Handmade], "Tamil Nadu"));
     }
 
