@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useI18n } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
 import type { Product, ProductVariantSummary } from '../types';
@@ -14,17 +14,26 @@ interface ProductVariantPickerProps {
   onSelect: (variantId: string) => void;
 }
 
-/** Amazon-style colour/option grid for parent products with variant SKUs. */
+/** Shades shown before "Show all": about two rows of small swatches. */
+const COLLAPSED_COUNT = 12;
+
+/** Compact colour/option grid for parent products with variant SKUs. */
 export function ProductVariantPicker({ product, selectedId, onSelect }: ProductVariantPickerProps) {
   const { t, language } = useI18n();
   const fonts = uiFonts(language);
   const styles = useMemo(() => createStyles(fonts), [language]);
+  const [expanded, setExpanded] = useState(false);
 
   const variants = product.variants ?? [];
   if (variants.length === 0) return null;
 
-  const selected = variants.find((v) => v.id === selectedId) ?? variants[0];
+  const selectedIndex = Math.max(0, variants.findIndex((v) => v.id === selectedId));
+  const selected = variants[selectedIndex];
   const optionLabel = product.variantOptionName?.trim() || t('product.colourLabel').replace(/:$/, '') || 'Colour';
+  // A selected shade further down keeps the whole list open, so it is never hidden.
+  const collapsible = variants.length > COLLAPSED_COUNT;
+  const open = !collapsible || expanded || selectedIndex >= COLLAPSED_COUNT;
+  const shown = open ? variants : variants.slice(0, COLLAPSED_COUNT);
 
   return (
     <View style={styles.wrap}>
@@ -34,22 +43,32 @@ export function ProductVariantPicker({ product, selectedId, onSelect }: ProductV
           {selected?.productCode ? ` (${selected.productCode})` : ''}
         </Text>
       </Text>
-      <ScrollView
-        horizontal={false}
-        nestedScrollEnabled
-        style={styles.scroll}
-        contentContainerStyle={styles.grid}
-      >
-        {variants.map((variant) => (
+      <View style={styles.grid}>
+        {shown.map((variant) => (
           <VariantCard
             key={variant.id}
             variant={variant}
             selected={variant.id === selectedId}
+            showPrice={variant.price !== selected.price}
             onPress={() => onSelect(variant.id)}
             styles={styles}
           />
         ))}
-      </ScrollView>
+      </View>
+      {collapsible && selectedIndex < COLLAPSED_COUNT ? (
+        <Pressable
+          onPress={() => setExpanded((v) => !v)}
+          style={styles.toggle}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+        >
+          <Text style={styles.toggleText}>
+            {expanded
+              ? t('product.showFewerColours')
+              : t('product.showAllColours', { count: variants.length })}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -57,11 +76,14 @@ export function ProductVariantPicker({ product, selectedId, onSelect }: ProductV
 function VariantCard({
   variant,
   selected,
+  showPrice,
   onPress,
   styles,
 }: {
   variant: ProductVariantSummary;
   selected: boolean;
+  /** Only when this shade costs something other than the selected one. */
+  showPrice: boolean;
   onPress: () => void;
   styles: ReturnType<typeof createStyles>;
 }) {
@@ -88,10 +110,7 @@ function VariantCard({
           {variant.productCode}
         </Text>
       ) : null}
-      <Text style={styles.price}>{formatInr(variant.price)}</Text>
-      {variant.mrp && variant.mrp > variant.price ? (
-        <Text style={styles.mrp}>{formatInr(variant.mrp)}</Text>
-      ) : null}
+      {showPrice ? <Text style={styles.price}>{formatInr(variant.price)}</Text> : null}
       {out ? <Text style={styles.outLabel}>Out of stock</Text> : null}
     </Pressable>
   );
@@ -113,25 +132,33 @@ function createStyles(fonts: UiFonts) {
       fontFamily: fonts.heading,
       fontWeight: '700',
     },
-    scroll: {
-      maxHeight: 280,
-    },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: spacing.sm,
+      gap: 6,
     },
     card: {
-      width: 68,
+      width: 46,
       borderWidth: 1.5,
       borderColor: colors.border,
       borderRadius: radii.sm,
-      padding: 4,
+      padding: 3,
       backgroundColor: colors.white,
     },
     cardSelected: {
       borderColor: colors.pink,
       borderWidth: 2.5,
+      padding: 2,
+    },
+    toggle: {
+      alignSelf: 'flex-start',
+      marginTop: spacing.sm,
+      paddingVertical: 6,
+    },
+    toggleText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 13,
+      color: colors.pinkDark,
     },
     cardOut: {
       opacity: 0.55,
@@ -153,23 +180,16 @@ function createStyles(fonts: UiFonts) {
       color: colors.muted,
     },
     code: {
-      fontFamily: fonts.heading,
-      fontSize: 10,
-      fontWeight: '700',
+      fontFamily: fonts.extraBold,
+      fontSize: 9,
       color: colors.ink,
       textAlign: 'center',
-      marginBottom: 2,
     },
     price: {
       fontFamily: fonts.extraBold,
-      fontSize: 11,
-      color: colors.ink,
-    },
-    mrp: {
-      fontFamily: fonts.regular,
       fontSize: 9,
-      color: colors.muted,
-      textDecorationLine: 'line-through',
+      color: colors.ink,
+      textAlign: 'center',
     },
     outLabel: {
       fontFamily: fonts.regular,
