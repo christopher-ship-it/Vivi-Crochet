@@ -3,7 +3,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   BackHandler,
   FlatList,
   Image,
@@ -18,13 +17,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  getProduct,
   listProductCategories,
   listProducts,
   productTypeForRoom,
 } from '../../src/api/products';
-import { findBeginnerKit } from '../../src/cart/beginnerKit';
-import { formatInr } from '../../src/utils/format';
 import { listMyOrders, type OrderResponse } from '../../src/api/orders';
 import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
@@ -45,6 +41,8 @@ import { colors, radii, spacing } from '../../src/theme';
 import { applyStatusBar } from '../../src/utils/statusBar';
 import { useWishlist } from '../../src/wishlist/WishlistContext';
 import { AppImage, prefetchImages } from '../../src/components/AppImage';
+import { findBeginnerKit } from '../../src/cart/beginnerKit';
+import { formatInr } from '../../src/utils/format';
 
 type ShopTab = 'products' | 'orders';
 type ShopRoom = 'handmade' | 'essentials';
@@ -73,7 +71,10 @@ function parseUtc(value: string): number {
   return new Date(hasZone ? value : `${value}Z`).getTime();
 }
 
-/** Designed Handmade Collection collage (1536×1024); compressed copy of assets/shophandmade.png. */
+/** Designed Crochet Essentials category collage (1536×1024). */
+/** Compressed app copies of assets/crochet-essentials.png and assets/shophandmade.png. */
+const ESSENTIALS_HERO = require('../../assets/shop-essentials-app.jpg');
+/** Designed Handmade Collection collage (1536×1024). */
 const HANDMADE_HERO = require('../../assets/shop-handmade-app.png');
 
 function parseShopRoom(raw: string | string[] | undefined): ShopRoom | null {
@@ -145,7 +146,7 @@ export default function ShopScreen() {
     at?: string | string[];
   }>();
   const shopTab = Array.isArray(shopTabParam) ? shopTabParam[0] : shopTabParam;
-  const { itemCount, justAdded, dismissJustAdded, peekItems, replaceItems, addProduct } = useCart();
+  const { itemCount, justAdded, dismissJustAdded, peekItems, replaceItems } = useCart();
   const [failedOrder, setFailedOrder] = useState<OrderResponse | null>(null);
   const [dismissedFailedId, setDismissedFailedId] = useState<string | null>(null);
   const { productIds: wishlistIds } = useWishlist();
@@ -173,10 +174,8 @@ export default function ShopScreen() {
   const [priceLowToHigh, setPriceLowToHigh] = useState(false);
   const hasLoadedOnce = useRef(false);
   const requestId = useRef(0);
-  // Shop landing: the beginner kit and the cheapest yarn come from the real Essentials products.
+  // Shop landing: the beginner kit card and the yarn highlight come from the real Essentials products.
   const [essentials, setEssentials] = useState<Product[]>([]);
-  const [kitAdding, setKitAdding] = useState(false);
-  const [kitError, setKitError] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -293,49 +292,6 @@ export default function ShopScreen() {
     if (tab === 'orders') void loadOrders();
   }, [loadOrders, tab]);
 
-  const showingChooser = tab === 'products' && !room;
-
-  // Reloaded each time the landing is shown, so a sold-out kit or a new price is picked up.
-  // A failed lookup just hides the kit; yarn and Handmade still work.
-  useEffect(() => {
-    if (!showingChooser || !market.canOrderProducts) return;
-    let cancelled = false;
-    listProducts(undefined, undefined, 'Resell')
-      .then((list) => {
-        if (!cancelled) setEssentials(list);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [showingChooser, market.canOrderProducts]);
-
-  const kit = useMemo(() => findBeginnerKit(essentials), [essentials]);
-  // The cheapest yarn gives both the "from" price and the photo shown on the yarn row.
-  const cheapestYarn = useMemo(() => {
-    const yarns = essentials.filter(
-      (p) => p.status !== 'Draft' && p.price > 0 && /yarn/i.test(p.category),
-    );
-    if (yarns.length === 0) return null;
-    return yarns.reduce((best, p) => (p.price < best.price ? p : best));
-  }, [essentials]);
-  const yarnFromPrice = cheapestYarn?.price ?? null;
-  const yarnImage = (cheapestYarn?.imageUrl ?? '').trim() || null;
-
-  async function addKit() {
-    if (!kit || kitAdding) return;
-    setKitAdding(true);
-    setKitError(false);
-    try {
-      // Live stock first, so the cart can't take more than is available.
-      await addProduct(await getProduct(kit.id).catch(() => kit), 1);
-    } catch {
-      setKitError(true);
-    } finally {
-      setKitAdding(false);
-    }
-  }
-
   const tabs = ['All', WISHLIST_FILTER, ...categories.filter((c) => c !== 'All')];
   const filterActive =
     activeCategory !== 'All' || wishlistOnly || availability !== 'all' || priceLowToHigh;
@@ -445,7 +401,34 @@ export default function ShopScreen() {
     router.push('/cart');
   }
 
-  const showAddedBar = justAdded && itemCount > 0 && tab === 'products';
+  const showAddedBar = justAdded && itemCount > 0 && tab === 'products' && room !== null;
+  const showingChooser = tab === 'products' && !room;
+
+  // Reloaded each time the landing is shown, so a sold-out kit or a new price is picked up.
+  // A failed lookup just hides the kit card and yarn highlight; the two room cards still work.
+  useEffect(() => {
+    if (!showingChooser || !market.canOrderProducts) return;
+    let cancelled = false;
+    listProducts(undefined, undefined, 'Resell')
+      .then((list) => {
+        if (!cancelled) setEssentials(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [showingChooser, market.canOrderProducts]);
+
+  const kit = useMemo(() => findBeginnerKit(essentials), [essentials]);
+  // The cheapest yarn gives both the "from" price and the photo on the highlighted yarn strip.
+  const cheapestYarn = useMemo(() => {
+    const yarns = essentials.filter(
+      (p) => p.status !== 'Draft' && p.price > 0 && /yarn/i.test(p.category),
+    );
+    if (yarns.length === 0) return null;
+    return yarns.reduce((best, p) => (p.price < best.price ? p : best));
+  }, [essentials]);
+  const yarnImage = (cheapestYarn?.imageUrl ?? '').trim() || null;
   // Inside a room the title/subtitle scroll away with the list, so products get the screen.
   const introInList = tab === 'products' && room !== null;
   const emptyIsWishlist = wishlistOnly && activeCategory === 'All';
@@ -625,65 +608,85 @@ export default function ShopScreen() {
           contentContainerStyle={[styles.chooser, { paddingBottom: dockClearance + 28 }]}
           showsVerticalScrollIndicator={false}
         >
-          {market.canOrderProducts ? (
-            <View style={styles.learnerCard}>
-              {kit ? (
-                <View style={styles.kitBlock}>
-                  <View style={styles.stepPill}>
-                    <Text style={styles.stepPillText}>{t('shop.kitStep')}</Text>
-                  </View>
-                  <View style={styles.kitRow}>
-                    <View style={styles.kitThumb}>
-                      {kit.imageUrl ? (
-                        <AppImage
-                          uri={kit.imageUrl}
-                          style={styles.kitThumbImage}
-                          contentFit="cover"
-                          accessibilityLabel={kit.name}
-                        />
-                      ) : (
-                        <Ionicons name="cube-outline" size={34} color={colors.pinkDark} />
-                      )}
-                    </View>
-                    <View style={styles.kitCopy}>
-                      <Text style={styles.kitTitle} numberOfLines={2}>
-                        {kit.name}
-                      </Text>
-                      <Text style={styles.kitSub}>{t('shop.kitSubtitle')}</Text>
-                      <View style={styles.kitPriceRow}>
-                        <Text style={styles.kitPrice}>{formatInr(kit.price)}</Text>
-                        {kit.mrp != null && kit.mrp > kit.price ? (
-                          <Text style={styles.kitMrp}>{formatInr(kit.mrp)}</Text>
-                        ) : null}
-                      </View>
-                    </View>
-                  </View>
-                  <Pressable
-                    style={({ pressed }) => [styles.kitCta, pressed && styles.roomCardPressed]}
-                    onPress={() => void addKit()}
-                    disabled={kitAdding}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t('shop.kitAdd')}, ${formatInr(kit.price)}`}
-                  >
-                    {kitAdding ? (
-                      <ActivityIndicator color={colors.white} />
-                    ) : (
-                      <Text style={styles.kitCtaText}>{t('shop.kitAdd')}</Text>
-                    )}
-                  </Pressable>
-                  {kitError ? <Text style={styles.kitError}>{t('shop.kitAddFailed')}</Text> : null}
+          {market.canOrderProducts && kit ? (
+            <Pressable
+              style={({ pressed }) => [styles.kitCard, pressed && styles.roomCardPressed]}
+              onPress={() => router.push(`/product/${kit.id}`)}
+              accessibilityRole="button"
+              accessibilityLabel={`${kit.name}, ${formatInr(kit.price)}`}
+            >
+              <View style={styles.kitThumb}>
+                {kit.imageUrl ? (
+                  <AppImage
+                    uri={kit.imageUrl}
+                    style={styles.kitThumbImage}
+                    contentFit="cover"
+                    accessibilityLabel={kit.name}
+                  />
+                ) : (
+                  <Ionicons name="cube-outline" size={36} color={colors.pinkDark} />
+                )}
+              </View>
+              <View style={styles.kitCopy}>
+                <View style={styles.stepPill}>
+                  <Text style={styles.stepPillText}>{t('shop.kitStep')}</Text>
                 </View>
-              ) : null}
+                <Text style={styles.kitTitle} numberOfLines={1}>
+                  {kit.name}
+                </Text>
+                <Text style={styles.kitSub} numberOfLines={2}>
+                  {t('shop.kitSubtitle')}
+                </Text>
+                <View style={styles.kitPriceRow}>
+                  <Text style={styles.kitPrice}>{formatInr(kit.price)}</Text>
+                  {kit.mrp != null && kit.mrp > kit.price ? (
+                    <Text style={styles.kitMrp}>{formatInr(kit.mrp)}</Text>
+                  ) : null}
+                </View>
+              </View>
+              <View style={styles.kitArrow}>
+                <Ionicons name="arrow-forward" size={18} color={colors.white} />
+              </View>
+            </Pressable>
+          ) : null}
 
+          <View style={[styles.roomTile, styles.roomTileEssentials]}>
+            <Pressable
+              style={({ pressed }) => pressed && styles.roomCardPressed}
+              onPress={() => enterRoom('essentials')}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}. ${t('shop.roomEssentialsDelivery')}`}
+            >
+              <View style={[styles.roomPhoto, styles.roomPhotoEssentials]}>
+                <Image
+                  source={ESSENTIALS_HERO}
+                  style={styles.roomTilePhoto}
+                  resizeMode="cover"
+                  accessibilityIgnoresInvertColors
+                />
+                <View style={styles.roomDeliveryBadge}>
+                  <Ionicons name="car-outline" size={11} color={colors.success} />
+                  <Text style={styles.roomDeliveryBadgeText} numberOfLines={2}>
+                    {t('shop.roomEssentialsDelivery')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.roomTileBody}>
+                <Text style={styles.roomTileTitle} numberOfLines={2}>
+                  {t('shop.roomEssentialsTitle')}
+                </Text>
+                <Text style={styles.roomTileExamples} numberOfLines={1}>
+                  {t('shop.roomEssentialsExamples')}
+                </Text>
+              </View>
+            </Pressable>
+
+            {market.canOrderProducts && cheapestYarn ? (
               <Pressable
-                style={({ pressed }) => [
-                  styles.yarnRow,
-                  kit ? styles.yarnRowDivider : null,
-                  pressed && styles.roomCardPressed,
-                ]}
+                style={({ pressed }) => [styles.yarnStrip, pressed && styles.roomCardPressed]}
                 onPress={() => enterRoom('essentials')}
                 accessibilityRole="button"
-                accessibilityLabel={t('shop.shopYarn')}
+                accessibilityLabel={t('shop.yarnTitle')}
               >
                 <View style={styles.yarnThumb}>
                   {yarnImage ? (
@@ -694,63 +697,60 @@ export default function ShopScreen() {
                       accessibilityLabel={t('shop.yarnTitle')}
                     />
                   ) : (
-                    <Ionicons name="color-palette-outline" size={24} color={colors.pinkDark} />
+                    <Ionicons name="color-palette-outline" size={22} color={colors.pinkDark} />
                   )}
                 </View>
                 <View style={styles.yarnCopy}>
-                  <Text style={styles.yarnText} numberOfLines={1}>
-                    {t('shop.yarnTitle')}
-                  </Text>
-                  {yarnFromPrice != null ? (
-                    <Text style={styles.yarnPrice} numberOfLines={1}>
-                      {t('shop.yarnPriceTag', { price: formatInr(yarnFromPrice) })}
+                  <View style={styles.yarnTitleRow}>
+                    <Text style={styles.yarnText} numberOfLines={1}>
+                      {t('shop.yarnTitle')}
                     </Text>
-                  ) : null}
-                  <Text style={styles.yarnNote} numberOfLines={1}>
+                    <View style={styles.featuredTag}>
+                      <Text style={styles.featuredTagText}>{t('shop.yarnFeatured')}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.yarnPrice} numberOfLines={2}>
+                    {t('shop.yarnPriceTag', { price: formatInr(cheapestYarn.price) })}
+                    {' · '}
                     {t('shop.yarnColours')}
                   </Text>
                 </View>
-                <View style={styles.yarnArrow}>
-                  <Ionicons name="arrow-forward" size={18} color={colors.white} />
-                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
               </Pressable>
-            </View>
-          ) : null}
-
-          {market.canOrderProducts ? (
-            <View style={styles.deliveryRow}>
-              <Ionicons name="car-outline" size={13} color={colors.success} />
-              <Text style={styles.deliveryRowText}>{t('shop.roomEssentialsDelivery')}</Text>
-            </View>
-          ) : null}
+            ) : null}
+          </View>
 
           <Pressable
-            style={({ pressed }) => [styles.handmadeRow, pressed && styles.roomCardPressed]}
+            style={({ pressed }) => [
+              styles.roomTile,
+              styles.roomTileHandmade,
+              pressed && styles.roomCardPressed,
+            ]}
             onPress={() => enterRoom('handmade')}
             accessibilityRole="button"
             accessibilityLabel={`${t('shop.roomHandmadeTitle')}. ${t('shop.roomHandmadeSubtitle')}`}
           >
-            <Image
-              source={HANDMADE_HERO}
-              style={styles.handmadePhoto}
-              resizeMode="cover"
-              accessibilityIgnoresInvertColors
-            />
-            <LinearGradient
-              colors={['rgba(90, 24, 46, 0.8)', 'rgba(90, 24, 46, 0.35)']}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.handmadeScrim}
-              pointerEvents="none"
-            />
-            <View style={styles.handmadeBody}>
-              <View style={styles.handmadeCopy}>
-                <Text style={styles.handmadeText}>{t('shop.roomHandmadeTitle')}</Text>
-                <Text style={styles.handmadeSub} numberOfLines={1}>
-                  {t('shop.roomHandmadeExamples')}
+            <View style={[styles.roomPhoto, styles.roomPhotoHandmade]}>
+              <Image
+                source={HANDMADE_HERO}
+                style={styles.roomTilePhoto}
+                resizeMode="cover"
+                accessibilityIgnoresInvertColors
+              />
+            </View>
+            <View style={styles.roomTileBody}>
+              <Text style={styles.roomTileTitle} numberOfLines={2}>
+                {t('shop.roomHandmadeTitle')}
+              </Text>
+              <Text style={styles.roomTileExamples} numberOfLines={1}>
+                {t('shop.roomHandmadeExamples')}
+              </Text>
+              <View style={styles.roomTileCta}>
+                <Text style={[styles.roomTileCtaText, styles.roomCtaHandmade]} numberOfLines={1}>
+                  {t('shop.roomHandmadeCta')}
                 </Text>
+                <Ionicons name="arrow-forward" size={12} color={colors.pinkDark} />
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.white} />
             </View>
           </Pressable>
         </ScrollView>
@@ -1186,34 +1186,18 @@ function createStyles(fonts: UiFonts, compact = false) {
       lineHeight: compact ? 27 : 27,
       color: colors.ink,
     },
-    learnerCard: {
-      borderRadius: 18,
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.white,
-    },
-    kitBlock: {
-      backgroundColor: colors.pinkSoft,
-      padding: 14,
-      gap: 10,
-    },
-    stepPill: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: 9,
-      paddingVertical: 3,
-      borderRadius: 999,
-      backgroundColor: colors.pinkMist,
-    },
-    stepPillText: {
-      fontFamily: fonts.semiBold,
-      fontSize: 11,
-      color: colors.pinkDark,
-    },
-    kitRow: {
+    /* Compact cards: photo on top, text band below, so all three fit with a short scroll. */
+    kitCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
+      gap: 12,
+      minHeight: 104,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.pinkMist,
+      backgroundColor: colors.pinkSoft,
     },
     kitThumb: {
       width: 80,
@@ -1230,69 +1214,169 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     kitCopy: {
       flex: 1,
-      gap: 2,
+      gap: 1,
+    },
+    stepPill: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: 7,
+      paddingVertical: 1,
+      borderRadius: 999,
+      backgroundColor: '#f9cfdc',
+    },
+    stepPillText: {
+      fontFamily: fonts.semiBold,
+      fontSize: 10,
+      lineHeight: 16,
+      color: colors.pinkDark,
     },
     kitTitle: {
       fontFamily: fonts.extraBold,
-      fontSize: compact ? 16 : 18,
-      lineHeight: compact ? 24 : 23,
+      fontSize: 16,
+      lineHeight: compact ? 24 : 21,
       color: colors.ink,
     },
     kitSub: {
       fontFamily: fonts.regular,
-      fontSize: 12,
-      lineHeight: compact ? 18 : 16,
+      fontSize: 11,
+      lineHeight: compact ? 17 : 15,
       color: colors.pinkDark,
     },
     kitPriceRow: {
       flexDirection: 'row',
       alignItems: 'baseline',
-      gap: 8,
-      marginTop: 2,
+      gap: 6,
     },
     kitPrice: {
       fontFamily: fonts.extraBold,
-      fontSize: 18,
+      fontSize: 17,
       color: colors.ink,
     },
     kitMrp: {
       fontFamily: fonts.semiBold,
-      fontSize: 14,
+      fontSize: 12,
       color: colors.muted,
       textDecorationLine: 'line-through',
     },
-    kitCta: {
-      minHeight: 44,
-      borderRadius: radii.md,
+    kitArrow: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
       backgroundColor: colors.pink,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    kitCtaText: {
+    roomTile: {
+      width: '100%',
+      borderRadius: 18,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.7)',
+    },
+    roomTileHandmade: {
+      backgroundColor: '#72243e',
+    },
+    roomTileEssentials: {
+      backgroundColor: '#4a2e25',
+    },
+    roomPhoto: {
+      width: '100%',
+    },
+    roomPhotoHandmade: {
+      height: 84,
+      backgroundColor: '#ffc7d8',
+    },
+    roomPhotoEssentials: {
+      height: 96,
+      backgroundColor: '#efe2d3',
+    },
+    /* Bundled images default to their pixel size, so size them to the card explicitly. */
+    roomTilePhoto: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+    },
+    roomTileBody: {
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: 12,
+      gap: 2,
+    },
+    roomTileTitle: {
       fontFamily: fonts.extraBold,
-      fontSize: 14,
+      fontSize: compact ? 16 : 17,
+      lineHeight: compact ? 25 : 22,
       color: colors.white,
     },
-    kitError: {
+    roomTileExamples: {
       fontFamily: fonts.semiBold,
-      fontSize: 12,
-      color: colors.danger,
+      fontSize: 11,
+      lineHeight: compact ? 17 : 15,
+      color: '#f3e6da',
     },
-    yarnRow: {
+    roomTileCta: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginTop: 6,
+      paddingHorizontal: 11,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: colors.white,
+      maxWidth: '100%',
+    },
+    roomTileCtaText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 11,
+      flexShrink: 1,
+    },
+    roomCardPressed: {
+      opacity: 0.94,
+      transform: [{ scale: 0.985 }],
+    },
+    roomDeliveryBadge: {
+      position: 'absolute',
+      top: 8,
+      left: 8,
+      maxWidth: '70%',
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    },
+    roomDeliveryBadgeText: {
+      flexShrink: 1,
+      fontFamily: fonts.extraBold,
+      fontSize: 10,
+      lineHeight: 14,
+      color: colors.success,
+    },
+    roomCtaHandmade: {
+      color: colors.pinkDark,
+    },
+    yarnStrip: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-    },
-    yarnRowDivider: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
+      marginHorizontal: 12,
+      marginBottom: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: colors.pink,
+      backgroundColor: colors.white,
     },
     yarnThumb: {
-      width: 56,
-      height: 56,
-      borderRadius: 12,
+      width: 40,
+      height: 40,
+      borderRadius: 8,
       overflow: 'hidden',
       backgroundColor: colors.pinkMist,
       alignItems: 'center',
@@ -1300,91 +1384,37 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     yarnCopy: {
       flex: 1,
-      gap: 2,
+      gap: 1,
     },
-    yarnPrice: {
-      fontFamily: fonts.extraBold,
-      fontSize: 15,
-      // Tamil / Hindi glyphs are taller; a fixed line height stops them clipping.
-      lineHeight: 22,
-      color: colors.pink,
-    },
-    yarnArrow: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.pink,
+    yarnTitleRow: {
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-    yarnNote: {
-      fontFamily: fonts.regular,
-      fontSize: 12,
-      color: colors.muted,
+      gap: 6,
     },
     yarnText: {
       fontFamily: fonts.extraBold,
-      fontSize: 16,
-      lineHeight: compact ? 24 : 21,
+      fontSize: 13,
+      lineHeight: compact ? 22 : 18,
       color: colors.ink,
     },
-    deliveryRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 5,
+    featuredTag: {
+      paddingHorizontal: 7,
+      paddingVertical: 0,
+      borderRadius: 999,
+      backgroundColor: colors.pink,
     },
-    deliveryRowText: {
-      fontFamily: fonts.semiBold,
-      fontSize: 11,
-      color: colors.success,
-    },
-    handmadeRow: {
-      height: 96,
-      borderRadius: 16,
-      overflow: 'hidden',
-      justifyContent: 'center',
-      backgroundColor: '#ffc7d8',
-    },
-    /* Bundled images default to their pixel size, so size it to the card explicitly. */
-    handmadePhoto: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      width: '100%',
-      height: '100%',
-    },
-    handmadeScrim: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-    },
-    handmadeBody: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 14,
-    },
-    handmadeCopy: {
-      flex: 1,
-    },
-    handmadeText: {
+    featuredTagText: {
       fontFamily: fonts.extraBold,
-      fontSize: 18,
-      lineHeight: 26,
+      fontSize: 10,
+      // Tamil / Hindi glyphs are taller; a fixed line height stops them clipping in the tag.
+      lineHeight: 17,
       color: colors.white,
     },
-    handmadeSub: {
+    yarnPrice: {
       fontFamily: fonts.semiBold,
-      fontSize: 13,
-      lineHeight: 19,
-      color: colors.white,
-    },
-    roomCardPressed: {
-      opacity: 0.94,
-      transform: [{ scale: 0.985 }],
+      fontSize: 12,
+      lineHeight: compact ? 19 : 16,
+      color: colors.pinkDark,
     },
     searchRow: {
       flexDirection: 'row',
