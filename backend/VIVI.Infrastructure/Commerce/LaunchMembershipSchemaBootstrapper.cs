@@ -26,6 +26,12 @@ public static class LaunchMembershipSchemaBootstrapper
                     CONSTRAINT [DF_LaunchOfferCounters_IsActive] DEFAULT CAST(1 AS bit);
 
             IF OBJECT_ID(N'[LaunchOfferCounters]', N'U') IS NOT NULL
+               AND COL_LENGTH('LaunchOfferCounters', 'IsVisible') IS NULL
+                ALTER TABLE [LaunchOfferCounters]
+                ADD [IsVisible] bit NOT NULL
+                    CONSTRAINT [DF_LaunchOfferCounters_IsVisible] DEFAULT CAST(1 AS bit);
+
+            IF OBJECT_ID(N'[LaunchOfferCounters]', N'U') IS NOT NULL
                AND COL_LENGTH('LaunchOfferCounters', 'PriceLabel') IS NULL
                 ALTER TABLE [LaunchOfferCounters]
                 ADD [PriceLabel] nvarchar(60) NOT NULL

@@ -60,7 +60,7 @@ public sealed class LaunchOfferService
         var offer = await _db.LaunchOfferCounters
             .AsNoTracking()
             .SingleOrDefaultAsync(c => c.CourseId == course.Id, cancellationToken);
-        if (offer is null || !offer.IsActive)
+        if (offer is null || !offer.SellsLaunchPrice)
             return;
 
         var prices = await _db.CoursePrices
@@ -264,7 +264,7 @@ public sealed class LaunchOfferService
     {
         var offer = await _db.LaunchOfferCounters
             .SingleOrDefaultAsync(c => c.CourseId == bundleCourseId, cancellationToken);
-        if (offer is null || !offer.IsActive)
+        if (offer is null || !offer.SellsLaunchPrice)
             return LaunchOfferConsumptionResult.NotApplicable;
 
         var isLaunchPrice = IsLaunchUnitPrice(offer, unitPrice);

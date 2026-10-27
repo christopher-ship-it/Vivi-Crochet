@@ -81,7 +81,7 @@ public sealed class OffersController : ControllerBase
             .AsNoTracking()
             .Include(o => o.Course)
             .Include(o => o.ViralProjectCourse)
-            .Where(o => o.Course!.Status == CourseStatus.Published)
+            .Where(o => o.Course!.Status == CourseStatus.Published && o.IsVisible)
             .OrderBy(o => o.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw ViviException.NotFound("OFFER_NOT_FOUND", "No launch offer is configured.");

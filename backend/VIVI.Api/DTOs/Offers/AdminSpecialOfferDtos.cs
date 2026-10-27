@@ -8,6 +8,8 @@ public sealed class AdminSpecialOfferResponse
     public string? BadgeText { get; set; }
     public string? EndedBadgeText { get; set; }
     public bool IsActive { get; set; }
+    /// <summary>False = hidden from the app's Offers tab and no launch price is sold.</summary>
+    public bool IsVisible { get; set; } = true;
     public int LaunchPrice { get; set; }
     public int LaunchLimit { get; set; }
     public int RegularPriceAfterLaunch { get; set; }
@@ -51,6 +53,8 @@ public sealed class AdminSpecialOfferRequest
     /// <summary>App badge after the offer ends. Blank resets to the app default.</summary>
     public string? EndedBadgeText { get; set; }
     public bool IsActive { get; set; }
+    /// <summary>Null leaves the current visibility unchanged.</summary>
+    public bool? IsVisible { get; set; }
     public int LaunchPrice { get; set; }
     public int LaunchLimit { get; set; }
     public int RegularPriceAfterLaunch { get; set; }
