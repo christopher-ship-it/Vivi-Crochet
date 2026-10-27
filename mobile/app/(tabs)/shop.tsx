@@ -672,10 +672,10 @@ export default function ShopScreen() {
                 </View>
               </View>
               <View style={styles.roomTileBody}>
-                <Text style={styles.roomTileTitle} numberOfLines={2}>
+                <Text style={[styles.roomTileTitle, styles.roomTileTitleDark]} numberOfLines={2}>
                   {t('shop.roomEssentialsTitle')}
                 </Text>
-                <Text style={styles.roomTileExamples} numberOfLines={1}>
+                <Text style={[styles.roomTileExamples, styles.roomTileExamplesDark]} numberOfLines={1}>
                   {t('shop.roomEssentialsExamples')}
                 </Text>
               </View>
@@ -739,13 +739,13 @@ export default function ShopScreen() {
               />
             </View>
             <View style={styles.roomTileBody}>
-              <Text style={styles.roomTileTitle} numberOfLines={2}>
+              <Text style={[styles.roomTileTitle, styles.roomTileTitleDark]} numberOfLines={2}>
                 {t('shop.roomHandmadeTitle')}
               </Text>
-              <Text style={styles.roomTileExamples} numberOfLines={1}>
+              <Text style={[styles.roomTileExamples, styles.roomTileExamplesDark]} numberOfLines={1}>
                 {t('shop.roomHandmadeExamples')}
               </Text>
-              <View style={styles.roomTileCta}>
+              <View style={[styles.roomTileCta, styles.roomTileCtaSoft]}>
                 <Text style={[styles.roomTileCtaText, styles.roomCtaHandmade]} numberOfLines={1}>
                   {t('shop.roomHandmadeCta')}
                 </Text>
@@ -1196,8 +1196,8 @@ function createStyles(fonts: UiFonts, compact = false) {
       paddingVertical: 10,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.pinkMist,
-      backgroundColor: colors.pinkSoft,
+      borderColor: colors.pink,
+      backgroundColor: colors.pink,
     },
     kitThumb: {
       width: 80,
@@ -1221,25 +1221,25 @@ function createStyles(fonts: UiFonts, compact = false) {
       paddingHorizontal: 7,
       paddingVertical: 1,
       borderRadius: 999,
-      backgroundColor: '#f9cfdc',
+      backgroundColor: colors.yellow,
     },
     stepPillText: {
-      fontFamily: fonts.semiBold,
+      fontFamily: fonts.extraBold,
       fontSize: 10,
       lineHeight: 16,
-      color: colors.pinkDark,
+      color: colors.ink,
     },
     kitTitle: {
       fontFamily: fonts.extraBold,
       fontSize: 16,
       lineHeight: compact ? 24 : 21,
-      color: colors.ink,
+      color: colors.white,
     },
     kitSub: {
       fontFamily: fonts.regular,
       fontSize: 11,
       lineHeight: compact ? 17 : 15,
-      color: colors.pinkDark,
+      color: colors.pinkMist,
     },
     kitPriceRow: {
       flexDirection: 'row',
@@ -1249,19 +1249,19 @@ function createStyles(fonts: UiFonts, compact = false) {
     kitPrice: {
       fontFamily: fonts.extraBold,
       fontSize: 17,
-      color: colors.ink,
+      color: colors.white,
     },
     kitMrp: {
       fontFamily: fonts.semiBold,
       fontSize: 12,
-      color: colors.muted,
+      color: '#ffc2d4',
       textDecorationLine: 'line-through',
     },
     kitArrow: {
       width: 34,
       height: 34,
       borderRadius: 17,
-      backgroundColor: colors.pink,
+      backgroundColor: colors.white,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1272,22 +1272,24 @@ function createStyles(fonts: UiFonts, compact = false) {
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.7)',
     },
+    /* Third in priority: a quiet light card, so the kit and Essentials get the eye first. */
     roomTileHandmade: {
-      backgroundColor: '#72243e',
+      backgroundColor: colors.white,
+      borderColor: colors.pinkMist,
     },
     roomTileEssentials: {
-      backgroundColor: '#4a2e25',
+      backgroundColor: '#fcc9da',
     },
     roomPhoto: {
       width: '100%',
     },
     roomPhotoHandmade: {
-      height: 84,
-      backgroundColor: '#ffc7d8',
+      height: 64,
+      backgroundColor: colors.pinkMist,
     },
     roomPhotoEssentials: {
       height: 96,
-      backgroundColor: '#efe2d3',
+      backgroundColor: '#f8c0d4',
     },
     /* Bundled images default to their pixel size, so size them to the card explicitly. */
     roomTilePhoto: {
@@ -1313,7 +1315,17 @@ function createStyles(fonts: UiFonts, compact = false) {
       fontFamily: fonts.semiBold,
       fontSize: 11,
       lineHeight: compact ? 17 : 15,
-      color: '#f3e6da',
+      color: colors.pinkMist,
+    },
+    /* The Essentials card is light pink, so its text is dark. */
+    roomTileCtaSoft: {
+      backgroundColor: colors.pinkMist,
+    },
+    roomTileTitleDark: {
+      color: colors.ink,
+    },
+    roomTileExamplesDark: {
+      color: '#7a1a42',
     },
     roomTileCta: {
       alignSelf: 'flex-start',
