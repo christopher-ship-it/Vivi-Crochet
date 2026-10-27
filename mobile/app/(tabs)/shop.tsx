@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
   FlatList,
+  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -70,6 +72,9 @@ function parseUtc(value: string): number {
   const hasZone = /(Z|[+-]\d{2}:?\d{2})$/i.test(value);
   return new Date(hasZone ? value : `${value}Z`).getTime();
 }
+
+/** Designed Handmade Collection collage (1536×1024); compressed copy of assets/shophandmade.png. */
+const HANDMADE_HERO = require('../../assets/shop-handmade-app.png');
 
 function parseShopRoom(raw: string | string[] | undefined): ShopRoom | null {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -716,9 +721,28 @@ export default function ShopScreen() {
             accessibilityRole="button"
             accessibilityLabel={`${t('shop.roomHandmadeTitle')}. ${t('shop.roomHandmadeSubtitle')}`}
           >
-            <Ionicons name="gift-outline" size={22} color={colors.pinkDark} />
-            <Text style={styles.handmadeText}>{t('shop.roomHandmadeTitle')}</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            <Image
+              source={HANDMADE_HERO}
+              style={styles.handmadePhoto}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
+            <LinearGradient
+              colors={['rgba(90, 24, 46, 0.8)', 'rgba(90, 24, 46, 0.35)']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.handmadeScrim}
+              pointerEvents="none"
+            />
+            <View style={styles.handmadeBody}>
+              <View style={styles.handmadeCopy}>
+                <Text style={styles.handmadeText}>{t('shop.roomHandmadeTitle')}</Text>
+                <Text style={styles.handmadeSub} numberOfLines={1}>
+                  {t('shop.roomHandmadeExamples')}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.white} />
+            </View>
           </Pressable>
         </ScrollView>
       ) : tab === 'products' ? (
@@ -1307,21 +1331,45 @@ function createStyles(fonts: UiFonts, compact = false) {
       color: colors.success,
     },
     handmadeRow: {
+      height: 64,
+      borderRadius: 14,
+      overflow: 'hidden',
+      justifyContent: 'center',
+      backgroundColor: '#ffc7d8',
+    },
+    /* Bundled images default to their pixel size, so size it to the card explicitly. */
+    handmadePhoto: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+    },
+    handmadeScrim: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
+    handmadeBody: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      minHeight: 52,
+      gap: 8,
       paddingHorizontal: 14,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.white,
+    },
+    handmadeCopy: {
+      flex: 1,
     },
     handmadeText: {
-      flex: 1,
       fontFamily: fonts.extraBold,
-      fontSize: 14,
-      color: colors.ink,
+      fontSize: 16,
+      color: colors.white,
+    },
+    handmadeSub: {
+      fontFamily: fonts.semiBold,
+      fontSize: 12,
+      color: colors.white,
     },
     roomCardPressed: {
       opacity: 0.94,
