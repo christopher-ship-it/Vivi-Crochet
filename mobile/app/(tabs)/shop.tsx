@@ -689,11 +689,18 @@ export default function ShopScreen() {
                   )}
                 </View>
                 <View style={styles.yarnCopy}>
-                  <Text style={styles.yarnText} numberOfLines={2}>
-                    {yarnFromPrice != null
-                      ? t(kit ? 'shop.yarnStepFrom' : 'shop.yarnFrom', { price: formatInr(yarnFromPrice) })
-                      : t('shop.yarnTitle')}
-                  </Text>
+                  <View style={styles.yarnTitleRow}>
+                    <Text style={styles.yarnText} numberOfLines={1}>
+                      {t('shop.yarnTitle')}
+                    </Text>
+                    {yarnFromPrice != null ? (
+                      <View style={styles.yarnPriceTag}>
+                        <Text style={styles.yarnPriceTagText} numberOfLines={1}>
+                          {t('shop.yarnPriceTag', { price: formatInr(yarnFromPrice) })}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <Text style={styles.yarnNote}>{t('shop.yarnColours')}</Text>
                 </View>
                 <Pressable
@@ -1292,6 +1299,25 @@ function createStyles(fonts: UiFonts, compact = false) {
     yarnCopy: {
       flex: 1,
       gap: 2,
+    },
+    yarnTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    yarnPriceTag: {
+      flexShrink: 0,
+      paddingHorizontal: 10,
+      paddingVertical: 2,
+      borderRadius: 999,
+      backgroundColor: colors.pinkMist,
+    },
+    yarnPriceTagText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 12,
+      // Tamil / Hindi glyphs are taller; a fixed line height stops them clipping in the tag.
+      lineHeight: 20,
+      color: colors.pinkDark,
     },
     yarnNote: {
       fontFamily: fonts.regular,
