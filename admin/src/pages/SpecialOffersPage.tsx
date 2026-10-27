@@ -15,6 +15,7 @@ type OfferFormState = {
   badgeText: string;
   endedBadgeText: string;
   isActive: boolean;
+  isVisible: boolean;
   launchPrice: NumberDraft;
   launchLimit: NumberDraft;
   regularPriceAfterLaunch: NumberDraft;
@@ -43,6 +44,7 @@ function toForm(offer: AdminSpecialOffer): OfferFormState {
     badgeText: offer.badgeText ?? '',
     endedBadgeText: offer.endedBadgeText ?? '',
     isActive: offer.isActive,
+    isVisible: offer.isVisible,
     launchPrice: offer.launchPrice,
     launchLimit: offer.launchLimit,
     regularPriceAfterLaunch: offer.regularPriceAfterLaunch,
@@ -60,6 +62,7 @@ function toForm(offer: AdminSpecialOffer): OfferFormState {
 const PAGE_SIZE = 20;
 
 export function SpecialOffersPage() {
+  const [offers, setOffers] = useState<AdminSpecialOffer[]>([]);
   const [offer, setOffer] = useState<AdminSpecialOffer | null>(null);
   const [form, setForm] = useState<OfferFormState | null>(null);
   const [viralProjects, setViralProjects] = useState<Course[]>([]);
@@ -88,6 +91,7 @@ export function SpecialOffersPage() {
         const [offers, courses] = await Promise.all([listSpecialOffers(), listCourses()]);
         if (cancelled) return;
         const first = offers[0] ?? null;
+        setOffers(offers);
         setOffer(first);
         setForm(first ? toForm(first) : null);
         setBundles(courses.filter((c) => c.type === 'Bundle'));
@@ -156,6 +160,7 @@ export function SpecialOffersPage() {
         badgeText: form.badgeText.trim() || null,
         endedBadgeText: form.endedBadgeText.trim() || null,
         isActive: form.isActive,
+        isVisible: form.isVisible,
         launchPrice: form.launchPrice === '' ? offer.launchPrice : form.launchPrice,
         launchLimit: form.launchLimit === '' ? offer.launchLimit : form.launchLimit,
         regularPriceAfterLaunch: form.regularPriceAfterLaunch === '' ? offer.regularPriceAfterLaunch : form.regularPriceAfterLaunch,
@@ -173,6 +178,7 @@ export function SpecialOffersPage() {
         includedCourseIds: form.courseOrder,
       };
       const updated = await updateSpecialOffer(offer.courseId, payload);
+      setOffers((all) => all.map((o) => (o.courseId === updated.courseId ? updated : o)));
       setOffer(updated);
       setForm(toForm(updated));
       setSaved(true);
@@ -269,7 +275,31 @@ export function SpecialOffersPage() {
       <header className="page-header">
         <div>
           <h1 className="page-header__title">Special Offers</h1>
-          <p className="page-header__subtitle">₹999 Launch Offer — VIVI Crochet Circle Founding Membership</p>
+          <p className="page-header__subtitle">{offer.offerName}</p>
+        </div>
+        <div className="page-header__actions">
+          {offers.length > 1 && (
+            <select
+              aria-label="Choose offer"
+              value={offer.courseId}
+              onChange={(e) => {
+                const next = offers.find((o) => o.courseId === e.target.value);
+                if (!next) return;
+                setOffer(next);
+                setForm(toForm(next));
+                setSaved(false);
+                setSaveError(null);
+                setPage(1);
+              }}
+            >
+              {offers.map((o) => (
+                <option key={o.courseId} value={o.courseId}>
+                  {o.offerName}{o.isVisible ? '' : ' (hidden)'}
+                </option>
+              ))}
+            </select>
+          )}
+          <Link to="/courses/new?type=Bundle" className="btn btn--primary">New offer</Link>
         </div>
       </header>
 
@@ -287,8 +317,8 @@ export function SpecialOffersPage() {
         <div className="card card--stat">
           <span className="card__label">Status</span>
           <span className="card__value">
-            <span className={`badge ${offer.isActive ? 'badge--published' : 'badge--inactive'}`}>
-              {offer.isActive ? 'ACTIVE' : 'INACTIVE'}
+            <span className={`badge ${offer.isActive && offer.isVisible ? 'badge--published' : 'badge--inactive'}`}>
+              {!offer.isVisible ? 'HIDDEN' : offer.isActive ? 'ACTIVE' : 'INACTIVE'}
             </span>
           </span>
         </div>
@@ -332,6 +362,18 @@ export function SpecialOffersPage() {
                 onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
               />
               Offer is ACTIVE (unchecking stops selling at the launch price immediately)
+            </label>
+          </div>
+
+          <div className="form-field span-3 form-field--checkbox">
+            <label htmlFor="isVisible">
+              <input
+                id="isVisible"
+                type="checkbox"
+                checked={form.isVisible}
+                onChange={(e) => setForm({ ...form, isVisible: e.target.checked })}
+              />
+              Show this offer in the app (unchecking hides it from the Offers tab and stops its launch price everywhere)
             </label>
           </div>
 

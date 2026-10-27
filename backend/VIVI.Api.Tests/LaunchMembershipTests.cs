@@ -103,6 +103,45 @@ public sealed class LaunchMembershipTests
         Assert.Empty(memberships);
     }
 
+    [Fact]
+    public async Task Hidden_offer_is_not_listed_and_sells_the_regular_price_without_membership()
+    {
+        await ResetLaunchCountAsync(0);
+        await SetOfferVisibleAsync(false);
+        try
+        {
+            var anon = _factory.CreateClient();
+            Assert.Equal(System.Net.HttpStatusCode.NotFound,
+                (await anon.GetAsync("/api/offers/founding-membership")).StatusCode);
+
+            var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient(), NextPhone());
+            var order = await CreateBundleOrderAsync(customer);
+            Assert.Equal(1699m, order.TotalAmount);
+            await VerifyPaymentAsync(customer, order);
+
+            await using var scope = _factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+            Assert.Empty(await db.LaunchMemberships.Where(m => m.OrderId == order.OrderId).ToListAsync());
+            Assert.Equal(0, await GetLaunchCountAsync());
+        }
+        finally
+        {
+            await SetOfferVisibleAsync(true);
+        }
+
+        var shown = await _factory.CreateClient().GetAsync("/api/offers/founding-membership");
+        Assert.Equal(System.Net.HttpStatusCode.OK, shown.StatusCode);
+    }
+
+    private async Task SetOfferVisibleAsync(bool visible)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+        var offer = await db.LaunchOfferCounters.SingleAsync(c => c.CourseId == DatabaseSeeder.Catalog.BundleId);
+        offer.IsVisible = visible;
+        await db.SaveChangesAsync();
+    }
+
     private sealed class MyMembershipDto
     {
         public bool IsMember { get; set; }

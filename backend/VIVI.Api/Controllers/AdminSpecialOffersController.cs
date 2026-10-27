@@ -78,6 +78,7 @@ public sealed class AdminSpecialOffersController : ControllerBase
         offer.BadgeText = string.IsNullOrWhiteSpace(request.BadgeText) ? null : request.BadgeText.Trim();
         offer.EndedBadgeText = string.IsNullOrWhiteSpace(request.EndedBadgeText) ? null : request.EndedBadgeText.Trim();
         offer.IsActive = request.IsActive;
+        offer.IsVisible = request.IsVisible ?? offer.IsVisible;
         offer.LaunchPrice = request.LaunchPrice;
         offer.LaunchLimit = request.LaunchLimit;
         offer.RegularPriceAfterLaunch = request.RegularPriceAfterLaunch;

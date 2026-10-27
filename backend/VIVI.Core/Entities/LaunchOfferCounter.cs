@@ -6,6 +6,10 @@ public sealed class LaunchOfferCounter
     public Guid CourseId { get; set; }
     public string OfferName { get; set; } = "VIVI Founding Membership";
     public bool IsActive { get; set; } = true;
+    /// <summary>False hides the offer from the app's Offers tab and stops selling its launch price everywhere.</summary>
+    public bool IsVisible { get; set; } = true;
+    /// <summary>The launch price (and member slots) are only sold while the offer is both active and shown.</summary>
+    public bool SellsLaunchPrice => IsActive && IsVisible;
     /// <summary>Admin-editable caption for the launch price (e.g. "Founding price"). Defaults to "Launch price".</summary>
     public string PriceLabel { get; set; } = "Launch price";
     /// <summary>Optional app badge text while the offer is live (e.g. "LAUNCH OFFER · FIRST 100 USERS"). Null uses the app default.</summary>

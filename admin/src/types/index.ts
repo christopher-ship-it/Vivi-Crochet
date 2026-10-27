@@ -583,6 +583,8 @@ export interface AdminSpecialOffer {
   badgeText?: string | null;
   endedBadgeText?: string | null;
   isActive: boolean;
+  /** False = hidden from the app's Offers tab and no launch price is sold. */
+  isVisible: boolean;
   launchPrice: number;
   launchLimit: number;
   regularPriceAfterLaunch: number;
@@ -612,6 +614,7 @@ export interface AdminSpecialOfferRequest {
   badgeText?: string | null;
   endedBadgeText?: string | null;
   isActive: boolean;
+  isVisible?: boolean;
   launchPrice: number;
   launchLimit: number;
   regularPriceAfterLaunch: number;

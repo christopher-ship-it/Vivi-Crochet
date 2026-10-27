@@ -316,7 +316,7 @@ public sealed class PricingService
             return (row.Price, false, null);
 
         var remaining = Math.Max(0, offer.LaunchLimit - offer.CompletedPurchaseCount);
-        if (offer.IsActive && remaining > 0 && row.LaunchPrice is decimal launchPrice)
+        if (offer.SellsLaunchPrice && remaining > 0 && row.LaunchPrice is decimal launchPrice)
             return (launchPrice, true, remaining);
 
         // No launch price set for this market, or the offer ended / sold out.
@@ -339,7 +339,7 @@ public sealed class PricingService
             return (course.Price, false, null);
 
         var remaining = Math.Max(0, offer.LaunchLimit - offer.CompletedPurchaseCount);
-        if (offer.IsActive && remaining > 0)
+        if (offer.SellsLaunchPrice && remaining > 0)
             return (offer.LaunchPrice, true, remaining);
 
         return (offer.RegularPriceAfterLaunch, false, 0);

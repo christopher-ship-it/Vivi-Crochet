@@ -898,6 +898,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("bit");
+
                     b.Property<int>("LaunchLimit")
                         .HasColumnType("int");
 

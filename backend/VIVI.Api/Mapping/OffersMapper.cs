@@ -112,6 +112,7 @@ public static class OffersMapper
             BadgeText = offer.BadgeText,
             EndedBadgeText = offer.EndedBadgeText,
             IsActive = offer.IsActive,
+            IsVisible = offer.IsVisible,
             LaunchPrice = offer.LaunchPrice,
             LaunchLimit = offer.LaunchLimit,
             RegularPriceAfterLaunch = offer.RegularPriceAfterLaunch,
