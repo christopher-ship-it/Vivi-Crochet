@@ -675,7 +675,16 @@ export default function ShopScreen() {
                 </View>
               ) : null}
 
-              <View style={[styles.yarnRow, kit ? styles.yarnRowDivider : null]}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.yarnRow,
+                  kit ? styles.yarnRowDivider : null,
+                  pressed && styles.roomCardPressed,
+                ]}
+                onPress={() => enterRoom('essentials')}
+                accessibilityRole="button"
+                accessibilityLabel={t('shop.shopYarn')}
+              >
                 <View style={styles.yarnThumb}>
                   {yarnImage ? (
                     <AppImage
@@ -689,29 +698,22 @@ export default function ShopScreen() {
                   )}
                 </View>
                 <View style={styles.yarnCopy}>
-                  <View style={styles.yarnTitleRow}>
-                    <Text style={styles.yarnText} numberOfLines={1}>
-                      {t('shop.yarnTitle')}
+                  <Text style={styles.yarnText} numberOfLines={1}>
+                    {t('shop.yarnTitle')}
+                  </Text>
+                  {yarnFromPrice != null ? (
+                    <Text style={styles.yarnPrice} numberOfLines={1}>
+                      {t('shop.yarnPriceTag', { price: formatInr(yarnFromPrice) })}
                     </Text>
-                    {yarnFromPrice != null ? (
-                      <View style={styles.yarnPriceTag}>
-                        <Text style={styles.yarnPriceTagText} numberOfLines={1}>
-                          {t('shop.yarnPriceTag', { price: formatInr(yarnFromPrice) })}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={styles.yarnNote}>{t('shop.yarnColours')}</Text>
+                  ) : null}
+                  <Text style={styles.yarnNote} numberOfLines={1}>
+                    {t('shop.yarnColours')}
+                  </Text>
                 </View>
-                <Pressable
-                  style={({ pressed }) => [styles.yarnBtn, pressed && styles.roomCardPressed]}
-                  onPress={() => enterRoom('essentials')}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('shop.shopYarn')}
-                >
-                  <Text style={styles.yarnBtnText}>{t('shop.shopYarn')}</Text>
-                </Pressable>
-              </View>
+                <View style={styles.yarnArrow}>
+                  <Ionicons name="arrow-forward" size={18} color={colors.white} />
+                </View>
+              </Pressable>
             </View>
           ) : null}
 
@@ -1300,24 +1302,20 @@ function createStyles(fonts: UiFonts, compact = false) {
       flex: 1,
       gap: 2,
     },
-    yarnTitleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    yarnPriceTag: {
-      flexShrink: 0,
-      paddingHorizontal: 10,
-      paddingVertical: 2,
-      borderRadius: 999,
-      backgroundColor: colors.pinkMist,
-    },
-    yarnPriceTagText: {
+    yarnPrice: {
       fontFamily: fonts.extraBold,
-      fontSize: 12,
-      // Tamil / Hindi glyphs are taller; a fixed line height stops them clipping in the tag.
-      lineHeight: 20,
-      color: colors.pinkDark,
+      fontSize: 15,
+      // Tamil / Hindi glyphs are taller; a fixed line height stops them clipping.
+      lineHeight: 22,
+      color: colors.pink,
+    },
+    yarnArrow: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.pink,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     yarnNote: {
       fontFamily: fonts.regular,
@@ -1326,23 +1324,8 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     yarnText: {
       fontFamily: fonts.extraBold,
-      fontSize: 14,
-      lineHeight: compact ? 21 : 19,
-      color: colors.ink,
-    },
-    yarnBtn: {
-      minHeight: 36,
-      paddingHorizontal: 14,
-      borderRadius: radii.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.white,
-    },
-    yarnBtnText: {
-      fontFamily: fonts.semiBold,
-      fontSize: 13,
+      fontSize: 16,
+      lineHeight: compact ? 24 : 21,
       color: colors.ink,
     },
     deliveryRow: {
