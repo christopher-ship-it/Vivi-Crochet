@@ -1357,8 +1357,8 @@ function createStyles(fonts: UiFonts, compact = false) {
       color: colors.success,
     },
     handmadeRow: {
-      height: 64,
-      borderRadius: 14,
+      height: 96,
+      borderRadius: 16,
       overflow: 'hidden',
       justifyContent: 'center',
       backgroundColor: '#ffc7d8',
@@ -1389,12 +1389,14 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     handmadeText: {
       fontFamily: fonts.extraBold,
-      fontSize: 16,
+      fontSize: 18,
+      lineHeight: 26,
       color: colors.white,
     },
     handmadeSub: {
       fontFamily: fonts.semiBold,
-      fontSize: 12,
+      fontSize: 13,
+      lineHeight: 19,
       color: colors.white,
     },
     roomCardPressed: {
