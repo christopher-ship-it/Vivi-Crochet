@@ -49,5 +49,6 @@ jobs:
         env:
           EXPO_PUBLIC_API_BASE_URL: https://app-vivi-api-hwbmc3dzhkewa5hb.centralindia-01.azurewebsites.net
           EXPO_PUBLIC_ALLOW_HTTP: 'false'
+          UPDATE_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          eas update --channel production --message "${{ github.event.head_commit.message }}" --non-interactive
+          eas update --channel production --message "$UPDATE_MESSAGE" --non-interactive
