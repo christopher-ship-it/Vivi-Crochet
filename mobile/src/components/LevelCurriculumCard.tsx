@@ -41,7 +41,7 @@ export function LevelCurriculumCard({ name, level, tagline, items, expanded, onT
           style={styles.head}
         >
           <View style={styles.headText}>
-            <Text style={styles.label} numberOfLines={1}>
+            <Text style={styles.label}>
               {name}
             </Text>
             {level != null ? (
