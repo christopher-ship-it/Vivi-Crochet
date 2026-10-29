@@ -87,6 +87,7 @@ function createStyles(fonts: UiFonts) {
     },
     head: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       alignItems: 'center',
       gap: 8,
       paddingHorizontal: spacing.md,
