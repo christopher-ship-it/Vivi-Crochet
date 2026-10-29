@@ -5,17 +5,20 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useI18n } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
 import { colors, radii, spacing } from '../theme';
-import type { OfferCurriculum } from '../utils/offerCurriculum';
-
 interface Props {
-  curriculum: OfferCurriculum;
+  name: string;
+  /** Shown as the "LEVEL n" badge. Omit to hide the badge. */
+  level?: number;
+  tagline?: string | null;
+  /** "What you learn" points, set by admin. */
+  items: string[];
   /** Controlled mode (lets a parent keep one card open at a time). Omit for self-managed. */
   expanded?: boolean;
   onToggle?: () => void;
 }
 
-/** Level badge header + tagline + topic checklist for Foundation / Signature / Mastery. */
-export function LevelCurriculumCard({ curriculum, expanded, onToggle }: Props) {
+/** Course name header + tagline + "what you learn" checklist, all from the admin course. */
+export function LevelCurriculumCard({ name, level, tagline, items, expanded, onToggle }: Props) {
   const { language } = useI18n();
   const styles = useMemo(() => createStyles(uiFonts(language)), [language]);
 
@@ -29,7 +32,7 @@ export function LevelCurriculumCard({ curriculum, expanded, onToggle }: Props) {
         onPress={toggle}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${curriculum.label}, what you learn`}
+        accessibilityLabel={`${name}, what you learn`}
       >
         <LinearGradient
           colors={[colors.pink, colors.pinkDark]}
@@ -39,11 +42,13 @@ export function LevelCurriculumCard({ curriculum, expanded, onToggle }: Props) {
         >
           <View style={styles.headText}>
             <Text style={styles.label} numberOfLines={1}>
-              {curriculum.shortName}
+              {name}
             </Text>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelBadgeText}>LEVEL {curriculum.level}</Text>
-            </View>
+            {level != null ? (
+              <View style={styles.levelBadge}>
+                <Text style={styles.levelBadgeText}>LEVEL {level}</Text>
+              </View>
+            ) : null}
           </View>
           <View style={styles.pill}>
             <Text style={styles.pillText}>What you learn</Text>
@@ -54,8 +59,8 @@ export function LevelCurriculumCard({ curriculum, expanded, onToggle }: Props) {
 
       {open ? (
       <View style={styles.body}>
-        <Text style={styles.tagline}>{curriculum.tagline}</Text>
-        {curriculum.items.map((item) => (
+        {tagline ? <Text style={styles.tagline}>{tagline}</Text> : null}
+        {items.map((item) => (
           <View key={item} style={styles.row}>
             <Ionicons name="checkmark-circle" size={18} color={colors.success} />
             <Text style={styles.itemText}>{item}</Text>

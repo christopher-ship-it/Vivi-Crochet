@@ -49,7 +49,6 @@ import { UnlockLearnModal } from '../../src/components/UnlockLearnModal';
 import { BackButton } from '../../src/components/BackButton';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { LevelCurriculumCard } from '../../src/components/LevelCurriculumCard';
-import { OFFER_CURRICULUM } from '../../src/utils/offerCurriculum';
 import { CourseLearningPath } from '../../src/components/CourseLearningPath';
 import { LessonDurationBackfill } from '../../src/components/LessonDurationBackfill';
 import { HeroGradient } from '../../src/components/HeroGradient';
@@ -68,7 +67,6 @@ import { isLastLessonInCourse } from '../../src/utils/learnerJourney';
 import { getCourseVideoProgress, type VideoProgress } from '../../src/api/videoProgress';
 import { summarizeCourseProgress } from '../../src/utils/watchProgress';
 import {
-  getMainCourseLevelIndex,
   getMainCourseWhatYouGetKey,
   isCompleteCollectionBundle,
   resolveCollectionOwnership,
@@ -577,8 +575,6 @@ export default function CourseDetailScreen() {
     course.about?.trim() ||
     course.description?.trim() ||
     (packageWhatYouGetKey ? t(packageWhatYouGetKey) : null);
-  const levelIndex = getMainCourseLevelIndex(course);
-  const levelCurriculum = levelIndex != null ? OFFER_CURRICULUM[levelIndex] : null;
   const alreadyInCart = Boolean(
     course &&
       cartItems.some(
@@ -796,9 +792,13 @@ export default function CourseDetailScreen() {
                 )}
               </View>
 
-              {!isBundle && levelCurriculum ? (
+              {!isBundle && course.topics?.length ? (
                 <View style={styles.block}>
-                  <LevelCurriculumCard curriculum={levelCurriculum} />
+                  <LevelCurriculumCard
+                    name={course.name}
+                    tagline={course.tagline}
+                    items={course.topics}
+                  />
                 </View>
               ) : null}
 

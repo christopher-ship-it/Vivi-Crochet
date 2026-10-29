@@ -118,6 +118,8 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.Level).HasMaxLength(160);
             entity.Property(x => x.Description).HasMaxLength(400);
             entity.Property(x => x.About).HasMaxLength(2000);
+            entity.Property(x => x.Tagline).HasMaxLength(200);
+            entity.Property(x => x.Topics).HasMaxLength(2000);
             entity.Property(x => x.Languages).HasMaxLength(200);
             entity.Property(x => x.ThumbnailUrl).HasMaxLength(512);
             entity.Property(x => x.SortOrder).IsRequired();

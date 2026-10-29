@@ -76,6 +76,8 @@ public static class DtoMapper
             Level = course.Level,
             Description = course.Description,
             About = course.About,
+            Tagline = course.Tagline,
+            Topics = CourseTopics.Split(course.Topics),
             Price = course.Price,
             Mrp = course.Mrp,
             AccessDays = course.AccessDays,

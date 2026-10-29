@@ -12,6 +12,10 @@ public sealed class Course
     /// <summary>Short copy for Home Viral / Trending hero slides.</summary>
     public string? Description { get; set; }
     public string? About { get; set; }
+    /// <summary>One-line promise on the Offers card, set by admin.</summary>
+    public string? Tagline { get; set; }
+    /// <summary>"What you learn" points, one per line (see CourseTopics).</summary>
+    public string? Topics { get; set; }
     public int Price { get; set; }
     public int? Mrp { get; set; }
     public int AccessDays { get; set; } = 30;

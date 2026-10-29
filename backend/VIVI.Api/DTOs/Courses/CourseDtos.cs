@@ -11,6 +11,9 @@ public sealed class CourseRequest
     /// <summary>Short copy for Home Viral / Trending hero slides.</summary>
     public string? Description { get; set; }
     public string? About { get; set; }
+    public string? Tagline { get; set; }
+    /// <summary>"What you learn" points, one per line.</summary>
+    public string? Topics { get; set; }
     public int Price { get; set; }
     public int? Mrp { get; set; }
     public int AccessDays { get; set; } = 30;
@@ -40,6 +43,8 @@ public sealed class CourseResponse
     /// <summary>Short copy for Home Viral / Trending hero slides.</summary>
     public string? Description { get; set; }
     public string? About { get; set; }
+    public string? Tagline { get; set; }
+    public IReadOnlyList<string> Topics { get; set; } = [];
     /// <summary>Price in <see cref="Currency"/> for the caller's country.</summary>
     public decimal Price { get; set; }
     public decimal? Mrp { get; set; }

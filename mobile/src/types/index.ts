@@ -51,6 +51,10 @@ export interface Course {
   /** Short copy for Home Viral / Trending hero slides. */
   description?: string | null;
   about?: string | null;
+  /** One line on the Offers card, set by admin. */
+  tagline?: string | null;
+  /** "What you learn" points, set by admin. */
+  topics?: string[];
   /** Price in `currency` for the user's country. */
   price: number;
   mrp?: number | null;

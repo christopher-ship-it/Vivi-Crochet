@@ -47,6 +47,8 @@ import { formatInr } from '../../src/utils/format';
 type ShopTab = 'products' | 'orders';
 type ShopRoom = 'handmade' | 'essentials';
 const WISHLIST_FILTER = 'Wishlist';
+/** Last loaded Essentials list, so the landing shows the kit card at once on revisits. */
+let essentialsCache: Product[] = [];
 
 /** Small icon per category chip — keyword match against free-text category names. */
 function categoryChipIcon(cat: string): keyof typeof Ionicons.glyphMap {
@@ -175,7 +177,8 @@ export default function ShopScreen() {
   const hasLoadedOnce = useRef(false);
   const requestId = useRef(0);
   // Shop landing: the beginner kit card and the yarn highlight come from the real Essentials products.
-  const [essentials, setEssentials] = useState<Product[]>([]);
+  const [essentials, setEssentials] = useState<Product[]>(essentialsCache);
+  const [essentialsLoading, setEssentialsLoading] = useState(essentialsCache.length === 0);
 
   useFocusEffect(
     useCallback(() => {
@@ -411,9 +414,14 @@ export default function ShopScreen() {
     let cancelled = false;
     listProducts(undefined, undefined, 'Resell')
       .then((list) => {
-        if (!cancelled) setEssentials(list);
+        if (cancelled) return;
+        essentialsCache = list;
+        setEssentials(list);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setEssentialsLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -648,6 +656,15 @@ export default function ShopScreen() {
                 <Ionicons name="arrow-forward" size={18} color={colors.white} />
               </View>
             </Pressable>
+          ) : market.canOrderProducts && essentialsLoading ? (
+            // Holds the kit slot so the card does not pop in below the first paint.
+            <View style={styles.kitCard}>
+              <View style={styles.kitThumb} />
+              <View style={styles.kitCopy}>
+                <View style={styles.skeletonLineWide} />
+                <View style={styles.skeletonLine} />
+              </View>
+            </View>
           ) : null}
 
           <View style={[styles.roomTile, styles.roomTileEssentials]}>

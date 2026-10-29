@@ -30,6 +30,8 @@ public sealed class FoundingMembershipCourseResponse
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public decimal RegularPrice { get; set; }
+    public string? Tagline { get; set; }
+    public IReadOnlyList<string> Topics { get; set; } = [];
 }
 
 public sealed class FoundingMembershipViralProjectResponse

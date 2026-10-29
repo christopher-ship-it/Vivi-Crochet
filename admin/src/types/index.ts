@@ -58,6 +58,10 @@ export interface Course {
   level?: string | null;
   description?: string | null;
   about?: string | null;
+  /** One line on the app's Offers card. */
+  tagline?: string | null;
+  /** "What you learn" points for the app's Offers card. */
+  topics?: string[];
   price: number;
   mrp?: number | null;
   /** Saved prices for other countries (admin view). */
@@ -110,6 +114,9 @@ export interface CourseRequest {
   level?: string | null;
   description?: string | null;
   about?: string | null;
+  tagline?: string | null;
+  /** One topic per line. */
+  topics?: string | null;
   price: number;
   mrp?: number | null;
   accessDays: number;

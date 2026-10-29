@@ -37,7 +37,6 @@ import { formatMoney } from '../../src/utils/format';
 import { buildShareUrl, shareLink } from '../../src/utils/share';
 import { resolveCollectionOwnership } from '../../src/utils/mainCourses';
 import { LevelCurriculumCard } from '../../src/components/LevelCurriculumCard';
-import { OFFER_CURRICULUM } from '../../src/utils/offerCurriculum';
 import { applyStatusBar } from '../../src/utils/statusBar';
 
 const LESSON_COUNT = 27;
@@ -600,12 +599,15 @@ export default function OffersScreen() {
               <Text style={styles.includedTitle}>{t('offers.whatsIncluded')}</Text>
 
               {includedCourses.map((name, index) => {
-                const curriculum = OFFER_CURRICULUM[index];
-                if (curriculum) {
+                const includedCourse = offer?.includedCourses[index];
+                if (includedCourse?.topics?.length) {
                   return (
                     <LevelCurriculumCard
                       key={name}
-                      curriculum={curriculum}
+                      name={includedCourse.name}
+                      level={index + 1}
+                      tagline={includedCourse.tagline}
+                      items={includedCourse.topics}
                       expanded={openLevel === index}
                       onToggle={() => setOpenLevel(openLevel === index ? null : index)}
                     />

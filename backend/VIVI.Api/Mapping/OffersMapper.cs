@@ -41,7 +41,14 @@ public static class OffersMapper
             AccessDurationDays = offer.AccessDurationDays,
             // Callers pass the courses already in the order the admin saved them.
             IncludedCourses = includedCourses
-                .Select(c => new FoundingMembershipCourseResponse { Id = c.Id, Name = c.Name, RegularPrice = c.Price })
+                .Select(c => new FoundingMembershipCourseResponse
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    RegularPrice = c.Price,
+                    Tagline = c.Tagline,
+                    Topics = CourseTopics.Split(c.Topics)
+                })
                 .ToList(),
             ViralProject = offer.ViralProjectCourse is null
                 ? null

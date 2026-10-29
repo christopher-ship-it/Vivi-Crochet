@@ -443,6 +443,8 @@ public sealed class CoursesController : ControllerBase
         course.Level = request.Level?.Trim();
         course.Description = request.Description?.Trim();
         course.About = request.About?.Trim();
+        course.Tagline = request.Tagline?.Trim();
+        course.Topics = CourseTopics.Normalize(request.Topics);
         course.Price = request.Price;
         course.Mrp = request.Mrp;
         course.AccessDays = request.AccessDays;

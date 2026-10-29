@@ -4,6 +4,8 @@ export interface FoundingMembershipCourse {
   id: string;
   name: string;
   regularPrice: number;
+  tagline?: string | null;
+  topics?: string[];
 }
 
 export interface FoundingMembershipViralProject {

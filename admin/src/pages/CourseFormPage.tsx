@@ -54,6 +54,8 @@ const emptyForm: CourseFormState = {
   level: '',
   description: '',
   about: '',
+  tagline: '',
+  topics: '',
   price: '',
   mrp: null,
   accessDays: 30,
@@ -127,6 +129,8 @@ export function CourseFormPage() {
           level: course.level ?? '',
           description: '',
           about: whatYouGetFromCourse(course),
+          tagline: course.tagline ?? '',
+          topics: (course.topics ?? []).join('\n'),
           price: course.price,
           mrp: course.mrp ?? null,
           accessDays: course.accessDays,
@@ -201,6 +205,8 @@ export function CourseFormPage() {
       languages: selectedLangs.join(', ') || null,
       level: form.level || null,
       about: form.about?.trim() || null,
+      tagline: form.tagline?.trim() || null,
+      topics: form.topics?.trim() || null,
       description: descriptionFromWhatYouGet(form.about ?? ''),
       mrp: form.mrp || null,
       includedCourseIds: form.type === 'Bundle' ? (form.includedCourseIds ?? []) : [],
@@ -550,6 +556,46 @@ export function CourseFormPage() {
               placeholder={
                 '7 guided lessons + 5 mini cute projects.\nBeginner Level - From First Hook Hold to Creating Your First Crochet Projects'
               }
+            />
+          </div>
+
+          <div className="form-field span-6">
+            <div className="form-label-row">
+              <label
+                htmlFor="tagline"
+                title="One line under the course name on the app's Offers card."
+              >
+                Tagline
+              </label>
+              <span className="form-hint">{(form.tagline ?? '').length}/200</span>
+            </div>
+            <input
+              id="tagline"
+              type="text"
+              value={form.tagline ?? ''}
+              onChange={(e) => setForm({ ...form, tagline: e.target.value })}
+              maxLength={200}
+              placeholder="Start your crochet journey from scratch!"
+            />
+          </div>
+
+          <div className="form-field span-6">
+            <div className="form-label-row">
+              <label
+                htmlFor="topics"
+                title="Shown as the checklist under What's included in the app's Offers card."
+              >
+                What you learn
+              </label>
+              <span className="form-hint">One topic per line</span>
+            </div>
+            <textarea
+              id="topics"
+              value={form.topics ?? ''}
+              onChange={(e) => setForm({ ...form, topics: e.target.value })}
+              maxLength={2000}
+              rows={6}
+              placeholder={'Chain Stitch & Slip Knot\nSingle Crochet\nHalf Double Crochet'}
             />
           </div>
 
