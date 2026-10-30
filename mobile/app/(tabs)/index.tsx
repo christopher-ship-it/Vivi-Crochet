@@ -1257,11 +1257,11 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     shopYarn: {
       position: 'absolute',
-      top: 40,
-      left: 6,
-      right: 6,
-      // Sized from the PNG's 700x560 ratio, not a % height, so it can't collapse to zero.
-      aspectRatio: 700 / 560,
+      top: 52,
+      left: 14,
+      right: 14,
+      // Fixed height: a % or aspectRatio here rendered the PNG at native size on device.
+      height: 105,
     },
     shopRule: {
       width: 28,
