@@ -826,12 +826,12 @@ export default function HomeScreen() {
           {/* Two staggered columns that grow to fill the screen; the natural sizes are the minimum. */}
           <View style={[styles.cols, { flexGrow: 1, flexBasis: colsMin, minHeight: colsMin }]}>
             <View style={styles.col}>
-              {renderTall(LEARN, 0.7)}
-              {renderPhotoCard(SHOP, 1)}
+              {renderTall(LEARN, 1)}
+              {renderTall(LIVE, 0.7)}
             </View>
             <View style={styles.col}>
-              {renderPhotoCard(PROJECTS, 1)}
-              {renderTall(LIVE, 0.7)}
+              {renderPhotoCard(SHOP, 1.3)}
+              {renderPhotoCard(PROJECTS, 0.8)}
             </View>
           </View>
         </ScrollView>
@@ -1022,10 +1022,12 @@ function createStyles(fonts: UiFonts, compact = false) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: 6,
+      columnGap: 6,
+      // Narrow cards: seats drop to the next line instead of squeezing the label into "Mor…".
+      flexWrap: 'wrap',
     },
     slotLabelFlex: {
-      flexShrink: 1,
+      flexShrink: 0,
     },
     slotHours: {
       fontFamily: fonts.regular,

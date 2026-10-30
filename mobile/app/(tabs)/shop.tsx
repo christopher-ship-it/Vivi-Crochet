@@ -1418,6 +1418,7 @@ function createStyles(fonts: UiFonts, compact = false) {
     yarnTitleRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      flexWrap: 'wrap',
       gap: 6,
     },
     yarnText: {
