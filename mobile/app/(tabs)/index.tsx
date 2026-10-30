@@ -1259,11 +1259,13 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     shopYarn: {
       position: 'absolute',
-      top: 40,
-      left: 4,
-      right: 4,
+      top: 38,
+      left: 0,
+      right: 0,
       // Fixed height: a % or aspectRatio here rendered the PNG at native size on device.
-      height: 125,
+      height: 140,
+      // The pile is width-limited by the card, so scale it to fill (card clips the few px that spill).
+      transform: [{ scale: 1.15 }],
     },
     shopRule: {
       width: 28,
