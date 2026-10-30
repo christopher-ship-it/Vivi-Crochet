@@ -55,12 +55,10 @@ public sealed class CoursesController : ControllerBase
         var query = _db.Courses
             .AsNoTracking()
             .Include(c => c.Category)
-            .Include(c => c.Videos)
             .Include(c => c.LaunchOffer)
             .Include(c => c.MarketPrices)
             .Include(c => c.BundleItems)
             .ThenInclude(b => b.IncludedCourse!)
-            .ThenInclude(ic => ic.Videos)
             .AsQueryable();
 
         if (!admin)
@@ -74,8 +72,13 @@ public sealed class CoursesController : ControllerBase
             .ThenBy(c => c.Name)
             .ToListAsync(cancellationToken);
 
+        var videoCounts = await _db.Videos.AsNoTracking()
+            .GroupBy(v => v.CourseId)
+            .Select(g => new { CourseId = g.Key, Total = g.Count(), Published = g.Count(v => v.Status == VideoStatus.Published) })
+            .ToDictionaryAsync(x => x.CourseId, x => (x.Total, x.Published), cancellationToken);
+
         var market = admin ? null : await _markets.ResolveAsync(User, Request, cancellationToken);
-        var dtos = items.Select(c => c.ToDto(includeLessons: false, adminView: admin, market: market)).ToList();
+        var dtos = items.Select(c => c.ToDto(includeLessons: false, adminView: admin, market: market, videoCounts: videoCounts)).ToList();
         await ResolveThumbnailsAsync(dtos, cancellationToken);
         return Ok(dtos);
     }

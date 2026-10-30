@@ -44,8 +44,16 @@ public static class DtoMapper
         UpdatedAt = category.UpdatedAt
     };
 
-    public static CourseResponse ToDto(this Course course, bool includeLessons, bool adminView, Market? market = null)
+    public static CourseResponse ToDto(
+        this Course course,
+        bool includeLessons,
+        bool adminView,
+        Market? market = null,
+        IReadOnlyDictionary<Guid, (int Total, int Published)>? videoCounts = null)
     {
+        // List views pass counts instead of loading every video row.
+        int CountFor(Guid courseId) => videoCounts!.TryGetValue(courseId, out var c) ? (adminView ? c.Total : c.Published) : 0;
+
         var ownVideos = course.Videos ?? [];
         // The order the admin saved on the Special Offers page.
         var included = (course.BundleItems ?? Array.Empty<CourseBundleItem>())
@@ -86,7 +94,11 @@ public static class DtoMapper
             ThumbnailUrl = course.ThumbnailUrl,
             SortOrder = course.SortOrder,
             Status = course.Status,
-            VideoCount = visible.Count(),
+            VideoCount = videoCounts is null
+                ? visible.Count()
+                : course.Type == CourseType.Bundle && included.Count > 0
+                    ? included.Sum(b => CountFor(b.IncludedCourseId))
+                    : CountFor(course.Id),
             CreatedAt = course.CreatedAt,
             UpdatedAt = course.UpdatedAt,
             CreatedBy = course.CreatedBy,
@@ -109,7 +121,9 @@ public static class DtoMapper
                     Id = b.IncludedCourseId,
                     Name = b.IncludedCourse?.Name ?? string.Empty,
                     AccessDays = b.IncludedCourse?.AccessDays ?? 0,
-                    VideoCount = (b.IncludedCourse?.Videos ?? []).Count(v => adminView || v.Status == VideoStatus.Published)
+                    VideoCount = videoCounts is null
+                        ? (b.IncludedCourse?.Videos ?? []).Count(v => adminView || v.Status == VideoStatus.Published)
+                        : CountFor(b.IncludedCourseId)
                 }).ToList(),
             LaunchOffer = adminView && course.LaunchOffer is not null
                 ? new LaunchOfferAdminResponse

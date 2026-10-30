@@ -39,6 +39,8 @@ public sealed class ProductsController : ControllerBase
         [FromQuery] string? category,
         [FromQuery] string? q,
         [FromQuery] ProductType? productType,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
     {
         var admin = User.IsAdmin();
@@ -47,9 +49,6 @@ public sealed class ProductsController : ControllerBase
         // Shop/admin catalogs show parent listings + standalone SKUs — never variant children.
         var query = _db.Products
             .AsNoTracking()
-            .Include(p => p.Images)
-            .Include(p => p.Course!)
-            .Include(p => p.Variants)
             .Where(p => p.ParentProductId == null)
             .AsQueryable();
 
@@ -76,7 +75,35 @@ public sealed class ProductsController : ControllerBase
                     || v.Name.Contains(term)));
         }
 
-        var items = await query
+        // Callers that send no page get the whole list, as before; the app moves to paging later.
+        var paged = page.HasValue || pageSize.HasValue;
+        IQueryable<Product> pageFilter = query;
+        Guid[]? pageIds = null;
+        if (paged)
+        {
+            var size = Math.Clamp(pageSize ?? 24, 1, 100);
+            var number = Math.Max(page ?? 1, 1);
+            // Rank in memory (CategoryShopRank is not SQL), but over a thin projection, not full entities.
+            var keys = await query
+                .Select(p => new { p.Id, p.Category, p.SortOrder, p.Name })
+                .ToListAsync(cancellationToken);
+            var ordered = keys
+                .OrderBy(k => CategoryShopRank(k.Category))
+                .ThenBy(k => k.Category, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(k => k.SortOrder)
+                .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(k => k.Id)
+                .ToArray();
+            Response.Headers["X-Total-Count"] = ordered.Length.ToString();
+            pageIds = ordered.Skip((number - 1) * size).Take(size).ToArray();
+            pageFilter = query.Where(p => pageIds.Contains(p.Id));
+        }
+
+        var items = await pageFilter
+            .Include(p => p.Images)
+            .Include(p => p.Course!)
+            .Include(p => p.Variants)
+            .AsSplitQuery()
             .OrderBy(p => p.SortOrder)
             .ThenBy(p => p.Name)
             .ToListAsync(cancellationToken);
@@ -585,9 +612,10 @@ public sealed class ProductsController : ControllerBase
     {
         try
         {
-            await _db.Entry(product).Collection(p => p.EssentialLinks).LoadAsync(cancellationToken);
-            foreach (var link in product.EssentialLinks)
-                await _db.Entry(link).Reference(l => l.EssentialProduct).LoadAsync(cancellationToken);
+            await _db.Entry(product).Collection(p => p.EssentialLinks)
+                .Query()
+                .Include(l => l.EssentialProduct)
+                .LoadAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -681,6 +709,14 @@ public sealed class ProductsController : ControllerBase
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>One query for all variants' images; the tracked variants get them through relationship fix-up.</summary>
+    private async Task LoadImagesForAsync(IEnumerable<Product> variants, CancellationToken cancellationToken)
+    {
+        var ids = variants.Select(v => v.Id).ToArray();
+        if (ids.Length > 0)
+            await _db.ProductImages.Where(i => ids.Contains(i.ProductId)).LoadAsync(cancellationToken);
+    }
+
     private async Task LoadVariantGraphAsync(Product product, CancellationToken cancellationToken)
     {
         try
@@ -691,15 +727,13 @@ public sealed class ProductsController : ControllerBase
                 if (product.Parent is not null)
                 {
                     await _db.Entry(product.Parent).Collection(p => p.Variants).LoadAsync(cancellationToken);
-                    foreach (var sibling in product.Parent.Variants)
-                        await _db.Entry(sibling).Collection(v => v.Images).LoadAsync(cancellationToken);
+                    await LoadImagesForAsync(product.Parent.Variants, cancellationToken);
                 }
             }
             else
             {
                 await _db.Entry(product).Collection(p => p.Variants).LoadAsync(cancellationToken);
-                foreach (var variant in product.Variants)
-                    await _db.Entry(variant).Collection(v => v.Images).LoadAsync(cancellationToken);
+                await LoadImagesForAsync(product.Variants, cancellationToken);
             }
         }
         catch (Exception ex)

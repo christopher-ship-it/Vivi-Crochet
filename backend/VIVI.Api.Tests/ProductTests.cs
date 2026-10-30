@@ -79,4 +79,29 @@ public sealed class ProductTests : IClassFixture<ApiFactory>
         var list = await anonymous.GetFromJsonAsync<List<ProductResponse>>("/api/products", Json);
         Assert.Contains(list!, p => p.Name == "Visible Plush" && p.Status == ProductStatus.Published);
     }
+
+    [Fact]
+    public async Task Paged_list_returns_a_slice_with_total_and_unpaged_list_is_unchanged()
+    {
+        var admin = _factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+        for (var i = 0; i < 3; i++)
+        {
+            var created = await admin.PostAsJsonAsync("/api/products", new { name = $"Paging Item {i}", category = "Paging", price = 100 });
+            var product = await created.Content.ReadFromJsonAsync<ProductResponse>(Json);
+            (await admin.PostAsync($"/api/products/{product!.Id}/publish", null)).EnsureSuccessStatusCode();
+        }
+
+        var anonymous = _factory.CreateClient();
+        var all = await anonymous.GetFromJsonAsync<List<ProductResponse>>("/api/products?category=Paging", Json);
+        var first = await anonymous.GetAsync("/api/products?category=Paging&page=1&pageSize=2");
+        var second = await anonymous.GetAsync("/api/products?category=Paging&page=2&pageSize=2");
+        var firstItems = await first.Content.ReadFromJsonAsync<List<ProductResponse>>(Json);
+        var secondItems = await second.Content.ReadFromJsonAsync<List<ProductResponse>>(Json);
+
+        Assert.Equal(3, all!.Count);
+        Assert.Equal("3", first.Headers.GetValues("X-Total-Count").Single());
+        Assert.Equal(all.Take(2).Select(p => p.Id), firstItems!.Select(p => p.Id));
+        Assert.Equal(all.Skip(2).Select(p => p.Id), secondItems!.Select(p => p.Id));
+    }
 }
