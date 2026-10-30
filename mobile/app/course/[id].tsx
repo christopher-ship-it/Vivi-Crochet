@@ -787,7 +787,9 @@ export default function CourseDetailScreen() {
                 >
                   <AppImage uri={course.thumbnailUrl} style={styles.previewImage} contentFit="cover" />
                   <View style={styles.previewPlay}>
-                    <Ionicons name="play" size={26} color={colors.white} />
+                    <View style={styles.previewPlayBtn}>
+                      <Ionicons name="play" size={26} color={colors.white} style={{ marginLeft: 3 }} />
+                    </View>
                   </View>
                   <Text style={styles.previewLabel}>
                     Free preview · {freePreviewLesson.title}
@@ -1283,7 +1285,7 @@ const styles = StyleSheet.create({
   unlockBtn: {
     backgroundColor: colors.pink,
     borderRadius: radii.md,
-    paddingVertical: 14,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   previewCard: {
@@ -1306,6 +1308,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  previewPlayBtn: {
+    width: 68,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#ff0000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   previewLabel: {
     fontFamily: fonts.semiBold,
     fontSize: 13,
@@ -1324,7 +1334,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.pink,
     borderRadius: radii.md,
-    paddingVertical: 12.5,
+    paddingVertical: 8.5,
     alignItems: 'center',
   },
   buyBtnText: {

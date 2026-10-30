@@ -810,11 +810,7 @@ export function LessonPlayer({
         {showInitialLoader && !hasError && (
           <View style={styles.overlay} pointerEvents="none">
             <ActivityIndicator size="large" color={colors.pink} />
-            <Text style={styles.overlayText}>
-              {isLargeLesson
-                ? 'Large lesson — starting playback…'
-                : 'Loading lesson…'}
-            </Text>
+            {!isLargeLesson && <Text style={styles.overlayText}>Loading lesson…</Text>}
           </View>
         )}
 
