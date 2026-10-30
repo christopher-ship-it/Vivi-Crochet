@@ -510,7 +510,13 @@ export default function HomeScreen() {
             </Text>
           </View>
         ) : null}
-        <View style={[styles.tallImageWrap, room.featured && styles.tallImageWrapLearn]}>
+        <View
+          style={[
+            styles.tallImageWrap,
+            room.featured && styles.tallImageWrapLearn,
+            room.id === 'live' && styles.tallImageWrapLive,
+          ]}
+        >
           <Image
             source={room.image}
             style={[styles.tallImage, room.featured && styles.tallImageLearn]}
@@ -599,6 +605,7 @@ export default function HomeScreen() {
                 { backgroundColor: room.ctaGradient?.[0] ?? room.accent, overflow: 'hidden' },
                 (room.id === 'live' || room.id === 'learn') && styles.ctaWide,
                 room.id === 'learn' && styles.ctaLearn,
+                room.id === 'live' && styles.ctaLive,
                 room.featured && { transform: [{ scale: ctaScale }] },
               ]}
             >
@@ -642,6 +649,7 @@ export default function HomeScreen() {
         style={({ pressed }) => [
           styles.card,
           styles.projectsCard,
+          isShop && styles.shopCard,
           { flexGrow: grow, flexBasis: 0, backgroundColor: room.wash[1] },
           pressed && styles.pressed,
         ]}
@@ -659,14 +667,15 @@ export default function HomeScreen() {
           pointerEvents="none"
         />
         <View style={[styles.projectsBadge, isShop && styles.shopBadge]}>
-          <Ionicons name={isShop ? 'bag-handle' : 'flame'} size={11} color={colors.white} />
-          <Text style={styles.badgeText} numberOfLines={1}>
+          <Ionicons name={isShop ? 'bag-handle' : 'flame'} size={11} color={isShop ? '#3a2617' : colors.white} />
+          <Text style={[styles.badgeText, isShop && styles.shopBadgeText]} numberOfLines={1}>
             {isShop ? t('shop.handmadeHeroTitle') : t(room.badge ?? 'home.badgeProjects')}
           </Text>
         </View>
         <View style={styles.projectsBody}>
           <View style={styles.squareCopy}>
-            <Text style={styles.projectsTitle} numberOfLines={3}>
+            {isShop ? <View style={styles.shopRule} /> : null}
+            <Text style={[styles.projectsTitle, isShop && styles.shopTitle]} numberOfLines={3}>
               {isShop ? (
                 title
               ) : (
@@ -676,12 +685,12 @@ export default function HomeScreen() {
                 </>
               )}
             </Text>
-            <Text style={styles.projectsSub} numberOfLines={2}>
+            <Text style={[styles.projectsSub, isShop && styles.shopSub]} numberOfLines={2}>
               {t(room.sub)}
             </Text>
           </View>
-          <View style={styles.projectsArrow}>
-            <Ionicons name="arrow-forward" size={14} color={room.accent} />
+          <View style={[styles.projectsArrow, isShop && styles.shopArrow]}>
+            <Ionicons name="arrow-forward" size={14} color={isShop ? '#3a2617' : room.accent} />
           </View>
         </View>
       </Pressable>
@@ -826,8 +835,8 @@ export default function HomeScreen() {
           {/* Two staggered columns that grow to fill the screen; the natural sizes are the minimum. */}
           <View style={[styles.cols, { flexGrow: 1, flexBasis: colsMin, minHeight: colsMin }]}>
             <View style={styles.col}>
-              {renderTall(LEARN, 1.3)}
-              {renderTall(LIVE, 0.5)}
+              {renderTall(LEARN, 2)}
+              {renderTall(LIVE, 0.3)}
             </View>
             <View style={styles.col}>
               {renderPhotoCard(PROJECTS, 0.5)}
@@ -1150,6 +1159,15 @@ function createStyles(fonts: UiFonts, compact = false) {
       marginTop: 11,
       paddingVertical: 10,
     },
+    /* Live is the smallest card: a slimmer button and a shorter image strip. */
+    ctaLive: {
+      marginTop: 6,
+      paddingVertical: 8,
+    },
+    tallImageWrapLive: {
+      minHeight: 24,
+      paddingTop: 30,
+    },
     ctaTextWide: {
       fontSize: 13,
       textAlign: 'center',
@@ -1183,7 +1201,7 @@ function createStyles(fonts: UiFonts, compact = false) {
       backgroundColor: 'rgba(106, 76, 156, 0.92)',
     },
     shopBadge: {
-      backgroundColor: 'rgba(122, 90, 60, 0.92)',
+      backgroundColor: '#e2c37a',
     },
     projectsBody: {
       flexDirection: 'row',
@@ -1210,6 +1228,35 @@ function createStyles(fonts: UiFonts, compact = false) {
       fontSize: 11,
       lineHeight: 14,
       color: 'rgba(255, 255, 255, 0.82)',
+    },
+    /* Premium Shop card: champagne-gold hairline, gold tag/arrow, spaced ivory type. */
+    shopCard: {
+      borderWidth: 1.5,
+      borderColor: '#e2c37a',
+      shadowColor: '#c9a24d',
+      shadowOpacity: 0.45,
+    },
+    shopBadgeText: {
+      color: '#3a2617',
+      letterSpacing: 0.6,
+    },
+    shopRule: {
+      width: 28,
+      height: 2,
+      borderRadius: 1,
+      backgroundColor: '#e2c37a',
+      marginBottom: 6,
+    },
+    shopTitle: {
+      color: '#fff8e8',
+      letterSpacing: 0.5,
+    },
+    shopSub: {
+      color: '#f1e2bd',
+      letterSpacing: 0.3,
+    },
+    shopArrow: {
+      backgroundColor: '#e2c37a',
     },
     projectsArrow: {
       width: 30,
