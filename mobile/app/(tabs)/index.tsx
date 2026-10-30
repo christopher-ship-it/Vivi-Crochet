@@ -668,7 +668,9 @@ export default function HomeScreen() {
                 end={{ x: 0.8, y: 1 }}
                 style={StyleSheet.absoluteFill}
               />
-              <Image source={SHOP_PHOTO} style={styles.shopYarn} resizeMode="contain" accessibilityIgnoresInvertColors />
+              <View style={styles.shopYarn}>
+                <Image source={SHOP_PHOTO} style={styles.fill} resizeMode="contain" accessibilityIgnoresInvertColors />
+              </View>
             </>
           ) : (
             <RoomSlideshow items={projectSlides} fallback={room.image} bare />
