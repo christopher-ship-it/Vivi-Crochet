@@ -1217,7 +1217,7 @@ function createStyles(fonts: UiFonts, compact = false) {
       backgroundColor: 'rgba(106, 76, 156, 0.92)',
     },
     shopBadge: {
-      backgroundColor: '#e2c37a',
+      backgroundColor: colors.pinkDark,
     },
     projectsBody: {
       flexDirection: 'row',
