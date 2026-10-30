@@ -1259,11 +1259,11 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     shopYarn: {
       position: 'absolute',
-      top: 52,
-      left: 14,
-      right: 14,
+      top: 40,
+      left: 4,
+      right: 4,
       // Fixed height: a % or aspectRatio here rendered the PNG at native size on device.
-      height: 105,
+      height: 125,
     },
     shopRule: {
       width: 28,
