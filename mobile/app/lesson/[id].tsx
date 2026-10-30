@@ -63,9 +63,6 @@ export default function LessonScreen() {
 
   const loadStream = useCallback(async () => {
     if (!id) return;
-    // #region agent log
-    fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'A',location:'lesson/[id].tsx:loadStream:start',message:'loadStream start',data:{hasId:Boolean(id),isAuthenticated},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setPhase('metadata');
     setError(null);
     setAccessBlock(null);
@@ -74,41 +71,19 @@ export default function LessonScreen() {
     try {
       const videoData = await getVideo(id);
       setVideo(videoData);
-      // #region agent log
-      fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'post-fix',hypothesisId:'A',location:'lesson/[id].tsx:loadStream:meta',message:'video metadata loaded',data:{isFreePreview:videoData.isFreePreview,status:videoData.status,uploadConfirmed:videoData.uploadConfirmed,contentType:videoData.contentType,fileSizeMB:Math.round((videoData.fileSizeBytes||0)/1048576),durationSeconds:videoData.durationSeconds??null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       if (!videoData.isFreePreview && !isAuthenticated) {
-        // #region agent log
-        fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'E',location:'lesson/[id].tsx:loadStream:authBlock',message:'blocked before stream — needs auth',data:{},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         setAccessBlock('auth');
         setPhase('idle');
         return;
       }
 
       setPhase('stream');
-      const streamStarted = Date.now();
       const stream = await getStreamUrl(id, !videoData.isFreePreview);
-      let streamHost = '';
-      let streamPath = '';
-      try {
-        const u = new URL(stream.streamUrl);
-        streamHost = u.host;
-        streamPath = u.pathname.slice(0, 80);
-      } catch {
-        streamHost = 'invalid-url';
-      }
-      // #region agent log
-      fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'A',location:'lesson/[id].tsx:loadStream:url',message:'stream url received',data:{elapsedMs:Date.now()-streamStarted,host:streamHost,pathPrefix:streamPath,urlLen:stream.streamUrl?.length??0,expiresAt:stream.expiresAt??null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setQualities(stream.qualities ?? []);
       setStreamUrl(stream.streamUrl);
       setPlayerKey((k) => k + 1);
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'A',location:'lesson/[id].tsx:loadStream:error',message:'loadStream failed',data:{code:err instanceof ApiClientError?err.code:'unknown',status:err instanceof ApiClientError?err.status:0,msg:err instanceof Error?err.message.slice(0,120):'non-error'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (err instanceof ApiClientError) {
         if (err.code === 'UNAUTHORIZED' || err.status === 401) {
           setAccessBlock('auth');

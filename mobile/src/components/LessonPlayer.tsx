@@ -179,17 +179,6 @@ export function LessonPlayer({
     return all.sort((a, b) => b.height - a.height);
   }, [qualities, streamUrl]);
 
-  // #region agent log
-  useEffect(() => {
-    let host = '';
-    try { host = new URL(streamUrl).host; } catch { host = 'bad-url'; }
-    fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'post-fix',hypothesisId:'B',location:'LessonPlayer.tsx:mount',message:'player mounted with stream',data:{host,urlLen:streamUrl.length,bufferMin:2,bufferFwd:isLargeLesson?12:20,contentType:sourceContentType,fileSizeMB:fileSizeBytes!=null?Math.round(fileSizeBytes/1048576):null,isLargeLesson},timestamp:Date.now()})}).catch(()=>{});
-  }, [streamUrl, fileSizeBytes, isLargeLesson, sourceContentType]);
-
-  useEffect(() => {
-    fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'post-fix',hypothesisId:'B',location:'LessonPlayer.tsx:status',message:'player status change',data:{status,isPlaying,hasStarted,duration:player.duration||0,currentTime:Math.round(player.currentTime||0)},timestamp:Date.now()})}).catch(()=>{});
-  }, [status, isPlaying, hasStarted, player]);
-  // #endregion
 
   useEffect(() => {
     onPlayingChange?.(isPlaying);
@@ -396,9 +385,6 @@ export function LessonPlayer({
   useEffect(() => {
     const sub = player.addListener('statusChange', ({ status: nextStatus, error }) => {
       if (nextStatus === 'error' || error) {
-        // #region agent log
-        fetch('http://127.0.0.1:7353/ingest/2555e7db-7b21-431f-aef7-257bbbc7370c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'01e32e'},body:JSON.stringify({sessionId:'01e32e',runId:'stream-debug',hypothesisId:'C',location:'LessonPlayer.tsx:error',message:'player error event',data:{nextStatus,errorMessage:error&&typeof error==='object'&&'message' in error?String((error as {message?:unknown}).message).slice(0,160):String(error??'').slice(0,160)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         onError?.();
       }
     });
