@@ -118,7 +118,7 @@ export const en = {
     seatOneLeft: '1 seat left',
     slotFull: 'Full',
     roomShopTitle: 'Crochet Shop',
-    roomShopSub: 'Handmade and essentials',
+    roomShopSub: 'Yarn, tools & handmade',
     roomProjectsTitle: 'Viral & Trending Tutorials',
     roomProjectsTitleViral: 'Viral & ',
     roomProjectsTitleTrending: 'Trending Tutorials',

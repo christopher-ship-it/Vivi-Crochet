@@ -126,7 +126,9 @@ const TALL_RATIO = 0.74;
 const LEARN_IMAGE = require('../../assets/learn-hero-banner.png');
 const LIVE_IMAGE = require('../../assets/live-hero-home.webp');
 const SHOP_IMAGE = require('../../assets/shop-handmade-app.png');
-const PROJECTS_IMAGE = require('../../assets/live-hero-yarn.png');
+// Transparent yarn cut-out, composed over a dark gold-lit backdrop on the Shop card (the product slideshow looked blurry).
+const SHOP_PHOTO = require('../../assets/home-hero-yarn.png');
+const PROJECTS_IMAGE =require('../../assets/live-hero-yarn.png');
 
 type Room = {
   id: 'learn' | 'live' | 'shop' | 'projects';
@@ -658,7 +660,21 @@ export default function HomeScreen() {
         accessibilityLabel={`${title}. ${t(room.sub)}`}
       >
         <View style={StyleSheet.absoluteFill}>
-          <RoomSlideshow items={isShop ? shopSlides : projectSlides} fallback={room.image} bare />
+          {isShop ? (
+            <>
+              <LinearGradient
+                colors={['#1d1210', '#4a2c1c', '#1b0f0d']}
+                start={{ x: 0.2, y: 0 }}
+                end={{ x: 0.8, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.shopGlowOuter} />
+              <View style={styles.shopGlowInner} />
+              <Image source={SHOP_PHOTO} style={styles.shopYarn} resizeMode="contain" accessibilityIgnoresInvertColors />
+            </>
+          ) : (
+            <RoomSlideshow items={projectSlides} fallback={room.image} bare />
+          )}
         </View>
         <LinearGradient
           colors={[`rgba(${tint}, 0.28)`, `rgba(${tint}, 0)`, `rgba(${tint}, 0.55)`, `rgba(${tint}, 0.94)`]}
@@ -669,7 +685,7 @@ export default function HomeScreen() {
         <View style={[styles.projectsBadge, isShop && styles.shopBadge]}>
           <Ionicons name={isShop ? 'bag-handle' : 'flame'} size={11} color={isShop ? '#3a2617' : colors.white} />
           <Text style={[styles.badgeText, isShop && styles.shopBadgeText]} numberOfLines={1}>
-            {isShop ? t('shop.handmadeHeroTitle') : t(room.badge ?? 'home.badgeProjects')}
+            {isShop ? 'Vivi Shop' : t(room.badge ?? 'home.badgeProjects')}
           </Text>
         </View>
         <View style={styles.projectsBody}>
@@ -1239,6 +1255,31 @@ function createStyles(fonts: UiFonts, compact = false) {
     shopBadgeText: {
       color: '#3a2617',
       letterSpacing: 0.6,
+    },
+    shopGlowOuter: {
+      position: 'absolute',
+      top: -10,
+      alignSelf: 'center',
+      width: 220,
+      height: 220,
+      borderRadius: 110,
+      backgroundColor: 'rgba(226, 195, 122, 0.10)',
+    },
+    shopGlowInner: {
+      position: 'absolute',
+      top: 24,
+      alignSelf: 'center',
+      width: 130,
+      height: 130,
+      borderRadius: 65,
+      backgroundColor: 'rgba(226, 195, 122, 0.18)',
+    },
+    shopYarn: {
+      position: 'absolute',
+      top: 40,
+      left: 6,
+      right: 6,
+      height: '42%',
     },
     shopRule: {
       width: 28,
