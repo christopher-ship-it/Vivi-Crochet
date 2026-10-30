@@ -826,12 +826,12 @@ export default function HomeScreen() {
           {/* Two staggered columns that grow to fill the screen; the natural sizes are the minimum. */}
           <View style={[styles.cols, { flexGrow: 1, flexBasis: colsMin, minHeight: colsMin }]}>
             <View style={styles.col}>
-              {renderTall(LEARN, 1)}
-              {renderTall(LIVE, 0.7)}
+              {renderTall(LEARN, 1.3)}
+              {renderTall(LIVE, 0.5)}
             </View>
             <View style={styles.col}>
-              {renderPhotoCard(SHOP, 1.3)}
-              {renderPhotoCard(PROJECTS, 0.8)}
+              {renderPhotoCard(PROJECTS, 0.5)}
+              {renderPhotoCard(SHOP, 1.6)}
             </View>
           </View>
         </ScrollView>
