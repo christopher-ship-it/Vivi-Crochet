@@ -36,34 +36,65 @@ public sealed class LiveController : ControllerBase
         _blob = blob;
     }
 
+    // shortcut: per-instance throttle, upgrade to a background job if seasons/holds need exact timing.
+    private const long MaintenanceIntervalMs = 30_000;
+    private static long _lastMaintenanceTick = long.MinValue;
+
+    /// <summary>Season seeding and expired-hold release are idempotent; once per interval is enough for public reads.</summary>
+    private async Task RunMaintenanceAsync(CancellationToken cancellationToken)
+    {
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastMaintenanceTick);
+        // The static throttle must not leak across the in-memory databases used by tests.
+        if (_db.Database.IsRelational() && last != long.MinValue && now - last < MaintenanceIntervalMs)
+            return;
+
+        Interlocked.Exchange(ref _lastMaintenanceTick, now);
+        try
+        {
+            await _calendar.EnsureSeasonAsync(cancellationToken);
+            await _bookings.ReleaseExpiredReservationsAsync(cancellationToken);
+        }
+        catch
+        {
+            Interlocked.Exchange(ref _lastMaintenanceTick, long.MinValue);
+            throw;
+        }
+    }
+
     [HttpGet("weeks")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IReadOnlyList<LiveWeekSummaryResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<LiveWeekSummaryResponse>>> ListWeeks(CancellationToken cancellationToken)
     {
-        await _calendar.EnsureSeasonAsync(cancellationToken);
-        await _bookings.ReleaseExpiredReservationsAsync(cancellationToken);
+        await RunMaintenanceAsync(cancellationToken);
 
         var selectableStarts = _calendar.GetCustomerSelectableWeekStarts();
-        var weeks = await _db.LiveWeeks
-            .AsNoTracking()
-            .Include(w => w.Slots)
-            .OrderBy(w => w.StartDate)
-            .ThenBy(w => w.WeekNumber)
-            .ToListAsync(cancellationToken);
-
-        // In-memory filter so current+next always applies even if EF cannot translate Contains.
+        var query = _db.LiveWeeks.AsNoTracking().Include(w => w.Slots).AsQueryable();
         if (selectableStarts.Count > 0)
         {
-            var allowed = selectableStarts.ToHashSet();
-            weeks = weeks.Where(w => allowed.Contains(w.StartDate)).ToList();
+            // Range in SQL so only the selectable weeks are read; exact set applied below.
+            var first = selectableStarts.Min();
+            var last = selectableStarts.Max();
+            query = query.Where(w => w.StartDate >= first && w.StartDate <= last);
         }
         else
         {
             // Full-season mode (tests): primary configured season only.
             // Production (count=2) uses the branch above and can span into the next season.
             var primaryYear = _calendar.PrimarySeasonYear;
-            weeks = weeks.Where(w => w.SeasonYear == primaryYear).ToList();
+            query = query.Where(w => w.SeasonYear == primaryYear);
+        }
+
+        var weeks = await query
+            .OrderBy(w => w.StartDate)
+            .ThenBy(w => w.WeekNumber)
+            .ToListAsync(cancellationToken);
+
+        if (selectableStarts.Count > 0)
+        {
+            var allowed = selectableStarts.ToHashSet();
+            weeks = weeks.Where(w => allowed.Contains(w.StartDate)).ToList();
         }
 
         var tutorDefault = await _calendar.GetOrCreateTutorDefaultAsync(cancellationToken);
@@ -78,8 +109,7 @@ public sealed class LiveController : ControllerBase
     [ProducesResponseType(typeof(LiveWeekDetailResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<LiveWeekDetailResponse>> GetWeek(Guid weekId, CancellationToken cancellationToken)
     {
-        await _calendar.EnsureSeasonAsync(cancellationToken);
-        await _bookings.ReleaseExpiredReservationsAsync(cancellationToken);
+        await RunMaintenanceAsync(cancellationToken);
 
         var week = await _db.LiveWeeks
             .AsNoTracking()

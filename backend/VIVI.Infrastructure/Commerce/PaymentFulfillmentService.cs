@@ -103,19 +103,22 @@ public sealed class PaymentFulfillmentService
         if (existingPayment is not null && existingPayment.Id != payment.Id)
             throw ViviException.Conflict("DUPLICATE_PAYMENT", "This payment has already been processed.");
 
-        var remote = await _razorpay.FetchPaymentAsync(input.RazorpayPaymentId, cancellationToken);
-        if (remote is not null)
-        {
-            if (!string.Equals(remote.RazorpayOrderId, input.RazorpayOrderId, StringComparison.Ordinal))
-                throw ViviException.Conflict("PAYMENT_ORDER_MISMATCH", "Payment does not belong to this order.");
+        // Fail closed: without Razorpay's record we cannot confirm the paid amount, so the client retries.
+        var remote = await _razorpay.FetchPaymentAsync(input.RazorpayPaymentId, cancellationToken)
+            ?? throw new ViviException(
+                "PAYMENT_LOOKUP_UNAVAILABLE",
+                "Could not confirm the payment with Razorpay yet. Please try again in a moment.",
+                503);
 
-            var expectedPaise = (int)Math.Round(order.TotalAmount * 100m, MidpointRounding.AwayFromZero);
-            if (remote.AmountPaise != expectedPaise)
-                throw ViviException.Conflict("AMOUNT_MISMATCH", "Paid amount does not match the order total.");
-            if (!string.IsNullOrWhiteSpace(remote.Currency)
-                && !string.Equals(remote.Currency, order.Currency, StringComparison.OrdinalIgnoreCase))
-                throw ViviException.Conflict("CURRENCY_MISMATCH", "Paid currency does not match the order currency.");
-        }
+        if (!string.Equals(remote.RazorpayOrderId, input.RazorpayOrderId, StringComparison.Ordinal))
+            throw ViviException.Conflict("PAYMENT_ORDER_MISMATCH", "Payment does not belong to this order.");
+
+        var expectedPaise = (int)Math.Round(order.TotalAmount * 100m, MidpointRounding.AwayFromZero);
+        if (remote.AmountPaise != expectedPaise)
+            throw ViviException.Conflict("AMOUNT_MISMATCH", "Paid amount does not match the order total.");
+        if (!string.IsNullOrWhiteSpace(remote.Currency)
+            && !string.Equals(remote.Currency, order.Currency, StringComparison.OrdinalIgnoreCase))
+            throw ViviException.Conflict("CURRENCY_MISMATCH", "Paid currency does not match the order currency.");
 
         payment.ProviderPaymentId = input.RazorpayPaymentId;
         payment.SignatureVerified = true;

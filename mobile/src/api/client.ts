@@ -181,7 +181,9 @@ async function apiRequestOnce<T>(
   return (await response.json()) as T;
 }
 
-function shouldRetryTransient(err: unknown): boolean {
+function shouldRetryTransient(err: unknown, method: string | undefined): boolean {
+  // Never replay writes: POST /api/orders has no idempotency key, so a retry can create a second order.
+  if (method && method.toUpperCase() !== 'GET') return false;
   return (
     err instanceof ApiClientError &&
     (err.code === 'TIMEOUT' || err.code === 'NETWORK_ERROR' || err.status === 500)
@@ -197,7 +199,7 @@ export async function apiRequest<T>(
   try {
     return await apiRequestOnce<T>(path, options, auth, timeoutMs);
   } catch (err) {
-    if (!shouldRetryTransient(err)) throw err;
+    if (!shouldRetryTransient(err, options.method)) throw err;
     return apiRequestOnce<T>(path, options, auth, timeoutMs);
   }
 }
