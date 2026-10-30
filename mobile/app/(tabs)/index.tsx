@@ -126,8 +126,8 @@ const TALL_RATIO = 0.74;
 const LEARN_IMAGE = require('../../assets/learn-hero-banner.png');
 const LIVE_IMAGE = require('../../assets/live-hero-home.webp');
 const SHOP_IMAGE = require('../../assets/shop-handmade-app.png');
-// Transparent yarn cut-out, composed over a dark gold-lit backdrop on the Shop card (the product slideshow looked blurry).
-const SHOP_PHOTO = require('../../assets/home-hero-yarn.png');
+// Transparent yarn-pile cut-out over a pink gradient on the Shop card (the product slideshow looked blurry).
+const SHOP_PHOTO = require('../../assets/shop-yarn-pile.png');
 const PROJECTS_IMAGE =require('../../assets/live-hero-yarn.png');
 
 type Room = {
@@ -663,27 +663,27 @@ export default function HomeScreen() {
           {isShop ? (
             <>
               <LinearGradient
-                colors={['#1d1210', '#4a2c1c', '#1b0f0d']}
+                colors={['#ffe9f2', '#fcc3da', '#f59bc0']}
                 start={{ x: 0.2, y: 0 }}
                 end={{ x: 0.8, y: 1 }}
                 style={StyleSheet.absoluteFill}
               />
-              <View style={styles.shopGlowOuter} />
-              <View style={styles.shopGlowInner} />
               <Image source={SHOP_PHOTO} style={styles.shopYarn} resizeMode="contain" accessibilityIgnoresInvertColors />
             </>
           ) : (
             <RoomSlideshow items={projectSlides} fallback={room.image} bare />
           )}
         </View>
-        <LinearGradient
-          colors={[`rgba(${tint}, 0.28)`, `rgba(${tint}, 0)`, `rgba(${tint}, 0.55)`, `rgba(${tint}, 0.94)`]}
-          locations={[0, 0.3, 0.62, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
+        {isShop ? null : (
+          <LinearGradient
+            colors={[`rgba(${tint}, 0.28)`, `rgba(${tint}, 0)`, `rgba(${tint}, 0.55)`, `rgba(${tint}, 0.94)`]}
+            locations={[0, 0.3, 0.62, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+        )}
         <View style={[styles.projectsBadge, isShop && styles.shopBadge]}>
-          <Ionicons name={isShop ? 'bag-handle' : 'flame'} size={11} color={isShop ? '#3a2617' : colors.white} />
+          <Ionicons name={isShop ? 'bag-handle' : 'flame'} size={11} color={colors.white} />
           <Text style={[styles.badgeText, isShop && styles.shopBadgeText]} numberOfLines={1}>
             {isShop ? 'Vivi Shop' : t(room.badge ?? 'home.badgeProjects')}
           </Text>
@@ -706,7 +706,7 @@ export default function HomeScreen() {
             </Text>
           </View>
           <View style={[styles.projectsArrow, isShop && styles.shopArrow]}>
-            <Ionicons name="arrow-forward" size={14} color={isShop ? '#3a2617' : room.accent} />
+            <Ionicons name="arrow-forward" size={14} color={isShop ? colors.white : room.accent} />
           </View>
         </View>
       </Pressable>
@@ -1245,59 +1245,41 @@ function createStyles(fonts: UiFonts, compact = false) {
       lineHeight: 14,
       color: 'rgba(255, 255, 255, 0.82)',
     },
-    /* Premium Shop card: champagne-gold hairline, gold tag/arrow, spaced ivory type. */
+    /* Premium Shop card: pink gradient, yarn pile on top, deep-berry type and tag. */
     shopCard: {
       borderWidth: 1.5,
-      borderColor: '#e2c37a',
-      shadowColor: '#c9a24d',
-      shadowOpacity: 0.45,
+      borderColor: '#ffffff',
+      shadowColor: colors.pinkDark,
+      shadowOpacity: 0.35,
     },
     shopBadgeText: {
-      color: '#3a2617',
       letterSpacing: 0.6,
-    },
-    shopGlowOuter: {
-      position: 'absolute',
-      top: -10,
-      alignSelf: 'center',
-      width: 220,
-      height: 220,
-      borderRadius: 110,
-      backgroundColor: 'rgba(226, 195, 122, 0.10)',
-    },
-    shopGlowInner: {
-      position: 'absolute',
-      top: 24,
-      alignSelf: 'center',
-      width: 130,
-      height: 130,
-      borderRadius: 65,
-      backgroundColor: 'rgba(226, 195, 122, 0.18)',
     },
     shopYarn: {
       position: 'absolute',
       top: 40,
       left: 6,
       right: 6,
-      height: '42%',
+      height: '44%',
     },
     shopRule: {
       width: 28,
       height: 2,
       borderRadius: 1,
-      backgroundColor: '#e2c37a',
+      backgroundColor: colors.pinkDark,
       marginBottom: 6,
     },
     shopTitle: {
-      color: '#fff8e8',
+      color: '#5a1f3a',
       letterSpacing: 0.5,
+      textShadowColor: 'transparent',
     },
     shopSub: {
-      color: '#f1e2bd',
+      color: '#7a3a57',
       letterSpacing: 0.3,
     },
     shopArrow: {
-      backgroundColor: '#e2c37a',
+      backgroundColor: colors.pinkDark,
     },
     projectsArrow: {
       width: 30,
