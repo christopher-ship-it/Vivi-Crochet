@@ -41,12 +41,23 @@ public sealed class AzureBlobStorageService : IBlobStorageService
         _sharedKey = TryGetSharedKey(_options.ConnectionString);
     }
 
+    // Once per process: calling CreateIfNotExists per SAS cost an Azure round trip (a 409) on every image URL.
+    private volatile bool _containerReady;
+
+    private async Task EnsureContainerAsync(CancellationToken cancellationToken)
+    {
+        if (_containerReady)
+            return;
+        await _container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+        _containerReady = true;
+    }
+
     public async Task<BlobUploadTicket> CreateUploadSasAsync(
         string blobPath,
         string contentType,
         CancellationToken cancellationToken = default)
     {
-        await _container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+        await EnsureContainerAsync(cancellationToken);
         var blob = _container.GetBlobClient(blobPath);
         var expires = DateTimeOffset.UtcNow.AddMinutes(_options.UploadSasMinutes);
         var sas = BuildSas(blob, expires, BlobSasPermissions.Create | BlobSasPermissions.Write);
@@ -57,7 +68,7 @@ public sealed class AzureBlobStorageService : IBlobStorageService
         string blobPath,
         CancellationToken cancellationToken = default)
     {
-        await _container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+        await EnsureContainerAsync(cancellationToken);
         var blob = _container.GetBlobClient(blobPath);
         var expires = DateTimeOffset.UtcNow.AddMinutes(_options.ReadSasMinutes);
         var sas = BuildSas(blob, expires, BlobSasPermissions.Read, CacheControlFor(blobPath));
@@ -113,7 +124,7 @@ public sealed class AzureBlobStorageService : IBlobStorageService
         string contentType,
         CancellationToken cancellationToken = default)
     {
-        await _container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+        await EnsureContainerAsync(cancellationToken);
         var blob = _container.GetBlobClient(blobPath);
         await using var stream = File.OpenRead(localFilePath);
         await blob.UploadAsync(
