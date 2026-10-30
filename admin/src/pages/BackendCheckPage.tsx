@@ -14,6 +14,120 @@ function uptime(seconds: number): string {
   return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+type Level = 'ok' | 'watch' | 'problem';
+
+interface CheckRow {
+  name: string;
+  value: string;
+  target: string;
+  level: Level;
+}
+
+const LEVEL_BADGE: Record<Level, { cls: string; label: string }> = {
+  ok: { cls: 'badge--published', label: 'OK' },
+  watch: { cls: 'badge--pending', label: 'Watch' },
+  problem: { cls: 'badge--failed', label: 'Problem' },
+};
+
+/** Ranges the owner should keep an eye on; tune here if traffic or the hosting plan changes. */
+function buildChecklist(data: BackendCheck): CheckRow[] {
+  const graded = (value: number, okMax: number, watchMax: number): Level =>
+    value <= okMax ? 'ok' : value <= watchMax ? 'watch' : 'problem';
+  const probe = (name: string, okMs: number, watchMs: number): CheckRow => {
+    const c = data.checks.find((x) => x.name === name);
+    if (!c) return { name, value: 'not reported', target: `under ${okMs} ms`, level: 'watch' };
+    return {
+      name,
+      value: c.ok ? ms(c.ms) : `Failing${c.error ? ` (${c.error})` : ''}`,
+      target: `under ${okMs} ms`,
+      level: c.ok ? graded(c.ms, okMs, watchMs) : 'problem',
+    };
+  };
+
+  // OPTIONS are browser preflights; endpoints with few requests are too noisy to judge.
+  const judged = data.routes.filter((r) => r.count >= 5 && !r.route.startsWith('OPTIONS'));
+  const worst = [...judged].sort((a, b) => b.p95Ms - a.p95Ms)[0];
+  const clientShare = data.totalRequests > 0 ? data.clientErrors / data.totalRequests : 0;
+
+  return [
+    probe('Database', 300, 1000),
+    probe('Blob storage', 200, 1000),
+    {
+      name: 'Server errors (5xx)',
+      value: String(data.serverErrors),
+      target: '0',
+      level: data.serverErrors === 0 ? 'ok' : 'problem',
+    },
+    {
+      name: 'Client errors (4xx)',
+      value: `${data.clientErrors} (${Math.round(clientShare * 100)}%)`,
+      target: 'under 5% of requests',
+      level: data.clientErrors < 10 || clientShare <= 0.05 ? 'ok' : 'watch',
+    },
+    {
+      name: 'Slowest endpoint (slowest 5%)',
+      value: worst ? `${ms(worst.p95Ms)} · ${worst.route}` : 'Not enough requests yet',
+      target: 'under 1 s',
+      level: worst ? graded(worst.p95Ms, 1000, 2000) : 'ok',
+    },
+    {
+      name: 'Up for',
+      value: uptime(data.uptimeSeconds),
+      target: 'not restarting',
+      level: data.uptimeSeconds < 600 ? 'watch' : 'ok',
+    },
+    {
+      name: 'Memory',
+      value: `${data.memoryMb} MB`,
+      target: 'under 400 MB',
+      level: graded(data.memoryMb, 400, 800),
+    },
+    {
+      name: 'Queued work',
+      value: String(data.threadPoolQueued),
+      target: '0',
+      level: graded(data.threadPoolQueued, 0, 10),
+    },
+  ];
+}
+
+function Checklist({ data }: { data: BackendCheck }) {
+  const rows = buildChecklist(data);
+  const needsAttention = rows.filter((r) => r.level !== 'ok').length;
+  return (
+    <section>
+      <h2>Checklist</h2>
+      <p className="muted">
+        {needsAttention === 0 ? 'Everything is within range.' : `${needsAttention} item(s) to look at.`}
+      </p>
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Check</th>
+              <th>Now</th>
+              <th>Target</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.name}>
+                <td>
+                  <span className={`badge ${LEVEL_BADGE[r.level].cls}`}>{LEVEL_BADGE[r.level].label}</span>
+                </td>
+                <td>{r.name}</td>
+                <td>{r.value}</td>
+                <td>{r.target}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function RouteTable({ title, rows, empty }: { title: string; rows: RouteStats[]; empty: string }) {
   return (
     <section>
@@ -102,6 +216,8 @@ export function BackendCheckPage() {
 
       {data && (
         <>
+          <Checklist data={data} />
+
           <div className="stat-grid">
             {data.checks.map((c) => (
               <div className="card card--stat" key={c.name}>
