@@ -1260,7 +1260,8 @@ function createStyles(fonts: UiFonts, compact = false) {
       top: 40,
       left: 6,
       right: 6,
-      height: '44%',
+      // Sized from the PNG's 700x560 ratio, not a % height, so it can't collapse to zero.
+      aspectRatio: 700 / 560,
     },
     shopRule: {
       width: 28,
