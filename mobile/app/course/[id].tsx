@@ -46,6 +46,7 @@ import {
   type RazorpaySuccessPayload,
 } from '../../src/components/RazorpayCheckoutModal';
 import { UnlockLearnModal } from '../../src/components/UnlockLearnModal';
+import { AppImage } from '../../src/components/AppImage';
 import { BackButton } from '../../src/components/BackButton';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { LevelCurriculumCard } from '../../src/components/LevelCurriculumCard';
@@ -553,6 +554,7 @@ export default function CourseDetailScreen() {
     .filter((lesson) => lesson.status === 'Published')
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
+  const freePreviewLesson = lessons.find((lesson) => lesson.isFreePreview);
   const displayPrice = pricing?.applicablePrice ?? course.price;
   const displayMrp = pricing?.mrp ?? course.mrp;
   // Prices come from the server in the user's currency (INR or USD).
@@ -776,6 +778,23 @@ export default function CourseDetailScreen() {
                 </View>
               )}
 
+              {!isBundle && freePreviewLesson ? (
+                <Pressable
+                  style={styles.previewCard}
+                  onPress={() => openLesson(freePreviewLesson)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Watch free preview"
+                >
+                  <AppImage uri={course.thumbnailUrl} style={styles.previewImage} contentFit="cover" />
+                  <View style={styles.previewPlay}>
+                    <Ionicons name="play" size={26} color={colors.white} />
+                  </View>
+                  <Text style={styles.previewLabel}>
+                    Free preview · {freePreviewLesson.title}
+                  </Text>
+                </Pressable>
+              ) : null}
+
               {course.languages && (
                 <View style={styles.block}>
                   <Text style={styles.blockTitle}>Languages</Text>
@@ -899,9 +918,10 @@ export default function CourseDetailScreen() {
                 )}
               </View>
             ) : null}
+            <View style={styles.btnRow}>
             {studentCodeInUse ? null : (
             <Pressable
-              style={[styles.unlockBtn, (purchasing || addingToCart) && styles.btnDisabled]}
+              style={[styles.unlockBtn, styles.btnHalf, (purchasing || addingToCart) && styles.btnDisabled]}
               onPress={() => {
                 if (alreadyInCart) {
                   router.push('/cart');
@@ -915,12 +935,17 @@ export default function CourseDetailScreen() {
             </Pressable>
             )}
             <Pressable
-              style={[studentCodeInUse ? styles.unlockBtn : styles.secondaryBtn, (purchasing || addingToCart) && styles.btnDisabled]}
+              style={[
+                studentCodeInUse ? styles.unlockBtn : styles.buyBtn,
+                styles.btnHalf,
+                (purchasing || addingToCart) && styles.btnDisabled,
+              ]}
               onPress={() => void startPurchase()}
               disabled={purchasing || addingToCart}
             >
-              <Text style={studentCodeInUse ? styles.unlockBtnText : styles.secondaryBtnText}>{payButtonLabel}</Text>
+              <Text style={studentCodeInUse ? styles.unlockBtnText : styles.buyBtnText}>{payButtonLabel}</Text>
             </Pressable>
+            </View>
             <Text style={styles.payNote}>
               {isRenewalOffer
                 ? t('learn.renewPayNote')
@@ -1252,13 +1277,60 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.softBorder,
     backgroundColor: colors.white,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
   },
   unlockBtn: {
     backgroundColor: colors.pink,
     borderRadius: radii.md,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: 'center',
+  },
+  previewCard: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: radii.md,
+    overflow: 'hidden',
+    backgroundColor: colors.ink,
+  },
+  previewImage: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+  },
+  previewPlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewLabel: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.white,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  btnHalf: {
+    flex: 1,
+  },
+  buyBtn: {
+    borderWidth: 1.5,
+    borderColor: colors.pink,
+    borderRadius: radii.md,
+    paddingVertical: 12.5,
+    alignItems: 'center',
+  },
+  buyBtnText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 14,
+    color: colors.pink,
   },
   btnDisabled: {
     opacity: 0.65,
