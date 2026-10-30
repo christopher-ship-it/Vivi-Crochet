@@ -44,8 +44,8 @@ function buildChecklist(data: BackendCheck): CheckRow[] {
     };
   };
 
-  // OPTIONS are browser preflights; endpoints with few requests are too noisy to judge.
-  const judged = data.routes.filter((r) => r.count >= 5 && !r.route.startsWith('OPTIONS'));
+  // OPTIONS are browser preflights and backend-check runs live probes, so neither says anything about the API; endpoints with few requests are too noisy to judge.
+  const judged = data.routes.filter((r) => r.count >= 5 && !r.route.startsWith('OPTIONS') && !r.route.endsWith('/api/admin/backend-check'));
   const worst = [...judged].sort((a, b) => b.p95Ms - a.p95Ms)[0];
   const clientShare = data.totalRequests > 0 ? data.clientErrors / data.totalRequests : 0;
 
@@ -95,11 +95,13 @@ function Checklist({ data }: { data: BackendCheck }) {
   const rows = buildChecklist(data);
   const needsAttention = rows.filter((r) => r.level !== 'ok').length;
   return (
-    <section>
-      <h2>Checklist</h2>
-      <p className="muted">
-        {needsAttention === 0 ? 'Everything is within range.' : `${needsAttention} item(s) to look at.`}
-      </p>
+    <details className="collapsible">
+      <summary>
+        <h2>Checklist</h2>
+        <span className={`badge ${needsAttention === 0 ? 'badge--published' : 'badge--pending'}`}>
+          {needsAttention === 0 ? 'All within range' : `${needsAttention} to look at`}
+        </span>
+      </summary>
       <div className="table-wrap">
         <table className="data-table">
           <thead>
@@ -124,7 +126,7 @@ function Checklist({ data }: { data: BackendCheck }) {
           </tbody>
         </table>
       </div>
-    </section>
+    </details>
   );
 }
 

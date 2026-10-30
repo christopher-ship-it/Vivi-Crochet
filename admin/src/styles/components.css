@@ -4445,3 +4445,32 @@ label.btn {
   background: #fde4ec;
   color: var(--vivi-pink-dark);
 }
+
+.collapsible {
+  margin-bottom: 1rem;
+}
+
+.collapsible > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible > summary::before {
+  content: '▸';
+  transition: transform 0.15s;
+}
+
+.collapsible[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsible > summary h2 {
+  margin: 0;
+}
