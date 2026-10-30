@@ -57,6 +57,7 @@ public sealed class ExceptionHandlingMiddleware
         else
             _logger.LogInformation(exception, "Request failed with {Code}", code);
 
+        context.Items[RequestMetricsMiddleware.ExceptionTypeItem] = exception.GetType().Name;
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/json";
 

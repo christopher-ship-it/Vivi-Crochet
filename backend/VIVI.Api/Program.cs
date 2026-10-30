@@ -204,6 +204,7 @@ builder.Services.AddScoped(sp =>
     };
 });
 builder.Services.AddScoped<DatabaseSeeder>();
+builder.Services.AddSingleton<VIVI.Api.Services.RequestMetrics>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -334,6 +335,7 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 var isProduction = app.Environment.IsProduction();
 
+app.UseMiddleware<RequestMetricsMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (!app.Environment.IsEnvironment("Testing"))

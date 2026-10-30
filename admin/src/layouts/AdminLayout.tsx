@@ -87,6 +87,7 @@ const NAV_ITEMS: { to: string; label: string; icon: IconName; end?: boolean }[] 
   { to: '/notifications', label: 'Notifications', icon: 'bell' },
   { to: '/support', label: 'Support', icon: 'support' },
   { to: '/app-health', label: 'App health', icon: 'health' },
+  { to: '/backend-check', label: 'Backend check', icon: 'health' },
 ];
 
 const COURSE_DASHBOARD_ITEMS = [
