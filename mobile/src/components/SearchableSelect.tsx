@@ -85,7 +85,7 @@ export function SearchableSelect({
             compact && styles.triggerTextCompact,
             !value && styles.placeholder,
           ]}
-          numberOfLines={1}
+          numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
         >
           {value || placeholder}
         </Text>

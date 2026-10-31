@@ -154,7 +154,7 @@ export default function SupportChatScreen() {
             </View>
           </View>
 
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             Contact us
           </Text>
 

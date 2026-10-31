@@ -121,10 +121,10 @@ function MenuRow({
         <Ionicons name={icon} size={17} color={colors.pink} />
       </View>
       <View style={styles.menuCopy}>
-        <Text style={styles.menuTitle} numberOfLines={1}>
+        <Text style={styles.menuTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {title}
         </Text>
-        <Text style={styles.menuSubtitle} numberOfLines={1}>
+        <Text style={styles.menuSubtitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {subtitle}
         </Text>
       </View>
@@ -633,7 +633,7 @@ export default function ProfileScreen() {
                   accessibilityLabel={item.label.replace('\n', ' ')}
                 >
                   <Ionicons name={item.icon} size={13} color={colors.pink} />
-                  <Text style={styles.footerItemLabel} numberOfLines={1}>
+                  <Text style={styles.footerItemLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                     {item.label.replace('\n', ' ')}
                   </Text>
                 </Pressable>

@@ -725,7 +725,7 @@ export default function LiveScreen() {
               <Text style={styles.bookedBannerTitle} numberOfLines={2}>
                 {t('live.bookedBannerTitle', { range: bookedRange })}
               </Text>
-              <Text style={styles.bookedBannerReady} numberOfLines={1}>
+              <Text style={styles.bookedBannerReady} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {t('live.bookedBannerReadyThisWeek', {
                   circle: bookingForSelectedWeek.slotName || bookingForSelectedWeek.slotType,
                 })}

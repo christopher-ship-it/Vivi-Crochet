@@ -344,14 +344,14 @@ export default function HomeScreen() {
     if (resume) {
       return (
         <>
-          <Text style={styles.tallSub} numberOfLines={1}>
+          <Text style={styles.tallSub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {t('home.learnPickUp')}
           </Text>
           <View style={styles.resumeBox}>
-            <Text style={styles.resumeName} numberOfLines={1}>
+            <Text style={styles.resumeName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {resume.courseName}
             </Text>
-            <Text style={styles.resumeLesson} numberOfLines={1}>
+            <Text style={styles.resumeLesson} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {t('home.learnLessonOf', { current: resume.current, total: resume.total })}
             </Text>
             <View style={styles.resumeBar}>
@@ -387,7 +387,7 @@ export default function HomeScreen() {
             >
               {course.name.split(' ')[0]}
             </Text>
-            <Text style={styles.slotSeats} numberOfLines={1}>
+            <Text style={styles.slotSeats} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {formatCoursePrice(course, t('market.notAvailable'))}
             </Text>
           </Pressable>
@@ -507,7 +507,7 @@ export default function HomeScreen() {
             {room.id === 'live' ? (
               <Animated.View style={[styles.liveDot, { opacity: dotOpacity }]} />
             ) : null}
-            <Text style={styles.badgeText} numberOfLines={1}>
+            <Text style={styles.badgeText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {t(room.id === 'learn' && resume ? 'home.badgeWelcomeBack' : room.badge)}
             </Text>
           </View>
@@ -547,7 +547,7 @@ export default function HomeScreen() {
           {room.id === 'live' ? (
             <>
               {liveWeekRange ? (
-                <Text style={styles.tallSub} numberOfLines={1}>
+                <Text style={styles.tallSub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {liveWeekRange}
                 </Text>
               ) : null}
@@ -567,13 +567,13 @@ export default function HomeScreen() {
                     <Ionicons name={slot.icon} size={14} color={room.accent} />
                     <View style={styles.slotCopy}>
                       <View style={styles.slotTopRow}>
-                        <Text style={[styles.slotLabel, styles.slotLabelFlex]} numberOfLines={1}>
+                        <Text style={[styles.slotLabel, styles.slotLabelFlex]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                           {slot.label}
                         </Text>
                         {slot.seats != null ? (
                           <Text
                             style={[styles.slotSeats, slot.full && styles.slotSeatsFull]}
-                            numberOfLines={1}
+                            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
                           >
                             {slot.full
                               ? t('home.slotFull')
@@ -686,7 +686,7 @@ export default function HomeScreen() {
         )}
         <View style={[styles.projectsBadge, isShop && styles.shopBadge]}>
           <Ionicons name={isShop ? 'bag-handle' : 'flame'} size={11} color={colors.white} />
-          <Text style={[styles.badgeText, isShop && styles.shopBadgeText]} numberOfLines={1}>
+          <Text style={[styles.badgeText, isShop && styles.shopBadgeText]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {isShop ? 'Vivi Shop' : t(room.badge ?? 'home.badgeProjects')}
           </Text>
         </View>
@@ -739,7 +739,7 @@ export default function HomeScreen() {
         />
         {room.badge ? (
           <View style={[styles.badge, { backgroundColor: room.accent }]}>
-            <Text style={styles.badgeText} numberOfLines={1}>
+            <Text style={styles.badgeText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {t(room.badge)}
             </Text>
           </View>

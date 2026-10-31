@@ -67,7 +67,7 @@ export function RoomSlideshow({ items, fallback, intervalMs = 3600, bare = false
       />
       {bare ? null : (
       <View style={styles.caption} pointerEvents="none">
-        <Text style={styles.captionText} numberOfLines={1}>
+        <Text style={styles.captionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {item.label}
         </Text>
         {item.price != null && item.price > 0 ? (

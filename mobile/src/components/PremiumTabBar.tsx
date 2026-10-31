@@ -242,7 +242,7 @@ function OffersTabLabel({
             transform: [{ translateY: 2 }],
           },
         ]}
-        numberOfLines={1}
+        numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
       >
         {offersLabel}
       </Animated.Text>

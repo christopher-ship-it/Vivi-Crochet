@@ -55,7 +55,7 @@ export function LanguageSelector({ variant = 'menu', isLast = false }: LanguageS
             <Text style={[styles.menuTitle, { fontFamily: fonts.nunitoBold }]}>
               {t('language.title')}
             </Text>
-            <Text style={[styles.menuSubtitle, { fontFamily: fonts.decorative }]} numberOfLines={1}>
+            <Text style={[styles.menuSubtitle, { fontFamily: fonts.decorative }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {t(currentLabelKey)}
             </Text>
           </View>
@@ -119,7 +119,7 @@ export function LanguageSelector({ variant = 'menu', isLast = false }: LanguageS
           <Text style={[styles.cardTitle, { fontFamily: fonts.semiBold }]}>
             {t('language.title')}
           </Text>
-          <Text style={[styles.cardSubtitle, { fontFamily: fonts.regular }]} numberOfLines={1}>
+          <Text style={[styles.cardSubtitle, { fontFamily: fonts.regular }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {expanded ? t('language.subtitle') : t(currentLabelKey)}
           </Text>
         </View>

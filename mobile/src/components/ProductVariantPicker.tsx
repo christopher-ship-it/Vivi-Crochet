@@ -106,7 +106,8 @@ function VariantCard({
         </View>
       )}
       {variant.productCode ? (
-        <Text style={styles.code} numberOfLines={1}>
+        // Fixed-width swatch: shrink the code to fit instead of ending in "…" on small phones / large system fonts.
+        <Text style={styles.code} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} allowFontScaling={false}>
           {variant.productCode}
         </Text>
       ) : null}

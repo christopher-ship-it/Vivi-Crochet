@@ -133,10 +133,10 @@ export function LearnerJourney({
           <Text style={styles.ringPct}>{pct}%</Text>
         </View>
         <View style={styles.stripCopy}>
-          <Text style={styles.eyebrow} numberOfLines={1}>
+          <Text style={styles.eyebrow} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {t('journey.eyebrow')}
           </Text>
-          <Text style={styles.stripTitle} numberOfLines={1}>
+          <Text style={styles.stripTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {ctaLabel}
           </Text>
         </View>
@@ -195,12 +195,12 @@ export function LearnerJourney({
               </Pressable>
               <Text
                 style={[styles.stepLabel, done && styles.stepLabelDone, active && styles.stepLabelActive]}
-                numberOfLines={1}
+                numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
               >
                 {milestone.shortLabel}
               </Text>
               {done ? (
-                <Text style={styles.badgeLabel} numberOfLines={1}>
+                <Text style={styles.badgeLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {milestone.badgeLabel}
                 </Text>
               ) : active && milestone.progressPct > 0 ? (

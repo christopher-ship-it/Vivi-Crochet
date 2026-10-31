@@ -64,7 +64,7 @@ export function CountrySelector({ isLast = false }: { isLast?: boolean }) {
         </View>
         <View style={styles.copy}>
           <Text style={[styles.title, { fontFamily: fonts.nunitoBold }]}>{t('market.settingsTitle')}</Text>
-          <Text style={[styles.subtitle, { fontFamily: fonts.decorative }]} numberOfLines={1}>
+          <Text style={[styles.subtitle, { fontFamily: fonts.decorative }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {expanded ? t('market.settingsHint') : `${current.flag} ${t(current.nameKey)}`}
           </Text>
         </View>

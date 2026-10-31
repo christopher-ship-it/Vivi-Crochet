@@ -466,7 +466,7 @@ export default function ShopScreen() {
                 hitSlop={6}
               >
                 <Ionicons name="chevron-back" size={16} color={colors.pink} />
-                <Text style={styles.backRoomsText} numberOfLines={1}>
+                <Text style={styles.backRoomsText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {t('shop.backToRooms')}
                 </Text>
               </Pressable>
@@ -647,7 +647,7 @@ export default function ShopScreen() {
                 <View style={styles.stepPill}>
                   <Text style={styles.stepPillText}>{t('shop.kitStep')}</Text>
                 </View>
-                <Text style={styles.kitTitle} numberOfLines={1}>
+                <Text style={styles.kitTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {kit.name}
                 </Text>
                 <Text style={styles.kitSub} numberOfLines={2}>
@@ -700,7 +700,7 @@ export default function ShopScreen() {
                 <Text style={[styles.roomTileTitle, styles.roomTileTitleDark]} numberOfLines={2}>
                   {t('shop.roomEssentialsTitle')}
                 </Text>
-                <Text style={[styles.roomTileExamples, styles.roomTileExamplesDark]} numberOfLines={1}>
+                <Text style={[styles.roomTileExamples, styles.roomTileExamplesDark]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {t('shop.roomEssentialsExamples')}
                 </Text>
               </View>
@@ -727,7 +727,7 @@ export default function ShopScreen() {
                 </View>
                 <View style={styles.yarnCopy}>
                   <View style={styles.yarnTitleRow}>
-                    <Text style={styles.yarnText} numberOfLines={1}>
+                    <Text style={styles.yarnText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                       {t('shop.yarnTitle')}
                     </Text>
                     <View style={styles.featuredTag}>
@@ -768,11 +768,11 @@ export default function ShopScreen() {
               <Text style={[styles.roomTileTitle, styles.roomTileTitleDark]} numberOfLines={2}>
                 {t('shop.roomHandmadeTitle')}
               </Text>
-              <Text style={[styles.roomTileExamples, styles.roomTileExamplesDark]} numberOfLines={1}>
+              <Text style={[styles.roomTileExamples, styles.roomTileExamplesDark]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {t('shop.roomHandmadeExamples')}
               </Text>
               <View style={[styles.roomTileCta, styles.roomTileCtaSoft]}>
-                <Text style={[styles.roomTileCtaText, styles.roomCtaHandmade]} numberOfLines={1}>
+                <Text style={[styles.roomTileCtaText, styles.roomCtaHandmade]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {t('shop.roomHandmadeCta')}
                 </Text>
                 <Ionicons name="arrow-forward" size={12} color={colors.pinkDark} />
@@ -925,10 +925,10 @@ export default function ShopScreen() {
         <View style={[styles.addedBar, { bottom: dockClearance + 4 }]} accessibilityLiveRegion="polite">
           <Ionicons name="checkmark-circle" size={22} color={colors.white} />
           <View style={styles.addedBarCopy}>
-            <Text style={styles.addedBarTitle} numberOfLines={1}>
+            <Text style={styles.addedBarTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {t('shop.addedToCart')}
             </Text>
-            <Text style={styles.addedBarSub} numberOfLines={1}>
+            <Text style={styles.addedBarSub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {t('shop.addedToCartCount', { count: itemCount })}
             </Text>
           </View>

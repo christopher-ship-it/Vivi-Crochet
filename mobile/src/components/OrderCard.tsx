@@ -30,7 +30,7 @@ export function OrderCard({ order, index, onPress }: OrderCardProps) {
       </View>
       <View style={styles.body}>
         <Text style={styles.ref}>Order #{order.orderNumber}</Text>
-        <Text style={styles.name} numberOfLines={1}>
+        <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {item?.productName ?? 'Handmade piece'}
           {item?.category ? ` · ${item.category}` : ''}
         </Text>

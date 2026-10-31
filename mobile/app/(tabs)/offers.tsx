@@ -452,7 +452,7 @@ export default function OffersScreen() {
                     size={12}
                     color={colors.pinkDark}
                   />
-                  <Text style={styles.tagText} numberOfLines={1}>
+                  <Text style={styles.tagText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                     {headTag}
                   </Text>
                 </Animated.View>

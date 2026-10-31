@@ -225,7 +225,7 @@ export default function HelpCenterScreen() {
                       ]}
                       onPress={() => router.push(`/order/${item.id}`)}
                     >
-                      <Text style={styles.orderId} numberOfLines={1}>
+                      <Text style={styles.orderId} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                         {item.orderNumber}
                       </Text>
                       <Text style={styles.orderDate}>{formatHelpOrderDate(item.createdAt)}</Text>

@@ -100,7 +100,7 @@ export function CourseCard({
             </Text>
           ) : null}
 
-          <Text style={styles.editorialMeta} numberOfLines={1}>
+          <Text style={styles.editorialMeta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {editorialMeta}
           </Text>
 
@@ -120,7 +120,7 @@ export function CourseCard({
 
           <View style={styles.editorialFooter}>
             {hasAccess ? (
-              <Text style={styles.editorialOwned} numberOfLines={1}>
+              <Text style={styles.editorialOwned} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {t('learn.continueArrow')}
               </Text>
             ) : (
@@ -170,10 +170,10 @@ export function CourseCard({
           )}
         </View>
 
-        <Text style={styles.railName} numberOfLines={1}>
+        <Text style={styles.railName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {course.name}
         </Text>
-        <Text style={styles.railMeta} numberOfLines={1}>
+        <Text style={styles.railMeta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {meta}
         </Text>
 
@@ -234,7 +234,7 @@ export function CourseCard({
           <Text style={styles.name} numberOfLines={2}>
             {course.name}
           </Text>
-          <Text style={styles.meta} numberOfLines={1}>
+          <Text style={styles.meta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {meta}
           </Text>
           {course.about ? (
@@ -251,7 +251,7 @@ export function CourseCard({
               <Text style={styles.mrp}>{formatMoney(course.mrp, course.currency)}</Text>
             ) : null}
           </View>
-          <Text style={styles.accessCta} numberOfLines={1}>
+          <Text style={styles.accessCta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {accessLabel} →
           </Text>
         </View>

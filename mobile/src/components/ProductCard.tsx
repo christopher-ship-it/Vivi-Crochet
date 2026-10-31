@@ -165,7 +165,7 @@ export function ProductCard({
   const infoBlock = (
     <View style={[styles.body, isRail && styles.bodyRail, compact && styles.bodyCompact, dense && styles.bodyDense]}>
       {!isRail && !compact && (
-        <Text style={styles.category} numberOfLines={1}>
+        <Text style={styles.category} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {product.category.toUpperCase()}
         </Text>
       )}
@@ -204,7 +204,7 @@ export function ProductCard({
         </View>
       ) : null}
       {!isRail && !dense && (previewVariant?.colourName || metaLine) ? (
-        <Text style={styles.metaLine} numberOfLines={1}>
+        <Text style={styles.metaLine} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {previewVariant?.colourName ?? metaLine}
         </Text>
       ) : null}

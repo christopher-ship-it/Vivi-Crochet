@@ -196,22 +196,22 @@ function MainCourseTile({
       </Text>
       {hasAccess ? (
         <>
-          <Text style={styles.tilePct} numberOfLines={1}>
+          <Text style={styles.tilePct} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {pct}%
           </Text>
           <View style={styles.tileTrack}>
             <View style={[styles.tileFill, { width: `${pct}%` }]} />
           </View>
-          <Text style={styles.tileContinue} numberOfLines={1}>
+          <Text style={styles.tileContinue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {t('learn.continueArrow')}
           </Text>
         </>
       ) : (
         <>
-          <Text style={styles.tilePrice} numberOfLines={1}>
+          <Text style={styles.tilePrice} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {formatCoursePrice(course, t('market.notAvailable'))}
           </Text>
-          <Text style={styles.tileMeta} numberOfLines={1}>
+          <Text style={styles.tileMeta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {lessonMeta}
           </Text>
         </>
@@ -557,7 +557,7 @@ export default function LearnScreen() {
               <View style={styles.sectionIndex}>
                 <Text style={styles.sectionIndexText}>1</Text>
               </View>
-              <Text style={styles.sectionTitle} numberOfLines={1}>
+              <Text style={styles.sectionTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {t('learn.mainCourses')}
               </Text>
             </View>
@@ -605,7 +605,7 @@ export default function LearnScreen() {
                 <View style={[styles.sectionIndex, styles.sectionIndexSecondary]}>
                   <Text style={styles.sectionIndexText}>2</Text>
                 </View>
-                <Text style={styles.sectionTitle} numberOfLines={1}>
+                <Text style={styles.sectionTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {t('learn.discover')}
                 </Text>
               </View>
@@ -630,7 +630,7 @@ export default function LearnScreen() {
                           styles.discoverChipText,
                           selected && styles.discoverChipTextActive,
                         ]}
-                        numberOfLines={1}
+                        numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
                       >
                         {chip.label}
                       </Text>

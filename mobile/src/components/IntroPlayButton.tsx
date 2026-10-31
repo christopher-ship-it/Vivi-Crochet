@@ -97,7 +97,7 @@ export function IntroPlayButton({ onPress }: Props) {
     >
       {showLabel ? (
         <View style={styles.label}>
-          <Text style={styles.labelText} numberOfLines={1}>
+          <Text style={styles.labelText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {t('home.introLabel')}
           </Text>
         </View>

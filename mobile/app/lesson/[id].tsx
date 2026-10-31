@@ -356,7 +356,7 @@ export default function LessonScreen() {
             fallbackHref={courseId ? `/course/${courseId}` : '/(tabs)/learn'}
             accessibilityLabel={t('common.back')}
           />
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {displayCourseName || video.title}
           </Text>
         </HeroGradient>
