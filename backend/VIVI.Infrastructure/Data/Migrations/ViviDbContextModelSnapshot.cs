@@ -1722,6 +1722,23 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.ToTable("ScreenTapCells", (string)null);
                 });
 
+            modelBuilder.Entity("VIVI.Core.Entities.ShopSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("HandmadeEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ShopSettings", (string)null);
+                });
+
             modelBuilder.Entity("VIVI.Core.Entities.StudentCode", b =>
                 {
                     b.Property<Guid>("Id")
