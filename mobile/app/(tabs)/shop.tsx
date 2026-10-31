@@ -22,6 +22,7 @@ import {
   productTypeForRoom,
 } from '../../src/api/products';
 import { listMyOrders, type OrderResponse } from '../../src/api/orders';
+import { getShopSettings } from '../../src/api/shopSettings';
 import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { useCart } from '../../src/cart/CartContext';
@@ -179,6 +180,13 @@ export default function ShopScreen() {
   // Shop landing: the beginner kit card and the yarn highlight come from the real Essentials products.
   const [essentials, setEssentials] = useState<Product[]>(essentialsCache);
   const [essentialsLoading, setEssentialsLoading] = useState(essentialsCache.length === 0);
+  // Stays on until the admin switch says otherwise; a failed call leaves Handmade visible.
+  const [handmadeEnabled, setHandmadeEnabled] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      getShopSettings().then((s) => setHandmadeEnabled(s.handmadeEnabled)).catch(() => {});
+    }, []),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -737,6 +745,7 @@ export default function ShopScreen() {
             ) : null}
           </View>
 
+          {handmadeEnabled ? (
           <Pressable
             style={({ pressed }) => [
               styles.roomTile,
@@ -770,6 +779,7 @@ export default function ShopScreen() {
               </View>
             </View>
           </Pressable>
+          ) : null}
         </ScrollView>
       ) : tab === 'products' ? (
         loading && !refreshing ? (

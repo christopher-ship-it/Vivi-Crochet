@@ -7,6 +7,7 @@ import {
   unpublishProduct,
 } from '../api/products';
 import { ApiClientError } from '../api/client';
+import { getShopSettings, setHandmadeEnabled as setHandmadeEnabled_ } from '../api/shopSettings';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { Product, ProductType } from '../types';
 import { formatDate, formatInr } from '../utils/format';
@@ -38,6 +39,7 @@ export function ProductsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [handmadeEnabled, setHandmadeEnabled] = useState<boolean | null>(null);
 
   const term = search.trim().toLowerCase();
   const visibleProducts = term
@@ -78,6 +80,19 @@ export function ProductsPage() {
     }
   }
 
+  useEffect(() => {
+    getShopSettings().then((s) => setHandmadeEnabled(s.handmadeEnabled)).catch(() => {});
+  }, []);
+
+  async function handleHandmadeToggle() {
+    if (handmadeEnabled === null) return;
+    try {
+      setHandmadeEnabled((await setHandmadeEnabled_(!handmadeEnabled)).handmadeEnabled);
+    } catch (err) {
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Could not change the setting.', { title: 'Something went wrong' });
+    }
+  }
+
   async function handlePublishToggle(product: Product) {
     setActionId(product.id);
     try {
@@ -106,6 +121,13 @@ export function ProductsPage() {
           <Link to={newProductHref} className="btn btn--primary">New product</Link>
         </div>
       </header>
+
+      {handmadeEnabled !== null && (
+        <label className="page-toolbar__search" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" checked={handmadeEnabled} onChange={() => void handleHandmadeToggle()} />
+          Show Handmade Collection in the app (turn off to hide it from customers)
+        </label>
+      )}
 
       <div className="page-toolbar">
         <div className="live-view-switch" role="tablist" aria-label="Product room">

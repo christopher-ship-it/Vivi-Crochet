@@ -72,6 +72,7 @@ public sealed class ViviDbContext : DbContext
     public DbSet<LaunchMembership> LaunchMemberships => Set<LaunchMembership>();
     public DbSet<StudentCode> StudentCodes => Set<StudentCode>();
     public DbSet<IntroVideo> IntroVideos => Set<IntroVideo>();
+    public DbSet<ShopSettings> ShopSettings => Set<ShopSettings>();
     public DbSet<EmailNotification> EmailNotifications => Set<EmailNotification>();
     public DbSet<OrderDeliveryUpdate> OrderDeliveryUpdates => Set<OrderDeliveryUpdate>();
     public DbSet<LiveWeek> LiveWeeks => Set<LiveWeek>();
@@ -735,6 +736,12 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.BlobPath).HasMaxLength(500).IsRequired();
             entity.Property(x => x.TranscodeStatus).HasConversion<int>();
             entity.Property(x => x.TranscodeError).HasMaxLength(1000);
+        });
+
+        modelBuilder.Entity<ShopSettings>(entity =>
+        {
+            entity.ToTable("ShopSettings");
+            entity.HasKey(x => x.Id);
         });
 
         modelBuilder.Entity<VideoProgress>(entity =>

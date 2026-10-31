@@ -31,6 +31,15 @@ public sealed class ProductsController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>Published products only, and no Handmade ones while the admin has that collection switched off.</summary>
+    private async Task<IQueryable<Product>> PublicOnlyAsync(IQueryable<Product> query, CancellationToken cancellationToken)
+    {
+        query = query.Where(p => p.Status == ProductStatus.Published);
+        return await _db.ShopSettings.AnyAsync(s => !s.HandmadeEnabled, cancellationToken)
+            ? query.Where(p => p.ProductType != ProductType.Handmade)
+            : query;
+    }
+
     /// <summary>Lists shop products. Anonymous callers only receive published products.</summary>
     [HttpGet]
     [AllowAnonymous]
@@ -53,7 +62,7 @@ public sealed class ProductsController : ControllerBase
             .AsQueryable();
 
         if (!admin)
-            query = query.Where(p => p.Status == ProductStatus.Published);
+            query = await PublicOnlyAsync(query, cancellationToken);
 
         if (productType.HasValue)
             query = query.Where(p => p.ProductType == productType.Value);
@@ -167,7 +176,7 @@ public sealed class ProductsController : ControllerBase
         var admin = User.IsAdmin();
         var query = _db.Products.AsNoTracking().Where(p => p.ParentProductId == null);
         if (!admin)
-            query = query.Where(p => p.Status == ProductStatus.Published);
+            query = await PublicOnlyAsync(query, cancellationToken);
 
         if (productType.HasValue)
             query = query.Where(p => p.ProductType == productType.Value);

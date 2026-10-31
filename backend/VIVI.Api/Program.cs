@@ -466,6 +466,16 @@ using (var scope = app.Services.CreateScope())
 
             try
             {
+                await ShopSettingsSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
+                logger.LogInformation("Shop settings schema verified.");
+            }
+            catch (Exception shopSettingsEx)
+            {
+                logger.LogError(shopSettingsEx, "Shop settings schema bootstrap failed. Product lists will error until ShopSettings exists.");
+            }
+
+            try
+            {
                 await StudentOfferSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
                 logger.LogInformation("Student code schema verified.");
             }
