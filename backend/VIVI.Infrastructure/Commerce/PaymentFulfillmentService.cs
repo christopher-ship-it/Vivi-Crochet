@@ -58,7 +58,13 @@ public sealed class PaymentFulfillmentService
         _sequence = sequence;
     }
 
-    public async Task<PaymentFulfillmentResult> VerifyAndFulfillAsync(
+    public Task<PaymentFulfillmentResult> VerifyAndFulfillAsync(
+        Guid customerId,
+        PaymentVerificationInput input,
+        CancellationToken cancellationToken)
+        => _db.RunRetryableAsync(() => VerifyAndFulfillCoreAsync(customerId, input, cancellationToken));
+
+    private async Task<PaymentFulfillmentResult> VerifyAndFulfillCoreAsync(
         Guid customerId,
         PaymentVerificationInput input,
         CancellationToken cancellationToken)
@@ -126,7 +132,13 @@ public sealed class PaymentFulfillmentService
         return await CompleteFulfillmentAsync(order, payment, transaction, cancellationToken);
     }
 
-    public async Task<PaymentFulfillmentResult> ProcessWebhookPaymentAsync(
+    public Task<PaymentFulfillmentResult> ProcessWebhookPaymentAsync(
+        string razorpayOrderId,
+        string razorpayPaymentId,
+        CancellationToken cancellationToken)
+        => _db.RunRetryableAsync(() => ProcessWebhookPaymentCoreAsync(razorpayOrderId, razorpayPaymentId, cancellationToken));
+
+    private async Task<PaymentFulfillmentResult> ProcessWebhookPaymentCoreAsync(
         string razorpayOrderId,
         string razorpayPaymentId,
         CancellationToken cancellationToken)

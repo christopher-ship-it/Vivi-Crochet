@@ -90,7 +90,14 @@ builder.Services.AddDbContext<ViviDbContext>(options =>
 
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                            ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not set.");
-    options.UseSqlServer(connectionString);
+    // Off by default: turn on with Database__RetryOnFailure=true once checkout/payment is smoke-tested.
+    // Every manual transaction already runs inside RunRetryableAsync, so the switch is safe to flip either way.
+    var retry = builder.Configuration.GetValue<bool>("Database:RetryOnFailure");
+    options.UseSqlServer(connectionString, sql =>
+    {
+        if (retry)
+            sql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null);
+    });
 });
 
 builder.Services.AddSingleton<IPasswordHasher<AdminUser>, PasswordHasher<AdminUser>>();

@@ -94,13 +94,23 @@ public sealed class OrderCheckoutService
         return await BuildQuoteAsync(types, shipping, DateTime.UtcNow, customerId, null, shippingAmount, cancellationToken);
     }
 
-    public async Task<CheckoutResult> CreateCheckoutAsync(
+    public Task<CheckoutResult> CreateCheckoutAsync(
         Guid customerId,
         IReadOnlyList<CheckoutLineInput> items,
         CancellationToken cancellationToken,
         string? paymentMethod = null,
         ShippingAddressInput? shipping = null,
         bool saveShippingAddress = true)
+        => _db.RunRetryableAsync(() => CreateCheckoutCoreAsync(
+            customerId, items, cancellationToken, paymentMethod, shipping, saveShippingAddress));
+
+    private async Task<CheckoutResult> CreateCheckoutCoreAsync(
+        Guid customerId,
+        IReadOnlyList<CheckoutLineInput> items,
+        CancellationToken cancellationToken,
+        string? paymentMethod,
+        ShippingAddressInput? shipping,
+        bool saveShippingAddress)
     {
         if (items.Count == 0)
             throw ViviException.Conflict("EMPTY_ORDER", "Add at least one item to checkout.");

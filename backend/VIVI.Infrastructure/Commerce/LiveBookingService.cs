@@ -142,7 +142,14 @@ public sealed class LiveBookingService
         await _db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<LiveCheckoutResult> CreateBookingCheckoutAsync(
+    public Task<LiveCheckoutResult> CreateBookingCheckoutAsync(
+        Guid customerId,
+        Guid weekId,
+        LiveSlotType slotType,
+        CancellationToken cancellationToken)
+        => _db.RunRetryableAsync(() => CreateBookingCheckoutCoreAsync(customerId, weekId, slotType, cancellationToken));
+
+    private async Task<LiveCheckoutResult> CreateBookingCheckoutCoreAsync(
         Guid customerId,
         Guid weekId,
         LiveSlotType slotType,
