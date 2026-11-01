@@ -19,7 +19,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProduct } from '../../src/api/products';
 import { ApiClientError } from '../../src/api/client';
 import { useCart } from '../../src/cart/CartContext';
-import { canIncreaseQuantity, isOutOfStock } from '../../src/cart/stock';
+import {
+  canIncreaseQuantity,
+  exceedsCategoryLimit,
+  isOutOfStock,
+  YARN_LIMIT_MESSAGE,
+} from '../../src/cart/stock';
 import { AppImage, prefetchImages } from '../../src/components/AppImage';
 import { ProductImageFrame } from '../../src/components/ProductImageFrame';
 import { InStockLabel } from '../../src/components/InStockLabel';
@@ -318,7 +323,9 @@ export default function ProductDetailScreen() {
           : `Added ${qty} to your cart.`,
       );
     } catch (err) {
-      setCartError(err instanceof Error ? err.message : 'Could not add to cart.');
+      const message = err instanceof Error ? err.message : 'Could not add to cart.';
+      if (message === YARN_LIMIT_MESSAGE) Alert.alert(message);
+      setCartError(message);
     } finally {
       setAdding(false);
     }
@@ -776,7 +783,13 @@ export default function ProductDetailScreen() {
                 <Pressable
                   style={[styles.qtyBtn, atMaxQty && styles.qtyBtnDisabled]}
                   disabled={atMaxQty}
-                  onPress={() => setQty((q) => (canIncreaseQuantity(q, stock) ? q + 1 : q))}
+                  onPress={() => {
+                    if (exceedsCategoryLimit(display.category, qty + 1)) {
+                      Alert.alert(YARN_LIMIT_MESSAGE);
+                      return;
+                    }
+                    setQty((q) => (canIncreaseQuantity(q, stock) ? q + 1 : q));
+                  }}
                 >
                   <Text style={styles.qtyBtnText}>+</Text>
                 </Pressable>

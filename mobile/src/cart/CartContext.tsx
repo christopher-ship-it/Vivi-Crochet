@@ -11,7 +11,7 @@ import {
 import { useSession, useShoppingSession } from '../auth/SessionContext';
 import type { Course, CourseType, Product } from '../types';
 import { cartItemCount, cartSubtotal, clampQuantity } from './calculations';
-import { clampQuantityToStock } from './stock';
+import { clampQuantityToStock, exceedsCategoryLimit, YARN_LIMIT_MESSAGE } from './stock';
 import {
   CART_GUEST_OWNER,
   claimGuestCart,
@@ -160,6 +160,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         (i) => isProductLine(i) && i.productId === product.id,
       );
       const desired = (existing?.quantity ?? 0) + quantity;
+      if (exceedsCategoryLimit(product.category, desired)) {
+        throw new Error(YARN_LIMIT_MESSAGE);
+      }
       if (desired > stock) {
         throw new Error(`Only ${stock} available.`);
       }
@@ -183,6 +186,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const stock = product.availableStock ?? 0;
       if (stock <= 0) {
         throw new Error('This product is out of stock.');
+      }
+      if (exceedsCategoryLimit(product.category, quantity)) {
+        throw new Error(YARN_LIMIT_MESSAGE);
       }
       if (quantity > stock) {
         throw new Error(`Only ${stock} available.`);
@@ -233,6 +239,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (quantity <= 0) {
         await persist(current.filter((i) => cartLineKey(i) !== lineKey));
         return;
+      }
+
+      if (exceedsCategoryLimit(target.category, quantity)) {
+        throw new Error(YARN_LIMIT_MESSAGE);
       }
 
       const next = current.map((i) => {

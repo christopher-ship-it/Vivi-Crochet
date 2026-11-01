@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -508,7 +509,9 @@ export default function CartScreen() {
                   ) {
                     return;
                   }
-                  void updateQuantity(key, item.quantity + 1);
+                  updateQuantity(key, item.quantity + 1).catch((err) => {
+                    if (err instanceof Error) Alert.alert(err.message);
+                  });
                 }}
                 onDecrease={() => {
                   if (digital) return;

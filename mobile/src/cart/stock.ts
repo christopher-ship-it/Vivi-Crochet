@@ -6,6 +6,14 @@ export function clampQuantityToStock(quantity: number, availableStock: number): 
   return Math.min(quantity, availableStock);
 }
 
+export const YARN_MAX_QUANTITY = 10;
+export const YARN_LIMIT_MESSAGE = 'You can select only a maximum of 10 pieces per order.';
+
+/** Yarn is capped per order; other categories are limited by stock only. */
+export function exceedsCategoryLimit(category: string | undefined, quantity: number): boolean {
+  return category?.trim().toLowerCase() === 'yarn' && quantity > YARN_MAX_QUANTITY;
+}
+
 export function canIncreaseQuantity(quantity: number, availableStock: number): boolean {
   return availableStock > 0 && quantity < availableStock;
 }
