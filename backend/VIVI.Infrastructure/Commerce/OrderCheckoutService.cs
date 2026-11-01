@@ -389,6 +389,8 @@ public sealed class OrderCheckoutService
         };
     }
 
+    private const int MaxYarnQuantity = 10;
+
     private async Task<(OrderItem Item, ProductType? ProductType)> BuildProductItemAsync(
         CheckoutLineInput line,
         CancellationToken cancellationToken)
@@ -413,6 +415,15 @@ public sealed class OrderCheckoutService
             throw ViviException.Conflict(
                 "SELECT_VARIANT",
                 "Choose a colour/variant before adding this product to the order.");
+        }
+
+        var category = string.IsNullOrWhiteSpace(product.Category) ? product.Parent?.Category : product.Category;
+        if (line.Quantity > MaxYarnQuantity
+            && string.Equals(category?.Trim(), "Yarn", StringComparison.OrdinalIgnoreCase))
+        {
+            throw ViviException.Conflict(
+                "YARN_LIMIT_EXCEEDED",
+                $"You can select only a maximum of {MaxYarnQuantity} pieces per order.");
         }
 
         _inventory.EnsureAvailableOrThrow(product, line.Quantity);
