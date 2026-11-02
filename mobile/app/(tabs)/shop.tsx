@@ -1755,6 +1755,8 @@ function createStyles(fonts: UiFonts, compact = false) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
+      // Enlarges the kit picture inside the fixed card; the card's own clipping trims any overflow.
+      transform: [{ scale: 1.12 }],
     },
     archLabel: {
       paddingVertical: 5,
