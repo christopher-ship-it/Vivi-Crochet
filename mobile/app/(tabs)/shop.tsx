@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,12 +49,37 @@ import { formatInr } from '../../src/utils/format';
 type ShopTab = 'products' | 'orders';
 type ShopRoom = 'handmade' | 'essentials';
 const WISHLIST_FILTER = 'Wishlist';
+/** Chip that shows every yarn category together (T-Shirt Yarn, Rose Yarn, ...). */
+const YARN_FILTER = '__yarn__';
+/** Gold frame and label gradients for the arch cards. */
+const GOLD_FRAME = ['#fbe6a2', '#f0b543', '#c98a1c'] as const;
+const GOLD_LABEL = ['#fff3c9', '#f5cd68'] as const;
+const ARCH_PHOTO_BG = '#fff6f2';
+/** String-light bulbs for the "Start here" band: a bright core with a soft halo around it. */
+const BULBS = [
+  { core: '#fff3c4', halo: 'rgba(255, 224, 130, 0.32)' },
+  { core: '#ffd1e0', halo: 'rgba(255, 170, 200, 0.32)' },
+  { core: '#ffe08a', halo: 'rgba(255, 200, 90, 0.32)' },
+  { core: '#ffffff', halo: 'rgba(255, 255, 255, 0.28)' },
+  { core: '#ffc2d6', halo: 'rgba(255, 150, 185, 0.32)' },
+  { core: '#fff3c4', halo: 'rgba(255, 224, 130, 0.32)' },
+  { core: '#ffd1e0', halo: 'rgba(255, 170, 200, 0.32)' },
+  { core: '#ffe08a', halo: 'rgba(255, 200, 90, 0.32)' },
+  { core: '#ffffff', halo: 'rgba(255, 255, 255, 0.28)' },
+  { core: '#ffc2d6', halo: 'rgba(255, 150, 185, 0.32)' },
+  { core: '#fff3c4', halo: 'rgba(255, 224, 130, 0.32)' },
+  { core: '#ffd1e0', halo: 'rgba(255, 170, 200, 0.32)' },
+];
+
+/** Behind the yarn photos on the yarn cards: white, because the product photos have white backgrounds. */
+const YARN_PHOTO_BG = '#ffffff';
 /** Last loaded Essentials list, so the landing shows the kit card at once on revisits. */
 let essentialsCache: Product[] = [];
 
 /** Small icon per category chip — keyword match against free-text category names. */
 function categoryChipIcon(cat: string): keyof typeof Ionicons.glyphMap {
   if (cat === 'All') return 'grid-outline';
+  if (cat === YARN_FILTER) return 'color-palette-outline';
   if (cat === WISHLIST_FILTER) return 'heart-outline';
   const key = cat.trim().toLowerCase();
   if (key.includes('yarn')) return 'color-palette-outline';
@@ -92,6 +118,7 @@ function categoryLabel(
 ): string {
   if (cat === 'All') return t('shop.all');
   if (cat === WISHLIST_FILTER) return t('shop.wishlist');
+  if (cat === YARN_FILTER) return t('shop.yarnTitle');
   return cat;
 }
 
@@ -131,20 +158,55 @@ function ProductGridSkeleton({ fonts }: { fonts: UiFonts }) {
   );
 }
 
+/** Gold wire with a string of glowing bulbs, laid along the top edge of a festive band. */
+function FestiveLights({ styles }: { styles: ReturnType<typeof createStyles> }) {
+  return (
+    <>
+      <View pointerEvents="none" style={styles.lightsWire} />
+      <View pointerEvents="none" style={styles.lightsRow}>
+        {BULBS.map((bulb, i) => (
+          <View key={i} style={[styles.bulbHalo, { backgroundColor: bulb.halo, marginTop: i % 2 ? 5 : 0 }]}>
+            <View style={[styles.bulb, { backgroundColor: bulb.core }]} />
+          </View>
+        ))}
+      </View>
+    </>
+  );
+}
+
 export default function ShopScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  // Two yarn cards fit inside the gradient band: page padding and band padding come off the width.
+  const yarnSize = Math.floor((windowWidth - spacing.md * 2 - 24 - 12) / 2);
+  // The yarn cards are a little smaller than half the band, so the next card peeks in at the right.
+  const yarnCardSize = Math.round(yarnSize * 0.86);
+  // A little taller than wide, so a two-line name fits without being cut.
+  const yarnBox = { width: yarnCardSize, height: yarnCardSize + 26 };
+  // The two arch cards (kit and materials) are smaller than the yarn cards and sit centred in their band.
+  const archSize = Math.round(yarnSize * 0.86);
   const { t, language } = useI18n();
   const { market } = usePreferences();
   const fonts = uiFonts(language);
   const styles = useMemo(() => createStyles(fonts, language !== 'en'), [language]);
+  // Two of the category names from the materials text, e.g. "Hooks · Bag rings".
+  const materialsHighlights = t('shop.roomEssentialsExamples')
+    .split('·')
+    .map((label) => label.trim())
+    .filter(Boolean)
+    .slice(1, 3)
+    .join(' · ');
   const {
     shopTab: shopTabParam,
     shopRoom: shopRoomParam,
+    shopYarn: shopYarnParam,
     at: navStamp,
   } = useLocalSearchParams<{
     shopTab?: string | string[];
     shopRoom?: string | string[];
+    /** "1" opens Essentials already filtered to yarn. */
+    shopYarn?: string | string[];
     /** Changes on every deep link so the same shopTab value still re-applies. */
     at?: string | string[];
   }>();
@@ -224,6 +286,12 @@ export default function ShopScreen() {
     if (next) setRoom(next);
   }, [shopRoomParam]);
 
+  const shopYarn = Array.isArray(shopYarnParam) ? shopYarnParam[0] : shopYarnParam;
+  useEffect(() => {
+    if (shopYarn === '1') enterRoom('essentials', YARN_FILTER);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopYarn, navStamp]);
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 350);
     return () => clearTimeout(timer);
@@ -243,15 +311,17 @@ export default function ShopScreen() {
         const [cats, data] = await Promise.all([
           listProductCategories(productType),
           listProducts(
-            activeCategory === 'All' ? undefined : activeCategory,
+            activeCategory === 'All' || activeCategory === YARN_FILTER ? undefined : activeCategory,
             debouncedQuery || undefined,
             productType,
           ),
         ]);
         if (id !== requestId.current) return;
+        const shown =
+          activeCategory === YARN_FILTER ? data.filter((p) => /yarn/i.test(p.category)) : data;
         setCategories(cats);
-        setProducts(data);
-        prefetchImages(data.map((p) => p.imageUrl));
+        setProducts(shown);
+        prefetchImages(shown.map((p) => p.imageUrl));
         hasLoadedOnce.current = true;
       } catch (err) {
         if (id !== requestId.current) return;
@@ -303,7 +373,15 @@ export default function ShopScreen() {
     if (tab === 'orders') void loadOrders();
   }, [loadOrders, tab]);
 
-  const tabs = ['All', WISHLIST_FILTER, ...categories.filter((c) => c !== 'All')];
+  const yarnCategories = categories.filter((c) => /yarn/i.test(c));
+  // A single yarn category already is the "Yarn" chip; the combined chip only helps when there are several.
+  const hasYarn = room === 'essentials' && yarnCategories.length > 1;
+  const tabs = [
+    'All',
+    ...(hasYarn ? [YARN_FILTER] : []),
+    WISHLIST_FILTER,
+    ...categories.filter((c) => c !== 'All'),
+  ];
   const filterActive =
     activeCategory !== 'All' || wishlistOnly || availability !== 'all' || priceLowToHigh;
   let displayedProducts = wishlistOnly
@@ -336,6 +414,8 @@ export default function ShopScreen() {
   function isTabActive(cat: string): boolean {
     if (cat === WISHLIST_FILTER) return wishlistOnly;
     if (cat === 'All') return activeCategory === 'All' && !wishlistOnly;
+    // Entered from a yarn link with one yarn category: that category's chip is the active one.
+    if (activeCategory === YARN_FILTER && !hasYarn) return cat === yarnCategories[0];
     return activeCategory === cat;
   }
 
@@ -350,9 +430,9 @@ export default function ShopScreen() {
     setFilterOpen(false);
   }
 
-  function enterRoom(next: ShopRoom) {
+  function enterRoom(next: ShopRoom, category = 'All') {
     hasLoadedOnce.current = false;
-    setActiveCategory('All');
+    setActiveCategory(category);
     setWishlistOnly(false);
     setAvailability('all');
     setPriceLowToHigh(false);
@@ -436,15 +516,22 @@ export default function ShopScreen() {
   }, [showingChooser, market.canOrderProducts]);
 
   const kit = useMemo(() => findBeginnerKit(essentials), [essentials]);
-  // The cheapest yarn gives both the "from" price and the photo on the highlighted yarn strip.
-  const cheapestYarn = useMemo(() => {
-    const yarns = essentials.filter(
-      (p) => p.status !== 'Draft' && p.price > 0 && /yarn/i.test(p.category),
-    );
-    if (yarns.length === 0) return null;
-    return yarns.reduce((best, p) => (p.price < best.price ? p : best));
-  }, [essentials]);
-  const yarnImage = (cheapestYarn?.imageUrl ?? '').trim() || null;
+  // One card per yarn product (any product in a category with "yarn" in its name), built from the
+  // real products, so a newly added yarn shows up on the landing page by itself.
+  const yarnCards = useMemo(
+    () =>
+      essentials
+        .filter((p) => p.status !== 'Draft' && p.price > 0 && /yarn/i.test(p.category ?? ''))
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          mrp: p.mrp ?? null,
+          imageUrl: (p.imageUrl ?? '').trim() || null,
+          colours: p.variantCount ?? p.variants?.length ?? 0,
+        })),
+    [essentials],
+  );
   // Inside a room the title/subtitle scroll away with the list, so products get the screen.
   const introInList = tab === 'products' && room !== null;
   const emptyIsWishlist = wishlistOnly && activeCategory === 'All';
@@ -624,161 +711,217 @@ export default function ShopScreen() {
           contentContainerStyle={[styles.chooser, { paddingBottom: dockClearance + 28 }]}
           showsVerticalScrollIndicator={false}
         >
-          {market.canOrderProducts && kit ? (
-            <Pressable
-              style={({ pressed }) => [styles.kitCard, pressed && styles.roomCardPressed]}
-              onPress={() => router.push(`/product/${kit.id}`)}
-              accessibilityRole="button"
-              accessibilityLabel={`${kit.name}, ${formatInr(kit.price)}`}
+          {market.canOrderProducts && yarnCards.length > 0 ? (
+            <LinearGradient
+              colors={['#e8215b', '#ff6b6b', '#ffc27a']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.yarnBand}
             >
-              <View style={styles.kitThumb}>
-                {kit.imageUrl ? (
-                  <AppImage
-                    uri={kit.imageUrl}
-                    style={styles.kitThumbImage}
-                    contentFit="cover"
-                    accessibilityLabel={kit.name}
-                  />
-                ) : (
-                  <Ionicons name="cube-outline" size={36} color={colors.pinkDark} />
-                )}
-              </View>
-              <View style={styles.kitCopy}>
-                <View style={styles.stepPill}>
-                  <Text style={styles.stepPillText}>{t('shop.kitStep')}</Text>
+              {/* Same festive lights as the "Start here" band, in warmer colours. */}
+              <View pointerEvents="none" style={styles.yarnGlowLarge} />
+              <View pointerEvents="none" style={styles.yarnGlowSmall} />
+              <FestiveLights styles={styles} />
+              <Ionicons pointerEvents="none" name="sparkles" size={15} color="#fff4cc" style={styles.yarnSparkleA} />
+              <Ionicons pointerEvents="none" name="sparkles" size={11} color="#ffffff" style={styles.yarnSparkleB} />
+              <Ionicons pointerEvents="none" name="sparkles" size={13} color="#fff4cc" style={styles.yarnSparkleC} />
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeading}>
+                  <Text style={styles.sectionTitle}>{t('shop.shopYarn')}</Text>
+                  <View style={styles.deliveryRow}>
+                    <Ionicons name="car-outline" size={13} color={colors.white} />
+                    <Text style={styles.deliveryText} numberOfLines={1}>
+                      {t('shop.roomEssentialsDelivery')}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={styles.kitTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                  {kit.name}
-                </Text>
-                <Text style={styles.kitSub} numberOfLines={2}>
-                  {t('shop.kitSubtitle')}
-                </Text>
-                <View style={styles.kitPriceRow}>
-                  <Text style={styles.kitPrice}>{formatInr(kit.price)}</Text>
-                  {kit.mrp != null && kit.mrp > kit.price ? (
-                    <Text style={styles.kitMrp}>{formatInr(kit.mrp)}</Text>
-                  ) : null}
-                </View>
+                <Pressable
+                  style={styles.viewAllPill}
+                  onPress={() => enterRoom('essentials', YARN_FILTER)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.sectionLink}>{t('common.viewAll')}</Text>
+                </Pressable>
               </View>
-              <View style={styles.kitArrow}>
-                <Ionicons name="arrow-forward" size={18} color={colors.white} />
-              </View>
-            </Pressable>
-          ) : market.canOrderProducts && essentialsLoading ? (
-            // Holds the kit slot so the card does not pop in below the first paint.
-            <View style={styles.kitCard}>
-              <View style={styles.kitThumb} />
-              <View style={styles.kitCopy}>
-                <View style={styles.skeletonLineWide} />
-                <View style={styles.skeletonLine} />
-              </View>
-            </View>
+              {/* Cards swipe sideways, so many yarns do not make the page long. */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.yarnRowScroll}
+                contentContainerStyle={styles.yarnRow}
+              >
+                {yarnCards.map((card) => {
+                  const off =
+                    card.mrp != null && card.mrp > card.price
+                      ? Math.round(((card.mrp - card.price) / card.mrp) * 100)
+                      : null;
+                  return (
+                    <Pressable
+                      key={card.id}
+                      style={({ pressed }) => [styles.yarnFrame, yarnBox, pressed && styles.roomCardPressed]}
+                      onPress={() => router.push(`/product/${card.id}`)}
+                      accessibilityRole="button"
+                      accessibilityLabel={card.name}
+                    >
+                      <LinearGradient colors={GOLD_FRAME} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
+                      <LinearGradient colors={['#ffffff', '#fff1e6']} style={styles.yarnTile}>
+                      <View style={styles.yarnThumb}>
+                        {card.imageUrl ? (
+                          <AppImage
+                            uri={card.imageUrl}
+                            style={styles.kitThumbImage}
+                            contentFit="contain"
+                            backgroundColor={YARN_PHOTO_BG}
+                            accessibilityLabel={card.name}
+                          />
+                        ) : (
+                          <Ionicons name="color-palette-outline" size={26} color={colors.pinkDark} />
+                        )}
+                      </View>
+                      {card.colours > 0 ? (
+                        <View style={styles.yarnColoursTag}>
+                          <Text style={styles.yarnColoursTagText} numberOfLines={1}>
+                            {t('shop.yarnColours', { count: card.colours })}
+                          </Text>
+                        </View>
+                      ) : null}
+                      <Text style={styles.yarnText} numberOfLines={2}>
+                        {card.name}
+                      </Text>
+                      <Text style={styles.yarnPriceLine} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                        <Text style={styles.yarnPrice}>{formatInr(card.price)}</Text>
+                        {off != null ? <Text style={styles.yarnMrp}>{`  ${formatInr(card.mrp!)}`}</Text> : null}
+                        {off != null ? (
+                          <Text style={styles.yarnOff}>{`  ${t('productCard.percentOff', { percent: off })}`}</Text>
+                        ) : null}
+                      </Text>
+                      </LinearGradient>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </LinearGradient>
           ) : null}
 
-          <View style={[styles.roomTile, styles.roomTileEssentials]}>
+          {/* Beginner kit and materials: two arch cards with gold frames on a deep band. */}
+          <LinearGradient
+            colors={['#3d0724', '#7a1146', '#c2185b', '#f0507f']}
+            start={{ x: 0.15, y: 0 }}
+            end={{ x: 0.85, y: 1 }}
+            style={styles.archBand}
+          >
+            {/* Festive lights: soft glows behind the cards, a string of bulbs on top, a few sparkles. */}
+            <View pointerEvents="none" style={styles.glowLarge} />
+            <View pointerEvents="none" style={styles.glowSmall} />
+            <FestiveLights styles={styles} />
+            <Ionicons pointerEvents="none" name="sparkles" size={16} color="#ffe9a8" style={styles.sparkleA} />
+            <Ionicons pointerEvents="none" name="sparkles" size={11} color="#fff4cc" style={styles.sparkleB} />
+            <Ionicons pointerEvents="none" name="sparkles" size={13} color="#ffe9a8" style={styles.sparkleC} />
+            <Text style={styles.archBandTitle}>{t('shop.kitStep')}</Text>
+            <View style={styles.archRow}>
+              {market.canOrderProducts && kit ? (
+                <Pressable
+                  style={({ pressed }) => [{ width: archSize }, pressed && styles.roomCardPressed]}
+                  onPress={() => router.push(`/product/${kit.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${kit.name}, ${formatInr(kit.price)}. ${t('shop.kitSubtitle')}`}
+                >
+                  <LinearGradient colors={GOLD_FRAME} style={[styles.archFrame, { borderTopLeftRadius: archSize / 2, borderTopRightRadius: archSize / 2 }]}>
+                    <View style={[styles.archInner, { borderTopLeftRadius: archSize / 2 - 3, borderTopRightRadius: archSize / 2 - 3 }]}>
+                      <View style={styles.archPhoto}>
+                        {kit.imageUrl ? (
+                          <AppImage
+                            uri={kit.imageUrl}
+                            style={styles.kitThumbImage}
+                            contentFit="contain"
+                            backgroundColor={ARCH_PHOTO_BG}
+                            accessibilityLabel={kit.name}
+                          />
+                        ) : (
+                          <Ionicons name="cube-outline" size={30} color={colors.pinkDark} />
+                        )}
+                      </View>
+                      <LinearGradient colors={GOLD_LABEL} style={styles.archLabel}>
+                        <Text style={styles.archLabelText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                          {kit.mrp != null && kit.mrp > kit.price
+                            ? `${formatInr(kit.price)} · ${t('productCard.percentOff', {
+                                percent: Math.round(((kit.mrp - kit.price) / kit.mrp) * 100),
+                              })}`
+                            : formatInr(kit.price)}
+                        </Text>
+                      </LinearGradient>
+                    </View>
+                  </LinearGradient>
+                  <Text style={styles.archCaption} numberOfLines={1}>
+                    {kit.name}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                style={({ pressed }) => [{ width: archSize }, pressed && styles.roomCardPressed]}
+                onPress={() => enterRoom('essentials')}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}`}
+              >
+                <LinearGradient colors={GOLD_FRAME} style={[styles.archFrame, { borderTopLeftRadius: archSize / 2, borderTopRightRadius: archSize / 2 }]}>
+                  <View style={[styles.archInner, { borderTopLeftRadius: archSize / 2 - 3, borderTopRightRadius: archSize / 2 - 3 }]}>
+                    <View style={styles.archPhoto}>
+                      <Image
+                        source={ESSENTIALS_HERO}
+                        style={styles.roomTilePhoto}
+                        resizeMode="cover"
+                        accessibilityIgnoresInvertColors
+                      />
+                    </View>
+                    <LinearGradient colors={GOLD_LABEL} style={styles.archLabel}>
+                      <Text style={styles.archLabelText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                        {materialsHighlights}
+                      </Text>
+                    </LinearGradient>
+                  </View>
+                </LinearGradient>
+                <Text style={styles.archCaption} numberOfLines={1}>
+                  {t('shop.roomEssentialsTitle')}
+                </Text>
+              </Pressable>
+            </View>
+          </LinearGradient>
+
+          {handmadeEnabled ? (
             <Pressable
-              style={({ pressed }) => pressed && styles.roomCardPressed}
-              onPress={() => enterRoom('essentials')}
+              style={({ pressed }) => [styles.handmadeCard, pressed && styles.roomCardPressed]}
+              onPress={() => enterRoom('handmade')}
               accessibilityRole="button"
-              accessibilityLabel={`${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}. ${t('shop.roomEssentialsDelivery')}`}
+              accessibilityLabel={`${t('shop.roomHandmadeTitle')}. ${t('shop.roomHandmadeSubtitle')}`}
             >
-              <View style={[styles.roomPhoto, styles.roomPhotoEssentials]}>
+              <View style={styles.handmadePhoto}>
                 <Image
-                  source={ESSENTIALS_HERO}
+                  source={HANDMADE_HERO}
                   style={styles.roomTilePhoto}
                   resizeMode="cover"
                   accessibilityIgnoresInvertColors
                 />
-                <View style={styles.roomDeliveryBadge}>
-                  <Ionicons name="car-outline" size={11} color={colors.success} />
-                  <Text style={styles.roomDeliveryBadgeText} numberOfLines={2}>
-                    {t('shop.roomEssentialsDelivery')}
-                  </Text>
-                </View>
               </View>
-              <View style={styles.roomTileBody}>
-                <Text style={[styles.roomTileTitle, styles.roomTileTitleDark]} numberOfLines={2}>
-                  {t('shop.roomEssentialsTitle')}
-                </Text>
-                <Text style={[styles.roomTileExamples, styles.roomTileExamplesDark]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                  {t('shop.roomEssentialsExamples')}
-                </Text>
-              </View>
-            </Pressable>
-
-            {market.canOrderProducts && cheapestYarn ? (
-              <Pressable
-                style={({ pressed }) => [styles.yarnStrip, pressed && styles.roomCardPressed]}
-                onPress={() => enterRoom('essentials')}
-                accessibilityRole="button"
-                accessibilityLabel={t('shop.yarnTitle')}
+              <LinearGradient
+                colors={['#fff7fa', '#ffd6e4']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.handmadeBody}
               >
-                <View style={styles.yarnThumb}>
-                  {yarnImage ? (
-                    <AppImage
-                      uri={yarnImage}
-                      style={styles.kitThumbImage}
-                      contentFit="cover"
-                      accessibilityLabel={t('shop.yarnTitle')}
-                    />
-                  ) : (
-                    <Ionicons name="color-palette-outline" size={22} color={colors.pinkDark} />
-                  )}
-                </View>
-                <View style={styles.yarnCopy}>
-                  <View style={styles.yarnTitleRow}>
-                    <Text style={styles.yarnText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                      {t('shop.yarnTitle')}
-                    </Text>
-                    <View style={styles.featuredTag}>
-                      <Text style={styles.featuredTagText}>{t('shop.yarnFeatured')}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.yarnPrice} numberOfLines={2}>
-                    {t('shop.yarnPriceTag', { price: formatInr(cheapestYarn.price) })}
-                    {' · '}
-                    {t('shop.yarnColours')}
+                <View style={styles.handmadeTitleRow}>
+                  <Text style={styles.handmadeTitle} numberOfLines={2}>
+                    {t('shop.roomHandmadeTitle')}
                   </Text>
+                  <View style={styles.tileArrow}>
+                    <Ionicons name="arrow-forward" size={14} color={colors.white} />
+                  </View>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-              </Pressable>
-            ) : null}
-          </View>
-
-          {handmadeEnabled ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.roomTile,
-              styles.roomTileHandmade,
-              pressed && styles.roomCardPressed,
-            ]}
-            onPress={() => enterRoom('handmade')}
-            accessibilityRole="button"
-            accessibilityLabel={`${t('shop.roomHandmadeTitle')}. ${t('shop.roomHandmadeSubtitle')}`}
-          >
-            <View style={[styles.roomPhoto, styles.roomPhotoHandmade]}>
-              <Image
-                source={HANDMADE_HERO}
-                style={styles.roomTilePhoto}
-                resizeMode="cover"
-                accessibilityIgnoresInvertColors
-              />
-            </View>
-            <View style={styles.roomTileBody}>
-              <Text style={[styles.roomTileTitle, styles.roomTileTitleDark]} numberOfLines={2}>
-                {t('shop.roomHandmadeTitle')}
-              </Text>
-              <Text style={[styles.roomTileExamples, styles.roomTileExamplesDark]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                {t('shop.roomHandmadeExamples')}
-              </Text>
-              <View style={[styles.roomTileCta, styles.roomTileCtaSoft]}>
-                <Text style={[styles.roomTileCtaText, styles.roomCtaHandmade]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                  {t('shop.roomHandmadeCta')}
+                <Text style={styles.handmadeExamples} numberOfLines={2}>
+                  {t('shop.roomHandmadeExamples')}
                 </Text>
-                <Ionicons name="arrow-forward" size={12} color={colors.pinkDark} />
-              </View>
-            </View>
-          </Pressable>
+              </LinearGradient>
+            </Pressable>
           ) : null}
         </ScrollView>
       ) : tab === 'products' ? (
@@ -843,7 +986,8 @@ export default function ShopScreen() {
                 showStock={room === 'essentials'}
                 compact={room === 'essentials'}
                 dense={room === 'essentials'}
-                onPress={() => router.push(`/product/${item.id}`)}
+                searchQuery={debouncedQuery}
+                onPress={(variantId) => router.push(`/product/${variantId ?? item.id}`)}
               />
               )
             }
@@ -989,7 +1133,7 @@ export default function ShopScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {activeCategory !== 'All' ? (
                     <Text style={[styles.filterOptionText, styles.filterOptionTextActive]}>
-                      {activeCategory}
+                      {categoryLabel(activeCategory, t)}
                     </Text>
                   ) : null}
                   <Ionicons
@@ -1197,7 +1341,7 @@ function createStyles(fonts: UiFonts, compact = false) {
     chooser: {
       paddingHorizontal: spacing.md,
       paddingTop: spacing.md,
-      gap: 12,
+      gap: 24,
     },
     chooserEyebrow: {
       fontFamily: fonts.semiBold,
@@ -1213,110 +1357,9 @@ function createStyles(fonts: UiFonts, compact = false) {
       lineHeight: compact ? 27 : 27,
       color: colors.ink,
     },
-    /* Compact cards: photo on top, text band below, so all three fit with a short scroll. */
-    kitCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      minHeight: 104,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.pink,
-      backgroundColor: colors.pink,
-    },
-    kitThumb: {
-      width: 80,
-      height: 80,
-      borderRadius: 12,
-      overflow: 'hidden',
-      backgroundColor: colors.pinkMist,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     kitThumbImage: {
       width: '100%',
       height: '100%',
-    },
-    kitCopy: {
-      flex: 1,
-      gap: 1,
-    },
-    stepPill: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: 7,
-      paddingVertical: 1,
-      borderRadius: 999,
-      backgroundColor: colors.yellow,
-    },
-    stepPillText: {
-      fontFamily: fonts.extraBold,
-      fontSize: 10,
-      lineHeight: 16,
-      color: colors.ink,
-    },
-    kitTitle: {
-      fontFamily: fonts.extraBold,
-      fontSize: 16,
-      lineHeight: compact ? 24 : 21,
-      color: colors.white,
-    },
-    kitSub: {
-      fontFamily: fonts.regular,
-      fontSize: 11,
-      lineHeight: compact ? 17 : 15,
-      color: colors.pinkMist,
-    },
-    kitPriceRow: {
-      flexDirection: 'row',
-      alignItems: 'baseline',
-      gap: 6,
-    },
-    kitPrice: {
-      fontFamily: fonts.extraBold,
-      fontSize: 17,
-      color: colors.white,
-    },
-    kitMrp: {
-      fontFamily: fonts.semiBold,
-      fontSize: 12,
-      color: '#ffc2d4',
-      textDecorationLine: 'line-through',
-    },
-    kitArrow: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      backgroundColor: colors.white,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    roomTile: {
-      width: '100%',
-      borderRadius: 18,
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.7)',
-    },
-    /* Third in priority: a quiet light card, so the kit and Essentials get the eye first. */
-    roomTileHandmade: {
-      backgroundColor: colors.white,
-      borderColor: colors.pinkMist,
-    },
-    roomTileEssentials: {
-      backgroundColor: '#fcc9da',
-    },
-    roomPhoto: {
-      width: '100%',
-    },
-    roomPhotoHandmade: {
-      height: 64,
-      backgroundColor: colors.pinkMist,
-    },
-    roomPhotoEssentials: {
-      height: 96,
-      backgroundColor: '#f8c0d4',
     },
     /* Bundled images default to their pixel size, so size them to the card explicitly. */
     roomTilePhoto: {
@@ -1326,135 +1369,359 @@ function createStyles(fonts: UiFonts, compact = false) {
       width: '100%',
       height: '100%',
     },
-    roomTileBody: {
-      paddingHorizontal: 12,
-      paddingTop: 10,
-      paddingBottom: 12,
-      gap: 2,
-    },
-    roomTileTitle: {
-      fontFamily: fonts.extraBold,
-      fontSize: compact ? 16 : 17,
-      lineHeight: compact ? 25 : 22,
-      color: colors.white,
-    },
-    roomTileExamples: {
-      fontFamily: fonts.semiBold,
-      fontSize: 11,
-      lineHeight: compact ? 17 : 15,
-      color: colors.pinkMist,
-    },
-    /* The Essentials card is light pink, so its text is dark. */
-    roomTileCtaSoft: {
-      backgroundColor: colors.pinkMist,
-    },
-    roomTileTitleDark: {
-      color: colors.ink,
-    },
-    roomTileExamplesDark: {
-      color: '#7a1a42',
-    },
-    roomTileCta: {
-      alignSelf: 'flex-start',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      marginTop: 6,
-      paddingHorizontal: 11,
-      paddingVertical: 5,
-      borderRadius: 999,
-      backgroundColor: colors.white,
-      maxWidth: '100%',
-    },
-    roomTileCtaText: {
-      fontFamily: fonts.extraBold,
-      fontSize: 11,
-      flexShrink: 1,
-    },
     roomCardPressed: {
       opacity: 0.94,
       transform: [{ scale: 0.985 }],
     },
-    roomDeliveryBadge: {
-      position: 'absolute',
-      top: 8,
-      left: 8,
-      maxWidth: '70%',
-      alignSelf: 'flex-start',
+    // Same soft-shadow card as the yarn tiles, so the whole page reads as one shop.
+    handmadeCard: {
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 8,
-      backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    },
-    roomDeliveryBadgeText: {
-      flexShrink: 1,
-      fontFamily: fonts.extraBold,
-      fontSize: 10,
-      lineHeight: 14,
-      color: colors.success,
-    },
-    roomCtaHandmade: {
-      color: colors.pinkDark,
-    },
-    yarnStrip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      marginHorizontal: 12,
-      marginBottom: 12,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      borderRadius: 12,
-      borderWidth: 2,
-      borderColor: colors.pink,
-      backgroundColor: colors.white,
-    },
-    yarnThumb: {
-      width: 40,
-      height: 40,
-      borderRadius: 8,
+      borderRadius: 20,
       overflow: 'hidden',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.softBorder,
+      backgroundColor: colors.white,
+      shadowColor: '#3a1a28',
+      shadowOpacity: 0.1,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 4,
+    },
+    handmadePhoto: {
+      width: 104,
+      height: 104,
       backgroundColor: colors.pinkMist,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
-    yarnCopy: {
+    handmadeBody: {
       flex: 1,
-      gap: 1,
+      justifyContent: 'center',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      gap: 4,
     },
-    yarnTitleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      gap: 6,
-    },
-    yarnText: {
-      fontFamily: fonts.extraBold,
-      fontSize: 13,
-      lineHeight: compact ? 22 : 18,
-      color: colors.ink,
-    },
-    featuredTag: {
-      paddingHorizontal: 7,
-      paddingVertical: 0,
-      borderRadius: 999,
-      backgroundColor: colors.pink,
-    },
-    featuredTagText: {
-      fontFamily: fonts.extraBold,
-      fontSize: 10,
-      // Tamil / Hindi glyphs are taller; a fixed line height stops them clipping in the tag.
-      lineHeight: 17,
-      color: colors.white,
-    },
-    yarnPrice: {
+    handmadeExamples: {
       fontFamily: fonts.semiBold,
       fontSize: 12,
       lineHeight: compact ? 19 : 16,
       color: colors.pinkDark,
+    },
+    handmadeTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    handmadeTitle: {
+      flex: 1,
+      fontFamily: fonts.extraBold,
+      fontSize: compact ? 16 : 17,
+      lineHeight: compact ? 25 : 22,
+      color: colors.ink,
+    },
+    // Vivid band behind the yarn cards, so the yarn section stands out on the Shop page.
+    yarnBand: {
+      borderRadius: 24,
+      overflow: 'hidden',
+      paddingTop: 22,
+      paddingBottom: 16,
+      paddingHorizontal: 12,
+      gap: 12,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingHorizontal: 4,
+    },
+    sectionHeading: {
+      flex: 1,
+      gap: 2,
+    },
+    sectionTitle: {
+      fontFamily: fonts.extraBold,
+      fontSize: compact ? 20 : 22,
+      lineHeight: compact ? 30 : 28,
+      color: colors.white,
+    },
+    deliveryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    deliveryText: {
+      flexShrink: 1,
+      fontFamily: fonts.semiBold,
+      fontSize: 12,
+      lineHeight: compact ? 19 : 16,
+      color: colors.white,
+    },
+    viewAllPill: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255, 255, 255, 0.24)',
+    },
+    sectionLink: {
+      fontFamily: fonts.extraBold,
+      fontSize: 11,
+      letterSpacing: 1,
+      color: colors.white,
+    },
+    // The row reaches the band edges, so a third card peeks in at the right.
+    yarnRowScroll: {
+      marginHorizontal: -12,
+      flexGrow: 0,
+    },
+    yarnRow: {
+      paddingHorizontal: 12,
+      gap: 12,
+    },
+    // Gold frame around each yarn card, with a warm glow, like the arch cards below.
+    yarnFrame: {
+      padding: 2.5,
+      borderRadius: 20,
+      shadowColor: '#ffd36b',
+      shadowOpacity: 0.6,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
+    },
+    yarnTile: {
+      flex: 1,
+      padding: 6,
+      gap: 4,
+      borderRadius: 17.5,
+      overflow: 'hidden',
+    },
+    // Soft pools of light and sparkles inside the yarn band.
+    yarnGlowLarge: {
+      position: 'absolute',
+      width: 240,
+      height: 240,
+      borderRadius: 120,
+      right: -70,
+      bottom: -90,
+      backgroundColor: 'rgba(255, 244, 200, 0.28)',
+    },
+    yarnGlowSmall: {
+      position: 'absolute',
+      width: 130,
+      height: 130,
+      borderRadius: 65,
+      left: -40,
+      top: 20,
+      backgroundColor: 'rgba(255, 120, 150, 0.25)',
+    },
+    yarnSparkleA: {
+      position: 'absolute',
+      top: 64,
+      right: 18,
+      opacity: 0.9,
+    },
+    yarnSparkleB: {
+      position: 'absolute',
+      bottom: 60,
+      right: 28,
+      opacity: 0.85,
+    },
+    yarnSparkleC: {
+      position: 'absolute',
+      bottom: 22,
+      right: 52,
+      opacity: 0.8,
+    },
+    yarnThumb: {
+      width: '100%',
+      height: compact ? 62 : 70,
+      paddingTop: 14,
+      borderRadius: 12,
+      overflow: 'hidden',
+      backgroundColor: YARN_PHOTO_BG,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    // Corner tab, flush with the card's top-left corner.
+    yarnColoursTag: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderTopLeftRadius: 15,
+      borderBottomRightRadius: 12,
+      backgroundColor: colors.pink,
+    },
+    yarnColoursTagText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 10,
+      lineHeight: 15,
+      color: colors.white,
+    },
+    yarnText: {
+      flex: 1,
+      paddingHorizontal: 4,
+      fontFamily: fonts.semiBold,
+      fontSize: 12,
+      lineHeight: compact ? 19 : 16,
+      color: colors.muted,
+    },
+    yarnPriceLine: {
+      paddingHorizontal: 4,
+    },
+    yarnPrice: {
+      fontFamily: fonts.extraBold,
+      fontSize: 15,
+      color: colors.ink,
+    },
+    yarnMrp: {
+      fontFamily: fonts.semiBold,
+      fontSize: 11,
+      color: colors.muted,
+      textDecorationLine: 'line-through',
+    },
+    yarnOff: {
+      fontFamily: fonts.extraBold,
+      fontSize: 10,
+      color: colors.pinkDark,
+    },
+    // Deep band behind the two arch cards, so the gold frames stand out.
+    archBand: {
+      borderRadius: 24,
+      overflow: 'hidden',
+      paddingTop: 16,
+      paddingBottom: 10,
+      paddingHorizontal: 12,
+      gap: 4,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 214, 120, 0.45)',
+    },
+    // Soft pools of warm light behind the cards.
+    glowLarge: {
+      position: 'absolute',
+      width: 260,
+      height: 260,
+      borderRadius: 130,
+      right: -60,
+      top: 30,
+      backgroundColor: 'rgba(255, 200, 110, 0.16)',
+    },
+    glowSmall: {
+      position: 'absolute',
+      width: 150,
+      height: 150,
+      borderRadius: 75,
+      left: -40,
+      bottom: -30,
+      backgroundColor: 'rgba(255, 140, 180, 0.22)',
+    },
+    lightsWire: {
+      position: 'absolute',
+      top: 5,
+      left: 10,
+      right: 10,
+      height: 1,
+      backgroundColor: 'rgba(255, 226, 150, 0.55)',
+    },
+    lightsRow: {
+      position: 'absolute',
+      top: 2,
+      left: 10,
+      right: 10,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    bulbHalo: {
+      width: 14,
+      height: 14,
+      borderRadius: 7,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bulb: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    sparkleA: {
+      position: 'absolute',
+      top: 34,
+      right: 30,
+      opacity: 0.9,
+    },
+    sparkleB: {
+      position: 'absolute',
+      top: 56,
+      right: 62,
+      opacity: 0.8,
+    },
+    sparkleC: {
+      position: 'absolute',
+      top: 78,
+      left: 22,
+      opacity: 0.7,
+    },
+    archBandTitle: {
+      paddingHorizontal: 4,
+      fontFamily: fonts.extraBold,
+      fontSize: compact ? 17 : 18,
+      lineHeight: compact ? 25 : 22,
+      color: colors.white,
+    },
+    archRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 16,
+    },
+    // Gold frame with a rounded-arch top; the radii are set in the card from its width.
+    archFrame: {
+      padding: 3,
+      shadowColor: '#ffd36b',
+      shadowOpacity: 0.6,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
+      borderBottomLeftRadius: 16,
+      borderBottomRightRadius: 16,
+    },
+    archInner: {
+      height: 114,
+      overflow: 'hidden',
+      borderBottomLeftRadius: 13,
+      borderBottomRightRadius: 13,
+      backgroundColor: ARCH_PHOTO_BG,
+    },
+    archPhoto: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    archLabel: {
+      paddingVertical: 5,
+      paddingHorizontal: 6,
+      alignItems: 'center',
+    },
+    archLabelText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 10,
+      lineHeight: compact ? 19 : 16,
+      color: colors.ink,
+    },
+    archCaption: {
+      marginTop: 3,
+      textAlign: 'center',
+      fontFamily: fonts.semiBold,
+      fontSize: 12,
+      lineHeight: compact ? 18 : 16,
+      color: colors.white,
+    },
+    tileArrow: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.pink,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     searchRow: {
       flexDirection: 'row',

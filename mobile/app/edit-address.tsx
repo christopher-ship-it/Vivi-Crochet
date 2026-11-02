@@ -2,9 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
+import { ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -14,8 +12,8 @@ import {
   Text,
   TextInput,
   View,
-  type LayoutChangeEvent,
-} from 'react-native';
+  type LayoutChangeEvent } from 'react-native';
+import { appAlert } from '../src/components/AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiClientError } from '../src/api/client';
 import {
@@ -271,7 +269,7 @@ export default function EditAddressScreen() {
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') {
-        Alert.alert(
+        appAlert(
           'Location needed',
           'Allow location access to fill your address, or enter it manually.',
         );
@@ -287,7 +285,7 @@ export default function EditAddressScreen() {
       });
       const place = places[0];
       if (!place) {
-        Alert.alert('Could not find address', 'Try entering your address manually.');
+        appAlert('Could not find address', 'Try entering your address manually.');
         return;
       }
 
@@ -319,7 +317,7 @@ export default function EditAddressScreen() {
       }
       setFieldErrors({});
     } catch {
-      Alert.alert('Location failed', 'Could not read your location. Enter the address manually.');
+      appAlert('Location failed', 'Could not read your location. Enter the address manually.');
     } finally {
       setLocating(false);
     }

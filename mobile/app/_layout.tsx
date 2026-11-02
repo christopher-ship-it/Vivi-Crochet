@@ -33,6 +33,8 @@ import { uiFonts } from '../src/i18n/uiFonts';
 import { addNotificationResponseListener } from '../src/notifications/push';
 import { TapCapture } from '../src/telemetry/TapCapture';
 import { TelemetryHost } from '../src/telemetry/TelemetryHost';
+import { FeedbackPrompt } from '../src/components/FeedbackPrompt';
+import { AppAlertHost } from '../src/components/AppAlert';
 import { errorToPayload, reportIssue } from '../src/telemetry/telemetry';
 import { colors } from '../src/theme';
 import { lockPortrait } from '../src/utils/screenOrientation';
@@ -211,6 +213,8 @@ export default function RootLayout() {
                 <PushNotificationNavigator />
                 <PreferenceSync />
                 <TelemetryHost />
+                <FeedbackPrompt />
+                <AppAlertHost />
                 <AppStack />
                 <AppUpdateCard />
                 <ForceUpdateGate />

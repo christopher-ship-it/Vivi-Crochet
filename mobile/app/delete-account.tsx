@@ -1,15 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
+import { ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
-} from 'react-native';
+  View } from 'react-native';
+import { appAlert } from '../src/components/AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiClientError } from '../src/api/client';
 import { deleteMyAccount } from '../src/api/me';
@@ -175,7 +173,7 @@ export default function DeleteAccountScreen() {
     } catch (err) {
       const message =
         err instanceof ApiClientError ? err.message : t('deleteAccount.deleteFailedBody');
-      Alert.alert(t('deleteAccount.deleteFailed'), message);
+      appAlert(t('deleteAccount.deleteFailed'), message);
     } finally {
       setDeleting(false);
     }

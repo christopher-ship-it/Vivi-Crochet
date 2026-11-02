@@ -311,6 +311,16 @@ export function UnlockLearnModal({
       return;
     }
     const nextEmail = sanitizeEmail(email);
+    if (requireIndianPhone && !nextEmail) {
+      // India: email is optional. Continue now; order updates need a verified email later.
+      setSaving(true);
+      try {
+        await finishWithProfile({ fullName: fullName.trim(), phone: normalizePhone(phone), email: '' }, false);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!isUsableCustomerEmail(nextEmail)) {
       setError(t('validation.email'));
       return;
@@ -436,6 +446,9 @@ export function UnlockLearnModal({
 
                   {error ? <Text style={styles.error}>{error}</Text> : null}
                   {info ? <Text style={styles.info}>{info}</Text> : null}
+                  {requireIndianPhone && !emailAlreadyVerified ? (
+                    <Text style={styles.lockedHint}>{t('unlockLearn.noEmailUpdates')}</Text>
+                  ) : null}
 
                   <Text style={styles.label}>{t('auth.fullName')}</Text>
                   <TextInput

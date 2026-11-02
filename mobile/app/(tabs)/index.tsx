@@ -127,6 +127,19 @@ const LEARN_IMAGE = require('../../assets/learn-hero-banner.png');
 const LIVE_IMAGE = require('../../assets/live-hero-home.webp');
 const SHOP_IMAGE = require('../../assets/shop-handmade-app.png');
 // Transparent yarn-pile cut-out over a pink gradient on the Shop card (the product slideshow looked blurry).
+/** Pearl-like beads in white and soft pink along the top of the Vivi Shop card: a premium, quiet garland. */
+const SHOP_DECOR: { icon: 'ellipse' | 'diamond'; size: number; color: string }[] = [
+  { icon: 'diamond', size: 10, color: '#ffffff' },
+  { icon: 'ellipse', size: 7, color: '#ffd9e6' },
+  { icon: 'ellipse', size: 7, color: '#ffffff' },
+  { icon: 'ellipse', size: 7, color: '#f4c0d1' },
+  { icon: 'ellipse', size: 7, color: '#ffffff' },
+  { icon: 'ellipse', size: 7, color: '#ffd9e6' },
+  { icon: 'ellipse', size: 7, color: '#ffffff' },
+  { icon: 'ellipse', size: 7, color: '#f4c0d1' },
+  { icon: 'ellipse', size: 7, color: '#ffffff' },
+  { icon: 'diamond', size: 10, color: '#ffffff' },
+];
 const SHOP_PHOTO = require('../../assets/shop-yarn-pile.png');
 const PROJECTS_IMAGE =require('../../assets/live-hero-yarn.png');
 
@@ -663,11 +676,24 @@ export default function HomeScreen() {
           {isShop ? (
             <>
               <LinearGradient
-                colors={['#ffe9f2', '#fcc3da', '#f59bc0']}
-                start={{ x: 0.2, y: 0 }}
-                end={{ x: 0.8, y: 1 }}
+                colors={['#3d0724', '#7a1146', '#c2185b', '#f0507f']}
+                start={{ x: 0.15, y: 0 }}
+                end={{ x: 0.85, y: 1 }}
                 style={StyleSheet.absoluteFill}
               />
+              <View style={styles.shopGlow} pointerEvents="none" />
+              <View style={styles.shopWire} pointerEvents="none" />
+              <View style={styles.shopBulbs} pointerEvents="none">
+                {SHOP_DECOR.map((d, i) => (
+                  <Ionicons
+                    key={i}
+                    name={d.icon}
+                    size={d.size}
+                    color={d.color}
+                    style={{ marginTop: i % 2 ? 4 : 0 }}
+                  />
+                ))}
+              </View>
               <View style={styles.shopYarn}>
                 <Image source={SHOP_PHOTO} style={styles.fill} resizeMode="contain" accessibilityIgnoresInvertColors />
               </View>
@@ -708,7 +734,7 @@ export default function HomeScreen() {
             </Text>
           </View>
           <View style={[styles.projectsArrow, isShop && styles.shopArrow]}>
-            <Ionicons name="arrow-forward" size={14} color={isShop ? colors.white : room.accent} />
+            <Ionicons name="arrow-forward" size={14} color={isShop ? colors.pinkDark : room.accent} />
           </View>
         </View>
       </Pressable>
@@ -1220,6 +1246,8 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     shopBadge: {
       backgroundColor: colors.pinkDark,
+      // Sits below the string of lights so the bulbs stay visible.
+      top: 30,
     },
     projectsBody: {
       flexDirection: 'row',
@@ -1250,20 +1278,21 @@ function createStyles(fonts: UiFonts, compact = false) {
     /* Premium Shop card: pink gradient, yarn pile on top, deep-berry type and tag. */
     shopCard: {
       borderWidth: 1.5,
-      borderColor: '#ffffff',
-      shadowColor: colors.pinkDark,
-      shadowOpacity: 0.35,
+      borderColor: '#ff8fb3',
+      shadowColor: '#7a1146',
+      shadowOpacity: 0.4,
     },
     shopBadgeText: {
       letterSpacing: 0.6,
+      color: colors.white,
     },
     shopYarn: {
       position: 'absolute',
-      top: 38,
+      top: 62,
       left: 0,
       right: 0,
       // Fixed height: a % or aspectRatio here rendered the PNG at native size on device.
-      height: 140,
+      height: 160,
       // The pile is width-limited by the card, so scale it to fill (card clips the few px that spill).
       transform: [{ scale: 1.15 }],
     },
@@ -1271,20 +1300,53 @@ function createStyles(fonts: UiFonts, compact = false) {
       width: 28,
       height: 2,
       borderRadius: 1,
-      backgroundColor: colors.pinkDark,
+      backgroundColor: '#ff8fb3',
       marginBottom: 6,
     },
     shopTitle: {
-      color: '#5a1f3a',
-      letterSpacing: 0.5,
-      textShadowColor: 'transparent',
+      color: '#ffffff',
+      letterSpacing: 0.4,
     },
     shopSub: {
-      color: '#7a3a57',
-      letterSpacing: 0.3,
+      color: '#ffd9e6',
+      letterSpacing: 0.2,
     },
     shopArrow: {
-      backgroundColor: colors.pinkDark,
+      backgroundColor: colors.white,
+    },
+    shopGlow: {
+      position: 'absolute',
+      width: 180,
+      height: 180,
+      borderRadius: 90,
+      right: -60,
+      bottom: 40,
+      backgroundColor: 'rgba(255, 210, 120, 0.2)',
+    },
+    shopWire: {
+      position: 'absolute',
+      top: 14,
+      left: 10,
+      right: 10,
+      height: 1,
+      backgroundColor: 'rgba(255, 226, 150, 0.6)',
+    },
+    shopBulbs: {
+      position: 'absolute',
+      top: 10,
+      left: 12,
+      right: 12,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    shopBulb: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      shadowColor: '#ffd23c',
+      shadowOpacity: 0.9,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 0 },
     },
     projectsArrow: {
       width: 30,

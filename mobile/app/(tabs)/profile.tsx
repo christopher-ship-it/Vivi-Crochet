@@ -3,17 +3,15 @@ import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
+import { ActivityIndicator,
   Linking,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
-} from 'react-native';
+  View } from 'react-native';
+import { appAlert } from '../../src/components/AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiClientError } from '../../src/api/client';
 import { listMyEnrollments, type Enrollment } from '../../src/api/enrollments';
@@ -50,7 +48,7 @@ function openStoreListing(alertTitle: string, alertBody: string) {
   const androidUrl = 'https://play.google.com/store/apps/details?id=in.vivicrochet.app';
   const iosUrl = 'https://apps.apple.com/app/id000000000';
   void Linking.openURL(Platform.OS === 'ios' ? iosUrl : androidUrl).catch(() => {
-    Alert.alert(alertTitle, alertBody);
+    appAlert(alertTitle, alertBody);
   });
 }
 
@@ -235,7 +233,7 @@ export default function ProfileScreen() {
             .find((item) => item.itemType === 'Product' && item.productId)?.productId;
 
           if (!lastProductId) {
-            Alert.alert(t('profile.buyAgain'), t('profile.buyAgainEmpty'), [
+            appAlert(t('profile.buyAgain'), t('profile.buyAgainEmpty'), [
               { text: t('profile.browseShop'), onPress: () => router.push('/(tabs)/shop') },
               { text: t('common.ok'), style: 'cancel' },
             ]);
@@ -244,7 +242,7 @@ export default function ProfileScreen() {
 
           router.push(`/product/${lastProductId}`);
         } catch (err) {
-          Alert.alert(
+          appAlert(
             t('profile.buyAgain'),
             err instanceof ApiClientError ? err.message : t('profile.buyAgainFailed'),
           );
@@ -279,7 +277,7 @@ export default function ProfileScreen() {
         title: t('profile.coupons'),
         subtitle: t('profile.couponsSub'),
         icon: 'pricetag-outline',
-        onPress: () => Alert.alert(t('profile.coupons'), t('profile.couponsSoon')),
+        onPress: () => appAlert(t('profile.coupons'), t('profile.couponsSoon')),
       },
       {
         key: 'address',
@@ -421,7 +419,7 @@ export default function ProfileScreen() {
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={t('profile.notifications')}
-                onPress={() => Alert.alert(t('profile.notifications'), t('profile.notificationsBody'))}
+                onPress={() => appAlert(t('profile.notifications'), t('profile.notificationsBody'))}
               >
                 <Ionicons name="notifications-outline" size={22} color={colors.ink} />
                 <View style={styles.notifDot} />
@@ -618,7 +616,7 @@ export default function ProfileScreen() {
                     label: 'About VIVI',
                     icon: 'information-circle-outline',
                     onPress: () =>
-                      Alert.alert(
+                      appAlert(
                         'About VIVI',
                         'VIVI Crochet is a Tamil Nadu handmade brand — crochet products, Learn & Loop courses, and live crochet circles.',
                       ),

@@ -22,10 +22,12 @@ import {
   type Enrollment,
 } from '../../src/api/enrollments';
 import { listProducts } from '../../src/api/products';
+import { getFoundingMembershipOffer, type FoundingMembershipOffer } from '../../src/api/offers';
 import { ApiClientError } from '../../src/api/client';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { AppImage, prefetchImages } from '../../src/components/AppImage';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
+import { CollectionOfferBanner } from '../../src/components/CollectionOfferBanner';
 import { LearnerJourney } from '../../src/components/LearnerJourney';
 import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
@@ -42,6 +44,7 @@ import {
   isLastLessonInCourse,
 } from '../../src/utils/learnerJourney';
 import {
+  resolveCollectionOwnership,
   selectDiscoverCourses,
   selectMainCourses,
   selectProductLinkedCourses,
@@ -50,7 +53,7 @@ import {
   type DiscoverFilter,
 } from '../../src/utils/mainCourses';
 import { applyStatusBar } from '../../src/utils/statusBar';
-import { formatCoursePrice } from '../../src/utils/format';
+import { formatCoursePrice, formatMoney } from '../../src/utils/format';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 /**
@@ -242,6 +245,8 @@ export default function LearnScreen() {
     {},
   );
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  /** The admin's collection offer, so single-course buyers can see the bundle price. */
+  const [offer, setOffer] = useState<FoundingMembershipOffer | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -320,10 +325,13 @@ export default function LearnScreen() {
       else setLoading(true);
       setError(null);
       try {
-        const [everyCourse, shopProducts] = await Promise.all([
+        const [everyCourse, shopProducts, offerData] = await Promise.all([
           listCourses(),
           listProducts().catch(() => [] as Product[]),
+          // The offer is a bonus section: if it cannot be loaded the page just leaves it out.
+          getFoundingMembershipOffer().catch(() => null),
         ]);
+        setOffer(offerData);
         const main = selectMainCourses(everyCourse);
         const exclude = new Set(main.map((c) => c.id));
         await loadProgress(main);
@@ -355,6 +363,26 @@ export default function LearnScreen() {
   );
 
   const mainCourses = useMemo(() => selectMainCourses(allCourses), [allCourses]);
+
+  // The collection banner: price, what the courses cost one by one, and the saving. All from the admin's offer;
+  // hidden when the customer already owns the collection, the offer is off, or it is not sold in their country.
+  const collectionBanner = useMemo(() => {
+    if (!offer || offer.availableInMarket === false) return null;
+    if (resolveCollectionOwnership(enrollments).owned) return null;
+    const live = offer.isActive && offer.remaining > 0;
+    const price = live ? offer.launchPrice : offer.regularPriceAfterLaunch;
+    if (!price || price <= 0) return null;
+    const currency = offer.currency ?? 'INR';
+    const parts = offer.includedCourses.map((c) => c.regularPrice);
+    const separate = parts.length > 1 && parts.every((p) => p > 0) ? parts.reduce((a, b) => a + b, 0) : offer.mrp;
+    const saving = separate > price ? separate - price : 0;
+    return {
+      title: offer.offerName,
+      price: formatMoney(price, currency),
+      separate: saving > 0 ? formatMoney(separate, currency) : null,
+      savings: saving > 0 ? formatMoney(saving, currency) : null,
+    };
+  }, [offer, enrollments]);
 
   const journey = useMemo(
     () => buildLearnerJourney(enrollments, progressByCourseId),
@@ -592,6 +620,18 @@ export default function LearnScreen() {
               </ScrollView>
             )}
           </View>
+
+          {collectionBanner ? (
+            <View style={styles.section}>
+              <CollectionOfferBanner
+                title={collectionBanner.title}
+                price={collectionBanner.price}
+                separateTotal={collectionBanner.separate}
+                savings={collectionBanner.savings}
+                onPress={() => router.navigate('/(tabs)/offers')}
+              />
+            </View>
+          ) : null}
 
           {discoverChips.length > 0 ? (
             <View

@@ -9,9 +9,21 @@ export function clampQuantityToStock(quantity: number, availableStock: number): 
 export const YARN_MAX_QUANTITY = 10;
 export const YARN_LIMIT_MESSAGE = 'You can select only a maximum of 10 pieces per order.';
 
-/** Yarn is capped per order; other categories are limited by stock only. */
-export function exceedsCategoryLimit(category: string | undefined, quantity: number): boolean {
-  return category?.trim().toLowerCase() === 'yarn' && quantity > YARN_MAX_QUANTITY;
+export function isYarnCategory(category: string | undefined): boolean {
+  return category?.trim().toLowerCase() === 'yarn';
+}
+
+/**
+ * Yarn is capped per order, counted across every yarn shade and product in the cart;
+ * other categories are limited by stock only. `otherYarn` is the yarn already in the cart
+ * on lines other than the one being changed.
+ */
+export function exceedsYarnLimit(
+  otherYarn: number,
+  category: string | undefined,
+  quantity: number,
+): boolean {
+  return isYarnCategory(category) && otherYarn + quantity > YARN_MAX_QUANTITY;
 }
 
 export function canIncreaseQuantity(quantity: number, availableStock: number): boolean {

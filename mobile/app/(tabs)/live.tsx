@@ -3,16 +3,14 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  Alert,
-  Platform,
+import { Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  View,
-} from 'react-native';
+  View } from 'react-native';
+import { appAlert } from '../../src/components/AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   createLiveBooking,
@@ -461,7 +459,7 @@ export default function LiveScreen() {
           : err instanceof Error
             ? err.message
             : t('live.couldNotStartBooking');
-      Alert.alert(t('live.booking'), message);
+      appAlert(t('live.booking'), message);
       if (selectedWeekId) void loadDetail(selectedWeekId);
     } finally {
       setBookingBusy(false);
@@ -491,7 +489,7 @@ export default function LiveScreen() {
       await loadMyBooking();
       if (selectedWeekId) void loadDetail(selectedWeekId);
     } catch (err) {
-      Alert.alert(
+      appAlert(
         t('live.payment'),
         err instanceof ApiClientError ? err.message : t('live.paymentVerifyFailed'),
       );
@@ -518,7 +516,7 @@ export default function LiveScreen() {
       return;
     }
     if (!selectedSlotData || slotUnavailable(selectedSlotData)) {
-      Alert.alert(t('live.chooseCircle'), t('live.chooseCircleBody'));
+      appAlert(t('live.chooseCircle'), t('live.chooseCircleBody'));
       return;
     }
     void startBooking();
@@ -919,7 +917,7 @@ export default function LiveScreen() {
         onSuccess={(r) => void onPaymentSuccess(r)}
         onDismiss={onPaymentDismiss}
         onError={(message) => {
-          Alert.alert(t('live.payment'), message);
+          appAlert(t('live.payment'), message);
           onPaymentDismiss();
         }}
       />

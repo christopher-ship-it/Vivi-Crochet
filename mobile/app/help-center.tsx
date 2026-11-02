@@ -1,17 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
+import { ActivityIndicator,
   Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  View,
-} from 'react-native';
+  View } from 'react-native';
+import { appAlert } from '../src/components/AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { listMyOrders, type OrderResponse } from '../src/api/orders';
 import { useShoppingSession } from '../src/auth/SessionContext';
@@ -128,7 +126,7 @@ export default function HelpCenterScreen() {
         accentIcon: 'cash-outline',
         keywords: ['payment', 'razorpay', 'refund', 'upi', 'card', 'failed'],
         onPress: () =>
-          Alert.alert(
+          appAlert(
             'Payments',
             'Orders are paid securely online. If a payment failed or you need a refund status, open the order from Orders or contact support with your order number.',
           ),

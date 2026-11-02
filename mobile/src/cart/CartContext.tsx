@@ -11,7 +11,12 @@ import {
 import { useSession, useShoppingSession } from '../auth/SessionContext';
 import type { Course, CourseType, Product } from '../types';
 import { cartItemCount, cartSubtotal, clampQuantity } from './calculations';
-import { clampQuantityToStock, exceedsCategoryLimit, YARN_LIMIT_MESSAGE } from './stock';
+import {
+  clampQuantityToStock,
+  exceedsYarnLimit,
+  isYarnCategory,
+  YARN_LIMIT_MESSAGE,
+} from './stock';
 import {
   CART_GUEST_OWNER,
   claimGuestCart,
@@ -39,7 +44,18 @@ function productToLine(product: Product, quantity: number): CartLineItem {
     category: product.category,
     availableStock: stock,
     productType: product.productType ?? 'Handmade',
+    colourName: product.colourName,
+    productCode: product.productCode,
+    colourHex: product.colourHex,
+    mrp: product.mrp,
   };
+}
+
+/** Yarn pieces in the cart on every line except the given one (the order limit spans all yarn shades). */
+function otherYarnQuantity(lines: CartLineItem[], exceptKey: string): number {
+  return lines
+    .filter((i) => isProductLine(i) && isYarnCategory(i.category) && cartLineKey(i) !== exceptKey)
+    .reduce((sum, i) => sum + i.quantity, 0);
 }
 
 function courseCartItemType(type: CourseType): CartItemType {
@@ -160,7 +176,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         (i) => isProductLine(i) && i.productId === product.id,
       );
       const desired = (existing?.quantity ?? 0) + quantity;
-      if (exceedsCategoryLimit(product.category, desired)) {
+      if (exceedsYarnLimit(otherYarnQuantity(current, `product:${product.id}`), product.category, desired)) {
         throw new Error(YARN_LIMIT_MESSAGE);
       }
       if (desired > stock) {
@@ -187,13 +203,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (stock <= 0) {
         throw new Error('This product is out of stock.');
       }
-      if (exceedsCategoryLimit(product.category, quantity)) {
+      const current = itemsRef.current;
+      if (exceedsYarnLimit(otherYarnQuantity(current, `product:${product.id}`), product.category, quantity)) {
         throw new Error(YARN_LIMIT_MESSAGE);
       }
       if (quantity > stock) {
         throw new Error(`Only ${stock} available.`);
       }
-      const current = itemsRef.current;
       const line = productToLine(product, quantity);
       const exists = current.some(
         (i) => isProductLine(i) && i.productId === product.id,
@@ -241,7 +257,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (exceedsCategoryLimit(target.category, quantity)) {
+      if (exceedsYarnLimit(otherYarnQuantity(current, lineKey), target.category, quantity)) {
         throw new Error(YARN_LIMIT_MESSAGE);
       }
 

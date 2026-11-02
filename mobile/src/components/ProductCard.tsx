@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Dimensions, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { appAlert } from './AppAlert';
 import { isOutOfStock } from '../cart/stock';
 import { useI18n } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
@@ -38,7 +39,10 @@ function imageHeightForWidth(width: number, ratio: number): number {
 interface ProductCardProps {
   product: Product;
   index: number;
-  onPress: () => void;
+  /** Gets the shade shown on the card (tapped swatch or search match), so the page opens on it. */
+  onPress: (variantId?: string) => void;
+  /** Shop search text; a shade whose name or code matches it is previewed on the card. */
+  searchQuery?: string;
   variant?: 'grid' | 'rail';
   showStock?: boolean;
   /** Shorter grid card — used for crochet essentials. */
@@ -51,6 +55,7 @@ export function ProductCard({
   product,
   index: _index,
   onPress,
+  searchQuery,
   variant = 'grid',
   showStock = false,
   compact = false,
@@ -80,9 +85,23 @@ export function ProductCard({
     .map((v) => v?.trim())
     .filter(Boolean)
     .join(' · ');
-  const swatchVariants = !isRail && variantCount > 1 ? (product.variants ?? []) : [];
+  const allVariants = !isRail && variantCount > 1 ? (product.variants ?? []) : [];
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const previewVariant = swatchVariants.find((v) => v.id === previewId) ?? null;
+  const needle = searchQuery?.trim().toLowerCase() ?? '';
+  const matchedVariant =
+    needle.length >= 2
+      ? allVariants.find(
+          (v) =>
+            v.colourName?.toLowerCase().includes(needle) ||
+            v.productCode?.toLowerCase().includes(needle),
+        )
+      : undefined;
+  // The searched shade goes first so it is always among the dots shown.
+  const swatchVariants = matchedVariant
+    ? [matchedVariant, ...allVariants.filter((v) => v !== matchedVariant)]
+    : allVariants;
+  const previewVariant =
+    swatchVariants.find((v) => v.id === previewId) ?? matchedVariant ?? null;
   const shownSwatches = swatchVariants.slice(0, dense ? MAX_SWATCHES_DENSE : MAX_SWATCHES);
   const extraSwatches = swatchVariants.length - shownSwatches.length;
   const imageHeight = isRail ? imageHeightForWidth(RAIL_CARD_WIDTH, RAIL_IMAGE_ASPECT_RATIO) : null;
@@ -96,7 +115,7 @@ export function ProductCard({
   async function handleWishlistPress() {
     const added = await toggleWishlist(product.id);
     if (added && outOfStock) {
-      Alert.alert(t('product.savedWishlist'), t('product.savedWishlistBody'));
+      appAlert(t('product.savedWishlist'), t('product.savedWishlistBody'));
     }
   }
 
@@ -178,7 +197,7 @@ export function ProductCard({
       {shownSwatches.length > 0 ? (
         <View style={[styles.swatchRow, dense && styles.swatchRowDense]}>
           {shownSwatches.map((v) => {
-            const active = v.id === previewId;
+            const active = v.id === previewVariant?.id;
             return (
               <Pressable
                 key={v.id}
@@ -200,10 +219,14 @@ export function ProductCard({
               </Pressable>
             );
           })}
-          {extraSwatches > 0 ? <Text style={styles.swatchMore}>+{extraSwatches}</Text> : null}
+          {extraSwatches > 0 ? (
+            <Text style={styles.swatchMore} onPress={() => onPress(previewVariant?.id)}>
+              +{extraSwatches}
+            </Text>
+          ) : null}
         </View>
       ) : null}
-      {!isRail && !dense && (previewVariant?.colourName || metaLine) ? (
+      {!isRail && (!dense || previewVariant) && (previewVariant?.colourName || metaLine) ? (
         <Text style={styles.metaLine} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {previewVariant?.colourName ?? metaLine}
         </Text>
@@ -234,7 +257,7 @@ export function ProductCard({
 
   const cardInner = (
     <Pressable
-      onPress={onPress}
+      onPress={() => onPress(previewVariant?.id)}
       style={({ pressed }) => [pressed && styles.cardPressed]}
       accessibilityRole="button"
       accessibilityLabel={product.name}

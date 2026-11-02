@@ -16,6 +16,20 @@ export interface CartLineItem {
   availableStock?: number;
   /** Handmade vs Resell — Resell (essentials) use a compact cart row. */
   productType?: 'Handmade' | 'Resell';
+  /** Shade of a yarn (or other variant) line, so the cart shows which colour was picked. */
+  colourName?: string | null;
+  productCode?: string | null;
+  colourHex?: string | null;
+  /** Original price, so the cart can show the discount next to the price. */
+  mrp?: number | null;
+}
+
+/** "Lilac (DSR001)" for a shade line; null for products without a shade. */
+export function cartLineColourLabel(item: CartLineItem): string | null {
+  const name = item.colourName?.trim();
+  if (!name) return null;
+  const code = item.productCode?.trim();
+  return code ? `${name} (${code})` : name;
 }
 
 export interface CartState {

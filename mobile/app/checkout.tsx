@@ -1,9 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  Alert,
-  BackHandler,
+import { BackHandler,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -14,8 +12,8 @@ import {
   Text,
   TextInput,
   View,
-  type TextInputProps,
-} from 'react-native';
+  type TextInputProps } from 'react-native';
+import { appAlert } from '../src/components/AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createOrder, quoteDelivery, type DeliveryQuote } from '../src/api/orders';
 import { AppImage } from '../src/components/AppImage';
@@ -36,6 +34,7 @@ import { useCart } from '../src/cart/CartContext';
 import { lineTotal } from '../src/cart/calculations';
 import {
   cartLineKey,
+  cartLineColourLabel,
   isCourseLine,
   isProductLine,
   normalizeCartItemType,
@@ -165,7 +164,9 @@ function SummaryLine({
         <Text style={styles.summaryLineMeta}>
           {isCourseLine(item)
             ? t('cart.digitalAccess')
-            : t('checkout.qtyShort', { count: item.quantity })}
+            : [cartLineColourLabel(item), t('checkout.qtyShort', { count: item.quantity })]
+                .filter(Boolean)
+                .join(' · ')}
         </Text>
       </View>
       <Text style={styles.summaryLinePrice}>{formatPrice(lineTotal(item))}</Text>
@@ -349,7 +350,7 @@ export default function CheckoutScreen() {
       return;
     }
 
-    Alert.alert(t('checkout.leaveTitle'), t('checkout.leaveBody'), [
+    appAlert(t('checkout.leaveTitle'), t('checkout.leaveBody'), [
       { text: t('checkout.leaveStay'), style: 'cancel' },
       {
         text: t('checkout.leaveConfirm'),
@@ -384,7 +385,7 @@ export default function CheckoutScreen() {
         return;
       }
       event.preventDefault();
-      Alert.alert(t('checkout.leaveTitle'), t('checkout.leaveBody'), [
+      appAlert(t('checkout.leaveTitle'), t('checkout.leaveBody'), [
         { text: t('checkout.leaveStay'), style: 'cancel' },
         {
           text: t('checkout.leaveConfirm'),
@@ -570,7 +571,9 @@ export default function CheckoutScreen() {
     isUsableCheckoutEmail(email)
     && (!isEmailVerified || emailNormalized !== verifiedEmail.trim().toLowerCase());
   const emailReady = isUsableCheckoutEmail(email) && !emailNeedsVerification;
-  const checkoutReady = shippingReady && emailReady;
+  // Email is mandatory outside India. In India it is optional: without a verified email, order updates are not sent.
+  const emailRequired = !indiaAccount;
+  const checkoutReady = shippingReady && (!emailRequired || emailReady);
   const hasDeliveryAddress = address1.trim().length > 0;
   // Flat delivery charge worked out by the server once the address is known (Tamil Nadu vs elsewhere).
   const deliveryCharge = hasPhysicalItems && quote ? quote.shippingAmount : 0;
@@ -743,7 +746,7 @@ export default function CheckoutScreen() {
     if (!isValidName(fullName)) {
       throw new Error('Enter your full name so we can notify you about this order.');
     }
-    if (!isUsableCheckoutEmail(email)) {
+    if (!indiaAccount && !isUsableCheckoutEmail(email)) {
       throw new Error('Enter a valid email — we will notify you there.');
     }
 
@@ -780,12 +783,12 @@ export default function CheckoutScreen() {
       return;
     }
 
-    if (!isUsableCheckoutEmail(email)) {
+    if (emailRequired && !isUsableCheckoutEmail(email)) {
       setEditingEmail(true);
       setStatus(t('checkout.emailValidForUpdates'));
       return;
     }
-    if (emailNeedsVerification) {
+    if (emailRequired && emailNeedsVerification) {
       setEditingEmail(true);
       setStatus(t('checkout.verifyBeforePayStatus'));
       return;
@@ -806,7 +809,7 @@ export default function CheckoutScreen() {
     if (addressError) {
       navigateToAddDeliveryAddress();
       setStatus(addressError);
-      Alert.alert(t('checkout.deliveryIncomplete'), addressError);
+      appAlert(t('checkout.deliveryIncomplete'), addressError);
       return;
     }
 
@@ -862,7 +865,7 @@ export default function CheckoutScreen() {
           ? err.message
           : t('checkout.couldNotStartCheckout');
       setStatus(message);
-      Alert.alert(t('checkout.checkoutFailed'), message);
+      appAlert(t('checkout.checkoutFailed'), message);
     } finally {
       setPurchasing(false);
     }
@@ -894,7 +897,7 @@ export default function CheckoutScreen() {
         ? err.message
         : t('checkout.paymentConfirmFailed');
       setStatus(message);
-      Alert.alert(t('checkout.verificationFailed'), message);
+      appAlert(t('checkout.verificationFailed'), message);
     } finally {
       setPurchasing(false);
       setPendingOrderId(null);
@@ -1116,15 +1119,18 @@ export default function CheckoutScreen() {
               <Text style={styles.trustBody}>{t('checkout.secureBody')}</Text>
             </View>
           </View>
+          {!emailRequired && !emailReady ? (
+            <Text style={styles.emailVerifyHint}>{t('checkout.noEmailUpdates')}</Text>
+          ) : null}
           <Pressable
             style={[styles.proceedBtn, purchasing && styles.btnDisabled]}
             onPress={() => {
               // Open the email sheet only — do not stack Alert.alert on top of it.
-              if (isAuthenticated && !isUsableCheckoutEmail(email)) {
+              if (isAuthenticated && emailRequired && !isUsableCheckoutEmail(email)) {
                 setEditingEmail(true);
                 return;
               }
-              if (isAuthenticated && emailNeedsVerification) {
+              if (isAuthenticated && emailRequired && emailNeedsVerification) {
                 setEditingEmail(true);
                 return;
               }
@@ -1141,7 +1147,7 @@ export default function CheckoutScreen() {
                 ? t('checkout.continueVerifyMobile')
                 : purchasing
                   ? t('checkout.startingPayment')
-                  : emailNeedsVerification
+                  : emailRequired && emailNeedsVerification
                     ? t('checkout.verifyEmailToPay')
                     : !checkoutReady
                       ? t('checkout.completeDeliveryToPay')
@@ -1298,7 +1304,7 @@ export default function CheckoutScreen() {
           setCheckoutPayload(null);
           setPendingOrderId(null);
           setStatus(message);
-          Alert.alert(t('checkout.paymentFailed'), message);
+          appAlert(t('checkout.paymentFailed'), message);
         }}
       />
     </View>

@@ -1,9 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Dimensions,
+import { Dimensions,
   NativeScrollEvent,
   Modal,
   NativeSyntheticEvent,
@@ -11,17 +9,19 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
-} from 'react-native';
+  View } from 'react-native';
+import { appAlert } from '../../src/components/AppAlert';
 import { buildShareUrl, shareLink } from '../../src/utils/share';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProduct } from '../../src/api/products';
 import { ApiClientError } from '../../src/api/client';
 import { useCart } from '../../src/cart/CartContext';
+import { cartLineKey } from '../../src/cart/types';
 import {
   canIncreaseQuantity,
-  exceedsCategoryLimit,
+  exceedsYarnLimit,
+  isYarnCategory,
   isOutOfStock,
   YARN_LIMIT_MESSAGE,
 } from '../../src/cart/stock';
@@ -31,6 +31,7 @@ import { InStockLabel } from '../../src/components/InStockLabel';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
 import { BackButton } from '../../src/components/BackButton';
 import { LearnThisModal } from '../../src/components/LearnThisModal';
+import { AppDialog, type AppDialogContent } from '../../src/components/AppDialog';
 import { ProductVariantPicker } from '../../src/components/ProductVariantPicker';
 import { ZoomableImage } from '../../src/components/ZoomableImage';
 import { ErrorView, LoadingView } from '../../src/components/StateViews';
@@ -46,7 +47,7 @@ import { useWishlist } from '../../src/wishlist/WishlistContext';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 /** Compact product gallery so title, price, and CTAs stay closer to first view. */
-const GALLERY_HEIGHT = Math.round(SCREEN_WIDTH * 0.72);
+const GALLERY_HEIGHT = Math.round(SCREEN_WIDTH * 0.6);
 /** Inset so product photos aren’t edge-cropped / feel zoomed. */
 const IMAGE_SIZE = Math.round(Math.min(SCREEN_WIDTH, GALLERY_HEIGHT) * 0.88);
 
@@ -73,7 +74,9 @@ export default function ProductDetailScreen() {
   const [viewerZoomed, setViewerZoomed] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsTab, setDetailsTab] = useState<'specs' | 'description'>('specs');
-  const { addProduct, setCartToProduct, peekItems } = useCart();
+  const [colourSheetOpen, setColourSheetOpen] = useState(false);
+  const [dialog, setDialog] = useState<AppDialogContent | null>(null);
+  const { addProduct, setCartToProduct, peekItems, removeItem, itemCount, items: cartItems } = useCart();
   const { market } = usePreferences();
   const { isWishlisted, toggleWishlist } = useWishlist();
   const learnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -90,12 +93,15 @@ export default function ProductDetailScreen() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getProduct(id);
+      let data = await getProduct(id);
+      // A shade's own record has no specs, description or photos: show its parent listing with that shade selected.
+      const openedShadeId = data.parentProductId ? data.id : null;
+      if (data.parentProductId) data = await getProduct(data.parentProductId);
       setProduct(data);
       const variants = data.variants ?? [];
       let initialVariantId: string | null = null;
       if (variants.length > 0) {
-        const match = variants.find((v) => v.id === data.id)
+        const match = variants.find((v) => v.id === (openedShadeId ?? data.id))
           ?? variants.find((v) => (v.availableStock ?? 0) > 0)
           ?? variants[0];
         initialVariantId = match.id;
@@ -232,6 +238,15 @@ export default function ProductDetailScreen() {
       product.needleSize?.trim(),
   );
   const hasDescription = description.length > 0;
+  const showYarnLink = market.canOrderProducts && /yarn/i.test(product.category);
+  const colourCount = product.variants?.length ?? 0;
+  // The yarn limit is per order, so the page counts every yarn shade already in the cart.
+  const yarnInCart = cartItems
+    .filter((i) => i.productId && isYarnCategory(i.category))
+    .reduce((sum, i) => sum + i.quantity, 0);
+  const quantityInCart = Object.fromEntries(
+    cartItems.filter((i) => i.productId).map((i) => [i.productId as string, i.quantity]),
+  );
   const highlights = [
     { label: t('product.codeLabel'), value: isEssentials ? undefined : display.productCode?.trim() },
     { label: t('product.ballWeightLabel'), value: product.ballWeight?.trim() },
@@ -278,7 +293,7 @@ export default function ProductDetailScreen() {
     if (!product) return;
     const added = await toggleWishlist(wishlistId);
     if (added && outOfStock) {
-      Alert.alert(
+      appAlert(
         t('product.savedWishlist'),
         t('product.savedWishlistBody'),
       );
@@ -324,10 +339,51 @@ export default function ProductDetailScreen() {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not add to cart.';
-      if (message === YARN_LIMIT_MESSAGE) Alert.alert(message);
+      if (message === YARN_LIMIT_MESSAGE) setDialog({ title: 'Order limit', message });
       setCartError(message);
     } finally {
       setAdding(false);
+    }
+  }
+
+  function showCartError(err: unknown, fallback: string) {
+    const message = err instanceof Error ? err.message : fallback;
+    setDialog({ title: message === YARN_LIMIT_MESSAGE ? 'Order limit' : 'Cart', message });
+  }
+
+  /** "+" in the colour list: one more piece of that shade; the list stays open. */
+  async function quickAddShade(variantId: string) {
+    const variant = product?.variants?.find((v) => v.id === variantId);
+    if (!product || !variant) return;
+    try {
+      await addProduct(
+        {
+          ...product,
+          id: variant.id,
+          price: variant.price,
+          mrp: variant.mrp,
+          availableStock: variant.availableStock,
+          productCode: variant.productCode,
+          colourName: variant.colourName,
+          colourHex: variant.colourHex,
+          imageUrl: variant.imageUrl ?? product.imageUrl,
+          parentProductId: product.parentProductId ?? product.id,
+        },
+        1,
+      );
+    } catch (err) {
+      showCartError(err, 'Could not add to cart.');
+    }
+  }
+
+  /** "×" in the colour list: takes that shade out of the cart, whatever its quantity. */
+  async function quickRemoveShade(variantId: string) {
+    const line = peekItems().find((i) => i.productId === variantId);
+    if (!line) return;
+    try {
+      await removeItem(cartLineKey(line));
+    } catch (err) {
+      showCartError(err, 'Could not update cart.');
     }
   }
 
@@ -362,6 +418,20 @@ export default function ProductDetailScreen() {
               <BrandWordmark size="sm" />
             </View>
             <View style={[styles.headerSide, styles.headerActions]}>
+              <Pressable
+                style={styles.headerBtn}
+                onPress={() => router.push('/cart')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={itemCount > 0 ? `Cart, ${itemCount} items` : 'Cart'}
+              >
+                <Ionicons name="bag-outline" size={20} color={colors.ink} />
+                {itemCount > 0 ? (
+                  <View style={styles.cartBadge}>
+                    <Text style={styles.cartBadgeText}>{itemCount > 99 ? '99+' : itemCount}</Text>
+                  </View>
+                ) : null}
+              </Pressable>
               <Pressable
                 style={styles.headerBtn}
                 onPress={() => void handleWishlist()}
@@ -557,6 +627,14 @@ export default function ProductDetailScreen() {
                 product={product}
                 selectedId={selectedVariantId}
                 onSelect={selectVariant}
+                sheetOpen={colourSheetOpen}
+                onSheetOpenChange={setColourSheetOpen}
+                quantityInCart={quantityInCart}
+                onQuickAdd={(variantId) => void quickAddShade(variantId)}
+                onQuickRemove={(variantId) => void quickRemoveShade(variantId)}
+                onViewCart={() => router.push('/cart')}
+                dialog={dialog}
+                onDialogClose={() => setDialog(null)}
               />
             ) : null}
 
@@ -574,8 +652,34 @@ export default function ProductDetailScreen() {
               </Pressable>
             ) : null}
 
-            {hasSpecs || hasDescription ? (
+            {hasSpecs || hasDescription || showYarnLink ? (
               <View style={styles.detailsBlock}>
+                {showYarnLink ? (
+                  <Pressable
+                    style={styles.yarnLink}
+                    onPress={() => {
+                      // Opens this yarn's full colour list; a yarn without shades opens the Yarn shop instead.
+                      if (selectedVariantId) {
+                        setColourSheetOpen(true);
+                        return;
+                      }
+                      router.push({
+                        pathname: '/(tabs)/shop',
+                        params: { shopRoom: 'essentials', shopYarn: '1', at: String(Date.now()) },
+                      });
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="color-palette-outline" size={20} color={colors.pink} />
+                    <Text style={styles.yarnLinkText}>
+                      {colourCount > 0
+                        ? `${colourCount} yarn ${colourCount === 1 ? 'colour' : 'colours'}`
+                        : 'Browse yarn'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                  </Pressable>
+                ) : null}
+                {hasSpecs || hasDescription ? (
                 <Pressable
                   style={styles.detailsHeader}
                   onPress={() => setDetailsOpen((v) => !v)}
@@ -591,6 +695,7 @@ export default function ProductDetailScreen() {
                     />
                   </View>
                 </Pressable>
+                ) : null}
                 {detailsOpen ? (
                   <View>
                     {highlights.length > 0 ? (
@@ -784,8 +889,8 @@ export default function ProductDetailScreen() {
                   style={[styles.qtyBtn, atMaxQty && styles.qtyBtnDisabled]}
                   disabled={atMaxQty}
                   onPress={() => {
-                    if (exceedsCategoryLimit(display.category, qty + 1)) {
-                      Alert.alert(YARN_LIMIT_MESSAGE);
+                    if (exceedsYarnLimit(yarnInCart, display.category, qty + 1)) {
+                      setDialog({ title: 'Order limit', message: YARN_LIMIT_MESSAGE });
                       return;
                     }
                     setQty((q) => (canIncreaseQuantity(q, stock) ? q + 1 : q));
@@ -796,12 +901,17 @@ export default function ProductDetailScreen() {
               </View>
             </View>
 
-            {lowStock ? (
-              <Text style={styles.stockHint}>
-                {atMaxQty
-                  ? 'Maximum quantity reached · Few left'
-                  : 'Few pieces left'}
-              </Text>
+            {lowStock || (itemCount > 0 && !cartMessage) ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.stockHint} numberOfLines={1}>
+                  {lowStock ? (atMaxQty ? 'Max quantity reached' : 'Few pieces left') : ''}
+                </Text>
+                {itemCount > 0 && !cartMessage ? (
+                  <Pressable onPress={() => router.push('/cart')} hitSlop={8} accessibilityRole="button">
+                    <Text style={styles.inCartLink}>{itemCount} in cart · View cart →</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
 
             <View style={styles.actionRow}>
@@ -826,6 +936,9 @@ export default function ProductDetailScreen() {
               </Pressable>
             </View>
           </View>
+        ) : null}
+        {dialog && !colourSheetOpen ? (
+          <AppDialog title={dialog.title} message={dialog.message} onClose={() => setDialog(null)} />
         ) : null}
       </View>
 
@@ -962,6 +1075,23 @@ function createStyles(fonts: UiFonts) {
   },
   headerActions: {
     justifyContent: 'flex-end',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    backgroundColor: colors.pink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartBadgeText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 9,
+    color: colors.white,
   },
   scroll: {
     flex: 1,
@@ -1165,9 +1295,23 @@ function createStyles(fonts: UiFonts) {
     lineHeight: 20,
   },
   detailsBlock: {
-    marginTop: 14,
+    marginTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
+  },
+  yarnLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  yarnLinkText: {
+    flex: 1,
+    fontFamily: fonts.extraBold,
+    fontSize: 15,
+    color: colors.ink,
   },
   detailsHeader: {
     flexDirection: 'row',
@@ -1339,11 +1483,23 @@ function createStyles(fonts: UiFonts) {
     fontSize: 14,
     color: colors.ink,
   },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginTop: 6,
+  },
+  inCartLink: {
+    fontFamily: fonts.extraBold,
+    fontSize: 12,
+    color: colors.pinkDark,
+  },
   stockHint: {
+    flexShrink: 1,
     fontFamily: fonts.regular,
     fontSize: 12,
     color: colors.muted,
-    marginTop: 8,
   },
   oosBlock: {
     marginTop: spacing.lg,

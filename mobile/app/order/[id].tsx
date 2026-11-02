@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { appAlert } from '../../src/components/AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cancelOrder, getOrder, type OrderResponse } from '../../src/api/orders';
 import { ApiClientError } from '../../src/api/client';
@@ -45,7 +46,7 @@ export default function OrderDetailScreen() {
 
   const confirmCancel = useCallback(() => {
     if (!id) return;
-    Alert.alert(
+    appAlert(
       'Cancel this order?',
       'Your full payment will be refunded to your original payment method, usually within 5 to 7 working days.',
       [
@@ -58,7 +59,7 @@ export default function OrderDetailScreen() {
             try {
               setOrder(await cancelOrder(id));
             } catch (err) {
-              Alert.alert(
+              appAlert(
                 'Could not cancel',
                 err instanceof ApiClientError ? err.message : 'Please try again in a moment.',
               );

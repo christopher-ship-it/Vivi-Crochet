@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,6 +28,7 @@ import {
   isProductLine,
   type CartLineItem,
 } from '../src/cart/types';
+import { AppDialog, type AppDialogContent } from '../src/components/AppDialog';
 import { CartLineRow } from '../src/components/CartLineRow';
 import {
   CartRecommendBlock,
@@ -193,6 +193,7 @@ export default function CartScreen() {
     peekItems,
   } = useCart();
 
+  const [dialog, setDialog] = useState<AppDialogContent | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
@@ -241,6 +242,10 @@ export default function CartScreen() {
             category: product.category,
             availableStock: 0,
             productType: product.productType ?? item.productType,
+            colourName: product.colourName,
+            productCode: product.productCode,
+            colourHex: product.colourHex,
+            mrp: product.mrp,
           });
           continue;
         }
@@ -259,6 +264,10 @@ export default function CartScreen() {
           category: product.category,
           availableStock: stock,
           productType: product.productType ?? item.productType,
+          colourName: product.colourName,
+          productCode: product.productCode,
+          colourHex: product.colourHex,
+          mrp: product.mrp,
         });
       } catch (err) {
         const message =
@@ -292,7 +301,10 @@ export default function CartScreen() {
       return (
         line.quantity !== prev.quantity ||
         line.price !== prev.price ||
-        line.availableStock !== prev.availableStock
+        line.availableStock !== prev.availableStock ||
+        // Lines saved before the shade was stored get it filled in on the first refresh.
+        (line.colourName ?? null) !== (prev.colourName ?? null) ||
+        (line.mrp ?? null) !== (prev.mrp ?? null)
       );
     });
     if (changed || toPersist.length !== liveItems.length) {
@@ -510,7 +522,7 @@ export default function CartScreen() {
                     return;
                   }
                   updateQuantity(key, item.quantity + 1).catch((err) => {
-                    if (err instanceof Error) Alert.alert(err.message);
+                    if (err instanceof Error) setDialog({ title: 'Order limit', message: err.message });
                   });
                 }}
                 onDecrease={() => {
@@ -576,6 +588,9 @@ export default function CartScreen() {
           <Text style={styles.checkoutBtnText}>{t('cart.proceedCheckout')}</Text>
         </Pressable>
       </View>
+      {dialog ? (
+        <AppDialog title={dialog.title} message={dialog.message} onClose={() => setDialog(null)} />
+      ) : null}
     </View>
   );
 }

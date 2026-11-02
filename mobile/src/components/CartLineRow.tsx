@@ -1,25 +1,28 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { lineTotal } from '../cart/calculations';
 import { canIncreaseQuantity } from '../cart/stock';
-import { isCourseLine, type CartLineItem } from '../cart/types';
+import { cartLineColourLabel, isCourseLine, type CartLineItem } from '../cart/types';
 import { useI18n } from '../i18n';
 import { uiFonts, type UiFonts } from '../i18n/uiFonts';
-import { colors, radii } from '../theme';
+import { colors } from '../theme';
 import { usePreferences } from '../preferences/PreferencesContext';
 import { AppImage } from './AppImage';
 
 const PLACEHOLDER_COLORS = ['#ffe3ec', '#f3e8ff', '#fff6d6', '#f7f4f5'];
+/** Soft grey behind the product photo and in the delivery strip. */
+const WASH = '#f4f2f3';
+const WARNING = '#d9531e';
 
 function createStyles(fonts: UiFonts, compact: boolean) {
+  const imageSize = compact ? 88 : 96;
   return StyleSheet.create({
-    row: {
-      flexDirection: 'row',
-      gap: compact ? 10 : 14,
-      padding: compact ? 10 : 14,
-      marginBottom: compact ? 8 : 10,
+    card: {
+      padding: 12,
+      marginBottom: 10,
       backgroundColor: colors.white,
-      borderRadius: compact ? radii.md : radii.lg,
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: colors.softBorder,
     },
@@ -31,14 +34,26 @@ function createStyles(fonts: UiFonts, compact: boolean) {
     rowUnavailable: {
       opacity: 0.65,
     },
-    thumb: {
-      width: compact ? 48 : 76,
-      height: compact ? 48 : 76,
-      borderRadius: compact ? 8 : radii.md,
+    main: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    // Photo with the quantity stepper attached underneath, as one rounded box.
+    imageCol: {
+      width: imageSize,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.softBorder,
+      overflow: 'hidden',
+      backgroundColor: colors.white,
+      alignSelf: 'flex-start',
+    },
+    imageBox: {
+      width: '100%',
+      height: imageSize,
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
-      backgroundColor: colors.mediaWash,
+      backgroundColor: WASH,
     },
     thumbImage: {
       width: '100%',
@@ -46,99 +61,139 @@ function createStyles(fonts: UiFonts, compact: boolean) {
     },
     thumbInitial: {
       fontFamily: fonts.extraBold,
-      fontSize: compact ? 18 : 28,
+      fontSize: compact ? 24 : 30,
       color: colors.ink,
       opacity: 0.22,
     },
-    body: {
-      flex: 1,
-      minWidth: 0,
-    },
-    name: {
-      fontFamily: fonts.semiBold,
-      fontSize: compact ? 13 : 14,
-      color: colors.ink,
-      lineHeight: compact ? 16 : 18,
-    },
-    category: {
-      fontFamily: fonts.regular,
-      fontSize: compact ? 10 : 11,
-      color: colors.muted,
-      marginTop: 1,
-    },
-    unitPrice: {
-      fontFamily: fonts.semiBold,
-      fontSize: compact ? 11 : 12,
-      color: colors.pink,
-      marginTop: compact ? 2 : 4,
-    },
-    qtyRow: {
+    stepper: {
+      height: 34,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginTop: compact ? 6 : 10,
+      paddingHorizontal: 4,
     },
-    qtyControl: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.softBorder,
-      borderRadius: compact ? 6 : radii.sm,
-      backgroundColor: colors.white,
-      overflow: 'hidden',
-    },
-    qtyBtn: {
-      width: compact ? 28 : 34,
-      height: compact ? 28 : 34,
+    stepBtn: {
+      width: 28,
+      height: 34,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    qtyBtnDisabled: {
-      opacity: 0.35,
+    stepBtnDisabled: {
+      opacity: 0.3,
     },
-    qtyBtnText: {
+    stepBtnText: {
       fontFamily: fonts.extraBold,
-      fontSize: compact ? 14 : 16,
+      fontSize: 18,
       color: colors.ink,
     },
-    qtyValue: {
-      width: compact ? 26 : 32,
-      textAlign: 'center',
+    stepValue: {
       fontFamily: fonts.extraBold,
-      fontSize: compact ? 12 : 13,
+      fontSize: 15,
       color: colors.ink,
     },
-    lineTotal: {
+    info: {
+      flex: 1,
+      minWidth: 0,
+      gap: 3,
+    },
+    name: {
       fontFamily: fonts.extraBold,
-      fontSize: compact ? 13 : 15,
+      fontSize: compact ? 14 : 15,
+      lineHeight: compact ? 20 : 21,
       color: colors.ink,
+    },
+    colourRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    colourDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    colourText: {
+      flexShrink: 1,
+      fontFamily: fonts.semiBold,
+      fontSize: 13,
+      color: colors.muted,
+    },
+    category: {
+      fontFamily: fonts.regular,
+      fontSize: 12,
+      color: colors.muted,
+    },
+    priceRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginTop: 4,
+    },
+    discount: {
+      fontFamily: fonts.extraBold,
+      fontSize: 13,
+      color: colors.success,
+    },
+    mrp: {
+      fontFamily: fonts.semiBold,
+      fontSize: 13,
+      color: colors.muted,
+      textDecorationLine: 'line-through',
+    },
+    price: {
+      fontFamily: fonts.extraBold,
+      fontSize: 18,
+      color: colors.ink,
+    },
+    total: {
+      fontFamily: fonts.semiBold,
+      fontSize: 12,
+      color: colors.muted,
+    },
+    stockCap: {
+      fontFamily: fonts.semiBold,
+      fontSize: 12,
+      color: WARNING,
+    },
+    unavailable: {
+      fontFamily: fonts.semiBold,
+      fontSize: 12,
+      color: colors.danger,
+      marginTop: 4,
     },
     readOnlyQty: {
       fontFamily: fonts.semiBold,
       fontSize: 12,
       color: colors.muted,
     },
-    unavailable: {
-      fontFamily: fonts.semiBold,
-      fontSize: 12,
-      color: colors.danger,
-      marginTop: 8,
-    },
     removeBtn: {
       alignSelf: 'flex-start',
-      marginTop: compact ? 4 : 8,
-      paddingVertical: 2,
+      paddingVertical: 4,
+      marginTop: 2,
     },
     removeBtnText: {
       fontFamily: fonts.semiBold,
-      fontSize: compact ? 11 : 12,
+      fontSize: 12,
       color: colors.muted,
     },
-    stockCap: {
-      fontFamily: fonts.regular,
-      fontSize: 10,
-      color: colors.muted,
-      marginTop: 4,
+    deliveryStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: WASH,
+    },
+    deliveryText: {
+      flex: 1,
+      fontFamily: fonts.semiBold,
+      fontSize: 13,
+      color: colors.ink,
     },
   });
 }
@@ -150,7 +205,7 @@ interface CartLineRowProps {
   readOnly?: boolean;
   /** Flatten bottom corners when a recommendation block follows. */
   attachBelow?: boolean;
-  /** Smaller row for Crochet Essentials (Resell) lines. */
+  /** Slightly smaller photo for Crochet Materials (Resell) lines. */
   compact?: boolean;
   onIncrease: () => void;
   onDecrease: () => void;
@@ -179,84 +234,114 @@ export function CartLineRow({
   const stock = item.availableStock;
   const atMax =
     typeof stock === 'number' ? !canIncreaseQuantity(item.quantity, stock) : false;
+  const colourLabel = digital ? null : cartLineColourLabel(item);
   const categoryLabel = digital
     ? item.itemType === 'CourseBundle'
       ? t('cart.courseBundleLabel')
       : t('cart.courseLabel')
     : item.category;
+  const discount =
+    item.mrp != null && item.mrp > item.price
+      ? Math.round(((item.mrp - item.price) / item.mrp) * 100)
+      : null;
+  const showStepper = !unavailable && !readOnly && !digital;
 
   return (
     <View
       style={[
-        styles.row,
+        styles.card,
         unavailable && styles.rowUnavailable,
         attachBelow && styles.rowAttachBelow,
       ]}
     >
-      <View style={[styles.thumb, !item.imageUrl && { backgroundColor: bg }]}>
-        {item.imageUrl ? (
-          <AppImage uri={item.imageUrl} style={styles.thumbImage} contentFit="contain" />
-        ) : (
-          <Text style={styles.thumbInitial}>{item.name.charAt(0)}</Text>
-        )}
-      </View>
-
-      <View style={styles.body}>
-        <Text style={styles.name} numberOfLines={compact ? 1 : 2}>
-          {item.name}
-        </Text>
-        {!compact && categoryLabel ? (
-          <Text style={styles.category}>{categoryLabel}</Text>
-        ) : null}
-        <Text style={styles.unitPrice}>
-          {formatPrice(item.price)} {t('cart.eachSuffix')}
-        </Text>
-
-        {unavailable ? (
-          <Text style={styles.unavailable}>{t('cart.productUnavailable')}</Text>
-        ) : readOnly || digital ? (
-          <View style={styles.qtyRow}>
-            <Text style={styles.readOnlyQty}>
-              {digital ? t('cart.digitalAccess') : t('cart.qtyShort', { count: item.quantity })}
-            </Text>
-            <Text style={styles.lineTotal}>{formatPrice(lineTotal(item))}</Text>
+      <View style={styles.main}>
+        <View style={styles.imageCol}>
+          <View style={[styles.imageBox, !item.imageUrl && { backgroundColor: bg }]}>
+            {item.imageUrl ? (
+              <AppImage
+                uri={item.imageUrl}
+                style={styles.thumbImage}
+                contentFit="contain"
+                backgroundColor={WASH}
+              />
+            ) : (
+              <Text style={styles.thumbInitial}>{item.name.charAt(0)}</Text>
+            )}
           </View>
-        ) : (
-          <>
-            <View style={styles.qtyRow}>
-              <View style={styles.qtyControl}>
-                <Pressable
-                  style={styles.qtyBtn}
-                  onPress={onDecrease}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('productCard.decreaseQty')}
-                >
-                  <Text style={styles.qtyBtnText}>−</Text>
-                </Pressable>
-                <Text style={styles.qtyValue}>{item.quantity}</Text>
-                <Pressable
-                  style={[styles.qtyBtn, atMax && styles.qtyBtnDisabled]}
-                  onPress={onIncrease}
-                  disabled={atMax}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('productCard.increaseQty')}
-                >
-                  <Text style={styles.qtyBtnText}>+</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.lineTotal}>{formatPrice(lineTotal(item))}</Text>
+          {showStepper ? (
+            <View style={styles.stepper}>
+              <Pressable
+                style={styles.stepBtn}
+                onPress={onDecrease}
+                accessibilityRole="button"
+                accessibilityLabel={t('productCard.decreaseQty')}
+              >
+                <Text style={styles.stepBtnText}>−</Text>
+              </Pressable>
+              <Text style={styles.stepValue}>{item.quantity}</Text>
+              <Pressable
+                style={[styles.stepBtn, atMax && styles.stepBtnDisabled]}
+                onPress={onIncrease}
+                disabled={atMax}
+                accessibilityRole="button"
+                accessibilityLabel={t('productCard.increaseQty')}
+              >
+                <Text style={styles.stepBtnText}>+</Text>
+              </Pressable>
             </View>
-            {atMax && typeof stock === 'number' && stock > 0 ? (
-              <Text style={styles.stockCap}>{t('cart.maxStockReached')}</Text>
-            ) : null}
-          </>
-        )}
-        {onRemove && !unavailable ? (
-          <Pressable style={styles.removeBtn} onPress={onRemove} hitSlop={8}>
-            <Text style={styles.removeBtnText}>{t('cart.remove')}</Text>
-          </Pressable>
-        ) : null}
+          ) : null}
+        </View>
+
+        <View style={styles.info}>
+          <Text style={styles.name} numberOfLines={2}>
+            {item.name}
+          </Text>
+          {colourLabel ? (
+            <View style={styles.colourRow}>
+              {item.colourHex ? <View style={[styles.colourDot, { backgroundColor: item.colourHex }]} /> : null}
+              <Text style={styles.colourText} numberOfLines={1}>
+                {colourLabel}
+              </Text>
+            </View>
+          ) : categoryLabel ? (
+            <Text style={styles.category}>{categoryLabel}</Text>
+          ) : null}
+
+          <View style={styles.priceRow}>
+            {discount != null ? <Text style={styles.discount}>{`↓${discount}%`}</Text> : null}
+            {discount != null ? <Text style={styles.mrp}>{formatPrice(item.mrp!)}</Text> : null}
+            <Text style={styles.price}>{formatPrice(item.price)}</Text>
+          </View>
+          {item.quantity > 1 && !digital ? (
+            <Text style={styles.total}>{`${t('cart.qtyShort', { count: item.quantity })} · ${formatPrice(lineTotal(item))}`}</Text>
+          ) : null}
+
+          {unavailable ? (
+            <Text style={styles.unavailable}>{t('cart.productUnavailable')}</Text>
+          ) : digital ? (
+            <Text style={styles.readOnlyQty}>{t('cart.digitalAccess')}</Text>
+          ) : readOnly ? (
+            <Text style={styles.readOnlyQty}>{t('cart.qtyShort', { count: item.quantity })}</Text>
+          ) : atMax && typeof stock === 'number' && stock > 0 ? (
+            <Text style={styles.stockCap}>{t('cart.maxStockReached')}</Text>
+          ) : null}
+
+          {onRemove && !unavailable ? (
+            <Pressable style={styles.removeBtn} onPress={onRemove} hitSlop={8}>
+              <Text style={styles.removeBtnText}>{t('cart.remove')}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
+
+      {!digital && !unavailable && item.productType === 'Resell' ? (
+        <View style={styles.deliveryStrip}>
+          <Ionicons name="car-outline" size={18} color={colors.ink} />
+          <Text style={styles.deliveryText} numberOfLines={1}>
+            {t('shop.roomEssentialsDelivery')}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

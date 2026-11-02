@@ -10,6 +10,8 @@ import { useI18n } from '../src/i18n';
 import { uiFonts, type UiFonts } from '../src/i18n/uiFonts';
 import { colors, radii, spacing } from '../src/theme';
 import { formatMoney } from '../src/utils/format';
+import { requestAppRatingAfterPurchase } from '../src/utils/appRating';
+
 
 export default function OrderConfirmationScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
@@ -38,6 +40,11 @@ export default function OrderConfirmationScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Ask for a Play Store rating once, after the first paid order.
+  useEffect(() => {
+    if (order?.status === 'Paid' || order?.status === 'Confirmed') void requestAppRatingAfterPurchase();
+  }, [order?.status]);
 
   if (loading) return <LoadingView message={t('orderConfirmation.loading')} />;
   if (error || !order) {

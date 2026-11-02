@@ -1,9 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  BackHandler,
+import { BackHandler,
   Keyboard,
   type LayoutChangeEvent,
   Platform,
@@ -12,8 +10,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
-} from 'react-native';
+  View } from 'react-native';
+import { appAlert } from '../../src/components/AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourse } from '../../src/api/courses';
 import {
@@ -295,7 +293,7 @@ export default function CourseDetailScreen() {
       return;
     }
 
-    Alert.alert(
+    appAlert(
       'Purchase required',
       'This lesson unlocks after you buy the course.',
       [
@@ -357,7 +355,7 @@ export default function CourseDetailScreen() {
       const message =
         err instanceof Error ? err.message : t('product.couldNotAddCart');
       setBanner(message);
-      Alert.alert(t('cart.title'), message);
+      appAlert(t('cart.title'), message);
     } finally {
       setAddingToCart(false);
     }
@@ -485,7 +483,7 @@ export default function CourseDetailScreen() {
       }
       const message = err instanceof ApiClientError ? err.message : 'Could not start checkout.';
       setBanner(message);
-      Alert.alert('Checkout failed', message);
+      appAlert('Checkout failed', message);
     } finally {
       setPurchasing(false);
     }
@@ -512,7 +510,7 @@ export default function CourseDetailScreen() {
         ? err.message
         : 'Payment received but verification failed. Contact support with your order details.';
       setBanner(message);
-      Alert.alert('Verification failed', message);
+      appAlert('Verification failed', message);
     } finally {
       setPurchasing(false);
       setPendingOrderId(null);
@@ -1001,7 +999,7 @@ export default function CourseDetailScreen() {
             setCheckoutPayload(null);
             setPendingOrderId(null);
             setBanner(message);
-            Alert.alert('Payment failed', message);
+            appAlert('Payment failed', message);
           }}
         />
       </View>

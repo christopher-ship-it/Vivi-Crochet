@@ -36,10 +36,10 @@ import type { Course } from '../../src/types';
 import { formatMoney } from '../../src/utils/format';
 import { buildShareUrl, shareLink } from '../../src/utils/share';
 import { resolveCollectionOwnership } from '../../src/utils/mainCourses';
-import { LevelCurriculumCard } from '../../src/components/LevelCurriculumCard';
+import { OfferCourseCard } from '../../src/components/OfferCourseCard';
+import { OfferHeadEffects } from '../../src/components/OfferHeadEffects';
 import { applyStatusBar } from '../../src/utils/statusBar';
 
-const LESSON_COUNT = 27;
 const STAGGER_MS = 50;
 const ENTRANCE_MS = 260;
 
@@ -57,6 +57,8 @@ export default function OffersScreen() {
   const [offer, setOffer] = useState<FoundingMembershipOffer | null>(null);
   const [membership, setMembership] = useState<MyMembership | null>(null);
   const [owned, setOwned] = useState(false);
+  /** Courses the signed-in customer already has an active enrollment for (lower-case ids). */
+  const [ownedCourseIds, setOwnedCourseIds] = useState<Set<string>>(new Set());
   const [accessUntil, setAccessUntil] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -98,9 +100,17 @@ export default function OffersScreen() {
           const ownership = resolveCollectionOwnership(enrollments);
           setOwned(ownership.owned);
           setAccessUntil(ownership.accessUntil);
+          setOwnedCourseIds(
+            new Set(
+              enrollments
+                .filter((e) => e.isActive && !e.isExpired)
+                .map((e) => e.courseId.toLowerCase()),
+            ),
+          );
         } catch {
           setOwned(false);
           setAccessUntil(null);
+          setOwnedCourseIds(new Set());
         }
         try {
           setMembership(await getMyMembership());
@@ -110,6 +120,7 @@ export default function OffersScreen() {
       } else {
         setOwned(false);
         setAccessUntil(null);
+        setOwnedCourseIds(new Set());
         setMembership(null);
       }
     } catch (err) {
@@ -269,16 +280,37 @@ export default function OffersScreen() {
   const displayPrice = launchActive
     ? offer?.launchPrice ?? course?.price ?? 0
     : offer?.regularPriceAfterLaunch ?? course?.price ?? 0;
-  const displayMrp = offer?.mrp ?? course?.mrp ?? null;
   // Prices arrive from the server in the user's currency; no price = not sold in their country.
   const currency = offer?.currency ?? course?.currency ?? 'INR';
   const money = (amount: number) => formatMoney(amount, currency);
+  // Each course in the collection with the price the admin set for it. The "bought separately" total is
+  // the sum of those prices; it is only shown when every course has a price in the buyer's country.
+  const parts = (offer?.includedCourses ?? []).map((entry, index) => ({
+    id: entry.id,
+    name: entry.name,
+    price: entry.regularPrice,
+    tagline: entry.tagline,
+    topics: entry.topics,
+    details: includedCourseDetails[index],
+    owned: ownedCourseIds.has(entry.id.toLowerCase()),
+    // A project course (like the Sunflower Bag Tutorial) is an add-on, not one of the numbered levels.
+    addOn: includedCourseDetails[index]?.type === 'ProjectCourse',
+  }));
+  // Numbered levels count only the regular courses, in the admin's order.
+  let levelCounter = 0;
+  const levelOf = parts.map((part) => (part.addOn ? undefined : ++levelCounter));
+  const separateTotal =
+    parts.length > 1 && parts.every((p) => p.price > 0) ? parts.reduce((sum, p) => sum + p.price, 0) : 0;
+  // What the bundle is compared against: the separate total, or the admin's MRP when that is not available.
+  const adminMrp = offer?.mrp ?? course?.mrp ?? null;
+  const displayMrp = separateTotal > displayPrice ? separateTotal : adminMrp;
+  const showLedger = separateTotal > displayPrice;
   const unavailableInCountry =
     !showAsOwned && (offer?.availableInMarket === false || course?.availableInMarket === false);
   const accessDays = offer?.accessDurationDays ?? course?.accessDays ?? 30;
   // Published lessons across the courses the collection includes; the bundle's own count is the fallback.
   const includedLessonTotal = includedCourseDetails.reduce((n, c) => n + (c.videoCount ?? 0), 0);
-  const lessonCount = includedLessonTotal > 0 ? includedLessonTotal : course?.videoCount || LESSON_COUNT;
+  const lessonCount = includedLessonTotal > 0 ? includedLessonTotal : course?.videoCount ?? 0;
   const title = offer?.offerName || course?.name || t('offers.collectionName');
 
   const ctaLabel = showAsOwned ? t('offers.ctaOwned') : t('offers.cta');
@@ -346,12 +378,11 @@ export default function OffersScreen() {
   const spotsClaimedRatio =
     spotsRemaining != null && launchLimit > 0 ? (launchLimit - spotsRemaining) / launchLimit : 0;
 
-  const includedCourses = offer?.includedCourses.length
-    ? offer.includedCourses.map((c) => c.name)
-    : t('offers.includesCourses')
-        .split('·')
-        .map((name) => name.trim())
-        .filter(Boolean);
+  function openCourse(courseId: string, isOwned: boolean) {
+    // An owned course opens in Learn; otherwise the course page, where it can be bought on its own.
+    if (isOwned) router.navigate('/(tabs)/learn');
+    else router.push({ pathname: '/course/[id]', params: { id: courseId } });
+  }
 
   const memberNumberLabel =
     showAsOwned && membership?.isMember && membership.memberNumber
@@ -363,7 +394,8 @@ export default function OffersScreen() {
   const headTag = showAsOwned
     ? t('offers.ownedBadge')
     : launchActive
-      ? offer?.badgeText?.trim() || t('offers.launchTag')
+      ? offer?.badgeText?.trim() ||
+        (offer ? t('offers.launchTagCount', { count: offer.launchLimit }) : t('offers.eyebrow'))
       : offerExhausted
         ? offer?.endedBadgeText?.trim() || t('offers.founding.offerEnded')
         : t('offers.eyebrow');
@@ -436,13 +468,12 @@ export default function OffersScreen() {
             {/* Coupon-style ticket: gradient head, perforation, white price body. */}
             <Animated.View style={[styles.ticket, fadeUp(cardAnim)]}>
               <LinearGradient
-                colors={[colors.pink, colors.pinkDark]}
+                colors={['#f2336f', colors.pinkDark, '#7d1048']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.ticketHead}
               >
-                <View style={[styles.glow, styles.glowTop]} pointerEvents="none" />
-                <View style={[styles.glow, styles.glowBottom]} pointerEvents="none" />
+                <OfferHeadEffects />
 
                 <Animated.View
                   style={[styles.tag, launchActive && { opacity: bannerBreath }]}
@@ -463,12 +494,22 @@ export default function OffersScreen() {
                     <Text style={styles.altName}>{t('offers.altName')}</Text>
                   </View>
                   {!showAsOwned && percentOff > 0 ? (
-                    <View style={styles.stamp}>
+                    <Animated.View
+                      style={[
+                        styles.stamp,
+                        launchActive && {
+                          transform: [
+                            { rotate: '-10deg' },
+                            { scale: bannerBreath.interpolate({ inputRange: [0.88, 1], outputRange: [1.08, 1] }) },
+                          ],
+                        },
+                      ]}
+                    >
                       <Text style={styles.stampPercent}>
                         {t('offers.percentOff', { percent: percentOff })}
                       </Text>
                       <Text style={styles.stampOff}>{t('offers.off')}</Text>
-                    </View>
+                    </Animated.View>
                   ) : null}
                 </View>
               </LinearGradient>
@@ -499,24 +540,76 @@ export default function OffersScreen() {
                   <Text style={styles.note}>{t('market.membershipUnavailable')}</Text>
                 ) : (
                   <Animated.View style={fadeUp(priceAnim)}>
-                    <View style={styles.priceRow}>
-                      <Animated.Text
-                        style={[styles.price, { transform: [{ scale: priceScale }] }]}
-                      >
-                        {money(displayPrice)}
-                      </Animated.Text>
-                      {savings > 0 && displayMrp != null ? (
-                        <Text style={styles.mrp}>{money(displayMrp)}</Text>
+                    {showLedger ? (
+                      <>
+                        {/* Right under the offer head: each course with its own price, so it is seen without scrolling. */}
+                        <Text style={styles.rowTitle}>{t('offers.separateTitle')}</Text>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          style={styles.partsScroll}
+                          contentContainerStyle={styles.partsRow}
+                        >
+                          {parts.map((part, index) => (
+                            <OfferCourseCard
+                              key={part.id}
+                              compact
+                              name={part.name}
+                              level={levelOf[index]}
+                              addOn={part.addOn}
+                              thumbnailUrl={part.details?.thumbnailUrl?.trim() || null}
+                              priceLabel={part.price > 0 ? money(part.price) : null}
+                              owned={part.owned}
+                              onOpen={() => openCourse(part.id, part.owned)}
+                            />
+                          ))}
+                        </ScrollView>
+                        <View style={styles.ledger}>
+                          {/* The sum, so nobody has to add it up: each course price, then the total. */}
+                          <Text style={styles.ledgerSum} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                            {parts.map((part) => money(part.price)).join(' + ')}
+                          </Text>
+                          <View style={styles.ledgerRow}>
+                            <Text style={styles.ledgerSeparateLabel}>
+                              {t('offers.ledgerSeparate')}
+                            </Text>
+                            <Text style={styles.ledgerEquals}>
+                              {'= '}
+                              <Text style={styles.ledgerSeparateTotal}>{money(separateTotal)}</Text>
+                            </Text>
+                          </View>
+                        </View>
+                      </>
+                    ) : null}
+                    <View style={showLedger ? styles.togetherBox : undefined}>
+                      {showLedger ? (
+                        <View style={styles.bestValue}>
+                          <Ionicons name="star" size={11} color={colors.ink} />
+                          <Text style={styles.bestValueText}>{t('offers.bestValue')}</Text>
+                        </View>
+                      ) : null}
+                      <View style={styles.priceRow}>
+                        <Animated.Text
+                          style={[styles.price, { transform: [{ scale: priceScale }] }]}
+                        >
+                          {money(displayPrice)}
+                        </Animated.Text>
+                        {showLedger ? (
+                          <Text style={styles.togetherLabel}>{t('offers.ledgerTogether')}</Text>
+                        ) : savings > 0 && displayMrp != null ? (
+                          <Text style={styles.mrp}>{money(displayMrp)}</Text>
+                        ) : null}
+                      </View>
+                      {savings > 0 ? (
+                        <View style={styles.saveChip}>
+                          <Ionicons name="pricetag" size={12} color={colors.success} />
+                          <Text style={styles.saveText}>
+                            {t('offers.youSave', { amount: money(savings) })}
+                            {percentOff > 0 ? ` · ${t('offers.percentOff', { percent: percentOff })} ${t('offers.off')}` : ''}
+                          </Text>
+                        </View>
                       ) : null}
                     </View>
-                    {savings > 0 ? (
-                      <View style={styles.saveChip}>
-                        <Ionicons name="pricetag" size={12} color={colors.success} />
-                        <Text style={styles.saveText}>
-                          {t('offers.youSave', { amount: money(savings) })}
-                        </Text>
-                      </View>
-                    ) : null}
                   </Animated.View>
                 )}
 
@@ -568,18 +661,37 @@ export default function OffersScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={ctaLabel}
                   >
-                    <LinearGradient
-                      colors={
-                        showAsOwned
-                          ? [colors.pinkDark, colors.pinkDark]
-                          : [colors.pink, colors.pinkDark]
-                      }
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.cta}
-                    >
-                      <Text style={styles.ctaText}>{ctaLabel}</Text>
-                    </LinearGradient>
+                    {({ pressed }) => (
+                      // A raised button: a darker edge under the face that the face sinks into when pressed.
+                      <View
+                        style={[
+                          styles.ctaEdge,
+                          pressed && { paddingBottom: 1, marginTop: 3 },
+                        ]}
+                      >
+                        <LinearGradient
+                          colors={
+                            showAsOwned
+                              ? [colors.pinkDark, '#a3104d']
+                              : ['#ff4a82', colors.pink, colors.pinkDark]
+                          }
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 0, y: 1 }}
+                          style={styles.cta}
+                        >
+                          <LinearGradient
+                            colors={['rgba(255,255,255,0.38)', 'rgba(255,255,255,0)']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0, y: 1 }}
+                            style={styles.ctaGloss}
+                            pointerEvents="none"
+                          />
+                          <Text style={styles.ctaText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                            {ctaLabel}
+                          </Text>
+                        </LinearGradient>
+                      </View>
+                    )}
                   </Pressable>
                 </Animated.View>
                 )}
@@ -596,46 +708,26 @@ export default function OffersScreen() {
             </Animated.View>
 
             <Animated.View style={[styles.included, fadeUp(ctaAnim)]}>
+              {/* Before buying: the courses on their own, each with its own price, so nobody has to guess. */}
               <Text style={styles.includedTitle}>{t('offers.whatsIncluded')}</Text>
 
-              {includedCourses.map((name, index) => {
-                const includedCourse = offer?.includedCourses[index];
-                if (includedCourse?.topics?.length) {
-                  return (
-                    <LevelCurriculumCard
-                      key={name}
-                      name={includedCourse.name}
-                      level={index + 1}
-                      tagline={includedCourse.tagline}
-                      items={includedCourse.topics}
-                      expanded={openLevel === index}
-                      onToggle={() => setOpenLevel(openLevel === index ? null : index)}
-                    />
-                  );
-                }
-                const thumb = includedCourseDetails[index]?.thumbnailUrl?.trim();
-                return (
-                  <View key={name} style={[styles.includedRow, styles.includedCard]}>
-                    <View style={styles.includedIcon}>
-                      {thumb ? (
-                        <AppImage
-                          uri={thumb}
-                          style={styles.includedThumb}
-                          contentFit="cover"
-                          accessibilityLabel={name}
-                        />
-                      ) : (
-                        <Text style={styles.includedIndex}>{index + 1}</Text>
-                      )}
-                    </View>
-                    <View style={styles.includedTextWrap}>
-                      <Text style={styles.includedName}>{name}</Text>
-                      <Text style={styles.includedSub}>{t('offers.courseIncluded')}</Text>
-                    </View>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                  </View>
-                );
-              })}
+              {parts.map((part, index) => (
+                <OfferCourseCard
+                  key={part.id}
+                  slim
+                  name={part.name}
+                  level={levelOf[index]}
+                              addOn={part.addOn}
+                  tagline={part.tagline}
+                  thumbnailUrl={part.details?.thumbnailUrl?.trim() || null}
+                  lessonCount={part.details?.videoCount}
+                  owned={showAsOwned || part.owned}
+                  topics={part.topics}
+                  expanded={openLevel === index}
+                  onToggle={() => setOpenLevel(openLevel === index ? null : index)}
+                  onOpen={() => openCourse(part.id, showAsOwned || part.owned)}
+                />
+              ))}
 
               {offer?.viralProject ? (
                 <View style={styles.includedRow}>
@@ -659,34 +751,29 @@ export default function OffersScreen() {
                 </View>
               ) : null}
 
-              <View style={styles.includedDivider} />
-
-              <View style={styles.perkRow}>
-                <Ionicons name="play-circle-outline" size={18} color={colors.pink} />
-                <Text style={styles.perkText}>
-                  {t('offers.lessonsIncluded', {
-                    count: lessonCount,
-                  })}
-                </Text>
-              </View>
-              <View style={styles.perkRow}>
-                <Ionicons name="time-outline" size={18} color={colors.pink} />
-                <Text style={styles.perkText}>
-                  {t('offers.accessDays', { days: accessDays })}
-                </Text>
-              </View>
-              <View style={styles.perkRow}>
-                <Ionicons name="ribbon-outline" size={18} color={colors.pink} />
-                <Text style={styles.perkText}>{t('offers.founding.badgePerk')}</Text>
-              </View>
-              {course.languages ? (
-                <View style={styles.perkRow}>
-                  <Ionicons name="language-outline" size={18} color={colors.pink} />
-                  <Text style={styles.perkText}>
-                    {t('offers.taughtIn', { languages: course.languages })}
-                  </Text>
+              {/* The perks as small chips on one wrapped line instead of a tall list. */}
+              <View style={styles.perkChips}>
+                {lessonCount > 0 ? (
+                  <View style={styles.perkChip}>
+                    <Ionicons name="play-circle-outline" size={14} color={colors.pink} />
+                    <Text style={styles.perkChipText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{t('offers.lessonsIncluded', { count: lessonCount })}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.perkChip}>
+                  <Ionicons name="time-outline" size={14} color={colors.pink} />
+                  <Text style={styles.perkChipText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{t('offers.accessDays', { days: accessDays })}</Text>
                 </View>
-              ) : null}
+                <View style={styles.perkChip}>
+                  <Ionicons name="ribbon-outline" size={14} color={colors.pink} />
+                  <Text style={styles.perkChipText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{t('offers.founding.badgePerk')}</Text>
+                </View>
+                {course.languages ? (
+                  <View style={styles.perkChip}>
+                    <Ionicons name="language-outline" size={14} color={colors.pink} />
+                    <Text style={styles.perkChipText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{t('offers.taughtIn', { languages: course.languages })}</Text>
+                  </View>
+                ) : null}
+              </View>
             </Animated.View>
           </>
         ) : null}
@@ -716,10 +803,10 @@ function createStyles(fonts: UiFonts) {
     },
     screenTitle: {
       fontFamily: fonts.extraBold,
-      fontSize: 22,
+      fontSize: 20,
       color: colors.ink,
       paddingHorizontal: spacing.lg,
-      marginBottom: spacing.md,
+      marginBottom: spacing.sm,
     },
     ticket: {
       marginHorizontal: spacing.lg,
@@ -735,26 +822,9 @@ function createStyles(fonts: UiFonts) {
       borderTopLeftRadius: radii.xl,
       borderTopRightRadius: radii.xl,
       paddingHorizontal: spacing.md,
-      paddingTop: spacing.md,
-      paddingBottom: spacing.md + 4,
+      paddingTop: spacing.sm + 2,
+      paddingBottom: spacing.sm + 4,
       overflow: 'hidden',
-    },
-    glow: {
-      position: 'absolute',
-      borderRadius: radii.pill,
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    glowTop: {
-      width: 180,
-      height: 180,
-      top: -90,
-      right: -50,
-    },
-    glowBottom: {
-      width: 120,
-      height: 120,
-      bottom: -70,
-      left: -30,
     },
     tag: {
       alignSelf: 'flex-start',
@@ -764,8 +834,8 @@ function createStyles(fonts: UiFonts) {
       backgroundColor: colors.yellow,
       borderRadius: radii.pill,
       paddingHorizontal: 9,
-      paddingVertical: 4,
-      marginBottom: spacing.sm + 2,
+      paddingVertical: 3,
+      marginBottom: 6,
       maxWidth: '100%',
     },
     tagText: {
@@ -784,8 +854,8 @@ function createStyles(fonts: UiFonts) {
     },
     name: {
       fontFamily: fonts.extraBold,
-      fontSize: 21,
-      lineHeight: 26,
+      fontSize: 18,
+      lineHeight: 23,
       color: colors.white,
     },
     altName: {
@@ -795,9 +865,9 @@ function createStyles(fonts: UiFonts) {
       marginTop: 3,
     },
     stamp: {
-      width: 66,
-      height: 66,
-      borderRadius: 33,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       backgroundColor: colors.white,
       borderWidth: 2,
       borderColor: colors.yellow,
@@ -808,8 +878,8 @@ function createStyles(fonts: UiFonts) {
     },
     stampPercent: {
       fontFamily: fonts.extraBold,
-      fontSize: 19,
-      lineHeight: 21,
+      fontSize: 16,
+      lineHeight: 18,
       color: colors.pink,
     },
     stampOff: {
@@ -832,18 +902,123 @@ function createStyles(fonts: UiFonts) {
     },
     ticketBody: {
       paddingHorizontal: spacing.md,
-      paddingTop: spacing.md,
-      paddingBottom: spacing.md,
+      paddingTop: spacing.sm + 2,
+      paddingBottom: spacing.sm + 2,
     },
     priceRow: {
       flexDirection: 'row',
       alignItems: 'baseline',
       gap: 9,
     },
+    // The receipt: every course with its price, the separate total, then the one price.
+    rowTitle: {
+      fontFamily: fonts.extraBold,
+      fontSize: 14,
+      color: colors.ink,
+      marginBottom: 6,
+    },
+    partsScroll: {
+      marginHorizontal: -spacing.md,
+      flexGrow: 0,
+    },
+    partsRow: {
+      paddingHorizontal: spacing.md,
+      paddingBottom: 4,
+      gap: 8,
+    },
+    ledger: {
+      marginTop: 4,
+      marginBottom: 6,
+      gap: 4,
+    },
+    ledgerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    ledgerName: {
+      flex: 1,
+      fontFamily: fonts.semiBold,
+      fontSize: 14,
+      color: colors.ink,
+    },
+    ledgerPrice: {
+      fontFamily: fonts.extraBold,
+      fontSize: 14,
+      color: colors.ink,
+    },
+    ledgerRule: {
+      height: 1,
+      borderTopWidth: 1.5,
+      borderTopColor: colors.border,
+      borderStyle: 'dashed',
+      marginVertical: 2,
+    },
+    ledgerEquals: {
+      fontFamily: fonts.extraBold,
+      fontSize: 15,
+      color: colors.muted,
+    },
+    ledgerSum: {
+      fontFamily: fonts.extraBold,
+      fontSize: 13,
+      color: colors.ink,
+    },
+    ledgerSeparateLabel: {
+      flex: 1,
+      fontFamily: fonts.semiBold,
+      fontSize: 13,
+      color: colors.muted,
+    },
+    ledgerSeparateTotal: {
+      fontFamily: fonts.extraBold,
+      fontSize: 15,
+      color: colors.muted,
+      textDecorationLine: 'line-through',
+    },
+    togetherBox: {
+      padding: 10,
+      borderRadius: radii.md,
+      backgroundColor: colors.pinkSoft,
+      borderWidth: 1.5,
+      borderColor: colors.yellow,
+    },
+    bestValue: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 1,
+      marginBottom: 2,
+      borderRadius: radii.pill,
+      backgroundColor: colors.yellow,
+    },
+    bestValueText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 10,
+      letterSpacing: 0.8,
+      color: colors.ink,
+    },
+    togetherLabel: {
+      flex: 1,
+      fontFamily: fonts.extraBold,
+      fontSize: 13,
+      color: colors.pinkDark,
+    },
+    separateHint: {
+      fontFamily: fonts.semiBold,
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.muted,
+      marginTop: -spacing.sm,
+      marginBottom: spacing.md,
+    },
     price: {
       fontFamily: fonts.extraBold,
-      fontSize: 30,
-      lineHeight: 36,
+      fontSize: 28,
+      lineHeight: 32,
       color: colors.ink,
     },
     mrp: {
@@ -913,19 +1088,35 @@ function createStyles(fonts: UiFonts) {
       marginTop: 6,
     },
     ctaWrap: {
-      marginTop: spacing.md,
-      borderRadius: radii.md,
-      shadowColor: colors.pink,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.3,
+      marginTop: spacing.sm + 2,
+      borderRadius: radii.md + 2,
+      shadowColor: colors.pinkDark,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.4,
       shadowRadius: 12,
-      elevation: 5,
+      elevation: 8,
+    },
+    // The darker strip under the face is what makes it read as a pressable, raised button.
+    ctaEdge: {
+      paddingBottom: 4,
+      borderRadius: radii.md + 2,
+      backgroundColor: '#8c0f45',
     },
     cta: {
-      borderRadius: radii.md,
-      paddingVertical: 14,
+      overflow: 'hidden',
+      borderRadius: radii.md + 1,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.35)',
+      paddingVertical: 13,
       paddingHorizontal: spacing.md,
       alignItems: 'center',
+    },
+    ctaGloss: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: '55%',
     },
     ctaText: {
       fontFamily: fonts.extraBold,
@@ -933,13 +1124,16 @@ function createStyles(fonts: UiFonts) {
       letterSpacing: 0.4,
       color: colors.white,
       textAlign: 'center',
+      textShadowColor: 'rgba(90, 0, 40, 0.45)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
     },
     noteRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 5,
-      marginTop: 10,
+      marginTop: 6,
     },
     note: {
       fontFamily: fonts.semiBold,
@@ -948,8 +1142,9 @@ function createStyles(fonts: UiFonts) {
     },
     included: {
       marginHorizontal: spacing.lg,
-      marginTop: spacing.lg,
-      padding: spacing.lg,
+      marginTop: spacing.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
       borderRadius: radii.xl,
       backgroundColor: 'rgba(255, 255, 255, 0.78)',
       borderWidth: StyleSheet.hairlineWidth,
@@ -957,12 +1152,9 @@ function createStyles(fonts: UiFonts) {
     },
     includedTitle: {
       fontFamily: fonts.extraBold,
-      fontSize: 17,
+      fontSize: 15,
       color: colors.ink,
-      marginBottom: spacing.md,
-    },
-    includedCard: {
-      marginBottom: 12,
+      marginBottom: 2,
     },
     includedRow: {
       flexDirection: 'row',
@@ -982,11 +1174,6 @@ function createStyles(fonts: UiFonts) {
       width: '100%',
       height: '100%',
     },
-    includedIndex: {
-      fontFamily: fonts.extraBold,
-      fontSize: 14,
-      color: colors.pinkDark,
-    },
     includedTextWrap: {
       flex: 1,
     },
@@ -1001,20 +1188,26 @@ function createStyles(fonts: UiFonts) {
       color: colors.muted,
       marginTop: 1,
     },
-    includedDivider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-      marginVertical: spacing.sm,
+    perkChips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 10,
     },
-    perkRow: {
+    perkChip: {
+      flexGrow: 1,
+      flexBasis: '45%',
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
-      marginTop: 8,
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: radii.pill,
+      backgroundColor: colors.pinkSoft,
     },
-    perkText: {
+    perkChipText: {
       fontFamily: fonts.semiBold,
-      fontSize: 14,
+      fontSize: 12,
       color: colors.ink,
     },
   });

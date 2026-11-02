@@ -4,6 +4,7 @@ import {
   applyLiveStockToCartQuantity,
   canIncreaseQuantity,
   clampQuantityToStock,
+  exceedsYarnLimit,
   isOutOfStock,
 } from './stock.ts';
 
@@ -26,6 +27,14 @@ describe('cart stock helpers', () => {
   test('stock 0 is out of stock', () => {
     assert.equal(isOutOfStock(0), true);
     assert.equal(clampQuantityToStock(1, 0), 0);
+  });
+
+  test('yarn limit counts all yarn in the order, not each shade', () => {
+    assert.equal(exceedsYarnLimit(0, 'Yarn', 10), false);
+    assert.equal(exceedsYarnLimit(0, 'Yarn', 11), true);
+    assert.equal(exceedsYarnLimit(6, 'Yarn', 6), true);
+    assert.equal(exceedsYarnLimit(4, 'Yarn', 6), false);
+    assert.equal(exceedsYarnLimit(20, 'Hooks', 20), false);
   });
 
   test('cart refresh reduces quantity when stock drops', () => {
