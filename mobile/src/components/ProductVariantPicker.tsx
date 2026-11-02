@@ -441,6 +441,8 @@ function createStyles(fonts: UiFonts) {
       textAlign: 'center',
     },
     outLabel: {
+      alignSelf: 'stretch',
+      textAlign: 'center',
       fontFamily: fonts.regular,
       fontSize: 9,
       color: colors.pink,

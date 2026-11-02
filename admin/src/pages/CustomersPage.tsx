@@ -171,7 +171,6 @@ export function CustomersPage() {
               <col className="col-state" />
               <col className="col-city" />
               <col className="col-phone" />
-              <col className="col-email" />
               <col className="col-orders" />
               <col className="col-date" />
               <col className="col-date" />
@@ -188,7 +187,6 @@ export function CustomersPage() {
                 <th className="col-state">State</th>
                 <th className="col-city">City</th>
                 <th className="col-phone">Phone</th>
-                <th className="col-email">Email</th>
                 <th className="col-orders">Orders</th>
                 <th className="col-date">Signed up</th>
                 <th className="col-date">Last active</th>
@@ -207,8 +205,14 @@ export function CustomersPage() {
                       </div>
                     ) : null}
                   </td>
-                  <td className="col-name col-clip cell-strong">
-                    {customer.fullName || '—'}
+                  <td className="col-name cell-strong">
+                    <div>{customer.fullName || '—'}</div>
+                    <div
+                      title={customer.email || undefined}
+                      style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary, #6b6b6b)', overflowWrap: 'anywhere', marginTop: 2 }}
+                    >
+                      {customer.email || '—'}
+                    </div>
                   </td>
                   <td className="col-track">{customer.track || '—'}</td>
                   <td className="col-age">{customer.age ?? '—'}</td>
@@ -216,9 +220,6 @@ export function CustomersPage() {
                   <td className="col-state col-clip">{customer.state || '—'}</td>
                   <td className="col-city col-clip">{customer.city || '—'}</td>
                   <td className="col-phone">{customer.phoneNumber || '—'}</td>
-                  <td className="col-email col-clip" title={customer.email || undefined}>
-                    {customer.email || '—'}
-                  </td>
                   <td className="col-orders">{customer.orderCount}</td>
                   <td className="col-date">{formatDate(customer.signedUpAt)}</td>
                   <td className="col-date">{formatDate(customer.lastActiveAt)}</td>
