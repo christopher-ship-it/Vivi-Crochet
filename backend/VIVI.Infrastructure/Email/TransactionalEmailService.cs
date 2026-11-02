@@ -303,6 +303,10 @@ public sealed class TransactionalEmailService
         Guid? enrollmentId,
         CancellationToken cancellationToken)
     {
+        // India customers may have no email (it is optional there): nothing to send, so queue nothing.
+        if (string.IsNullOrWhiteSpace(recipient))
+            return;
+
         var existing = await _db.EmailNotifications
             .SingleOrDefaultAsync(n => n.IdempotencyKey == idempotencyKey, cancellationToken);
 
