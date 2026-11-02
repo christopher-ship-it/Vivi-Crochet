@@ -181,12 +181,8 @@ export default function ShopScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  // Two yarn cards fit inside the gradient band: page padding and band padding come off the width.
+  // The kit card is sized from the band width: page padding and band padding come off it.
   const yarnSize = Math.floor((windowWidth - spacing.md * 2 - 24 - 12) / 2);
-  // The yarn cards are a little smaller than half the band, so the next card peeks in at the right.
-  const yarnCardSize = Math.round(yarnSize * 0.86);
-  // A little taller than wide, so a two-line name fits without being cut.
-  const yarnBox = { width: yarnCardSize, height: yarnCardSize + 26 };
   // The two arch cards (kit and materials) are smaller than the yarn cards and sit centred in their band.
   const archSize = Math.round(yarnSize * 0.86);
   const { t, language } = useI18n();
@@ -771,14 +767,9 @@ export default function ShopScreen() {
                   <Text style={styles.sectionLink}>{t('common.viewAll')}</Text>
                 </Pressable>
               </View>
-              {/* Cards swipe sideways, so many yarns do not make the page long. */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.yarnRowScroll}
-                contentContainerStyle={styles.yarnRow}
-              >
-                {yarnCards.map((card) => {
+              {/* Four across: the first three yarns, then the materials card. */}
+              <View style={styles.yarnRow}>
+                {yarnCards.slice(0, 3).map((card) => {
                   const off =
                     card.mrp != null && card.mrp > card.price
                       ? Math.round(((card.mrp - card.price) / card.mrp) * 100)
@@ -786,7 +777,7 @@ export default function ShopScreen() {
                   return (
                     <Pressable
                       key={card.id}
-                      style={({ pressed }) => [styles.yarnFrame, yarnBox, pressed && styles.roomCardPressed]}
+                      style={({ pressed }) => [styles.yarnFrame, styles.yarnFour, pressed && styles.roomCardPressed]}
                       onPress={() => router.push(`/product/${card.id}`)}
                       accessibilityRole="button"
                       accessibilityLabel={card.name}
@@ -827,10 +818,60 @@ export default function ShopScreen() {
                     </Pressable>
                   );
                 })}
-              </ScrollView>
+                <Pressable
+                  style={({ pressed }) => [styles.yarnFrame, styles.yarnFour, pressed && styles.roomCardPressed]}
+                  onPress={() => enterRoom('essentials')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}`}
+                >
+                  <LinearGradient colors={GOLD_FRAME} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
+                  <LinearGradient colors={['#ffffff', '#fff1e6']} style={styles.yarnTile}>
+                    <View style={styles.yarnThumb}>
+                      <Image source={ESSENTIALS_HERO} style={styles.kitThumbImage} resizeMode="contain" accessibilityIgnoresInvertColors />
+                    </View>
+                    <Text style={styles.yarnText} numberOfLines={2}>{t('shop.roomEssentialsTitle')}</Text>
+                    <Text style={styles.yarnHint} numberOfLines={2}>{materialsHighlights}</Text>
+                  </LinearGradient>
+                </Pressable>
+              </View>
             </LinearGradient>
           ) : null}
 
+          {handmadeEnabled ? (
+            <Pressable
+              style={({ pressed }) => [styles.handmadeCard, pressed && styles.roomCardPressed]}
+              onPress={() => enterRoom('handmade')}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('shop.roomHandmadeTitle')}. ${t('shop.roomHandmadeSubtitle')}`}
+            >
+              <View style={styles.handmadePhoto}>
+                <Image
+                  source={HANDMADE_HERO}
+                  style={styles.roomTilePhoto}
+                  resizeMode="cover"
+                  accessibilityIgnoresInvertColors
+                />
+              </View>
+              <LinearGradient
+                colors={['#fff7fa', '#ffd6e4']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.handmadeBody}
+              >
+                <View style={styles.handmadeTitleRow}>
+                  <Text style={styles.handmadeTitle} numberOfLines={2}>
+                    {t('shop.roomHandmadeTitle')}
+                  </Text>
+                  <View style={styles.tileArrow}>
+                    <Ionicons name="arrow-forward" size={14} color={colors.white} />
+                  </View>
+                </View>
+                <Text style={styles.handmadeExamples} numberOfLines={2}>
+                  {t('shop.roomHandmadeExamples')}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          ) : null}
           {/* Beginner kit and materials: two arch cards with gold frames on a deep band. */}
           <LinearGradient
             colors={['#3d0724', '#7a1146', '#c2185b', '#f0507f']}
@@ -885,71 +926,9 @@ export default function ShopScreen() {
                   </Text>
                 </Pressable>
               ) : null}
-              <Pressable
-                style={({ pressed }) => [{ width: archSize }, pressed && styles.roomCardPressed]}
-                onPress={() => enterRoom('essentials')}
-                accessibilityRole="button"
-                accessibilityLabel={`${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}`}
-              >
-                <LinearGradient colors={GOLD_FRAME} style={[styles.archFrame, { borderTopLeftRadius: archSize / 2, borderTopRightRadius: archSize / 2 }]}>
-                  <View style={[styles.archInner, { borderTopLeftRadius: archSize / 2 - 3, borderTopRightRadius: archSize / 2 - 3 }]}>
-                    <View style={styles.archPhoto}>
-                      <Image
-                        source={ESSENTIALS_HERO}
-                        style={styles.roomTilePhoto}
-                        resizeMode="cover"
-                        accessibilityIgnoresInvertColors
-                      />
-                    </View>
-                    <LinearGradient colors={GOLD_LABEL} style={styles.archLabel}>
-                      <Text style={styles.archLabelText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                        {materialsHighlights}
-                      </Text>
-                    </LinearGradient>
-                  </View>
-                </LinearGradient>
-                <Text style={styles.archCaption} numberOfLines={1}>
-                  {t('shop.roomEssentialsTitle')}
-                </Text>
-              </Pressable>
             </View>
           </LinearGradient>
 
-          {handmadeEnabled ? (
-            <Pressable
-              style={({ pressed }) => [styles.handmadeCard, pressed && styles.roomCardPressed]}
-              onPress={() => enterRoom('handmade')}
-              accessibilityRole="button"
-              accessibilityLabel={`${t('shop.roomHandmadeTitle')}. ${t('shop.roomHandmadeSubtitle')}`}
-            >
-              <View style={styles.handmadePhoto}>
-                <Image
-                  source={HANDMADE_HERO}
-                  style={styles.roomTilePhoto}
-                  resizeMode="cover"
-                  accessibilityIgnoresInvertColors
-                />
-              </View>
-              <LinearGradient
-                colors={['#fff7fa', '#ffd6e4']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.handmadeBody}
-              >
-                <View style={styles.handmadeTitleRow}>
-                  <Text style={styles.handmadeTitle} numberOfLines={2}>
-                    {t('shop.roomHandmadeTitle')}
-                  </Text>
-                  <View style={styles.tileArrow}>
-                    <Ionicons name="arrow-forward" size={14} color={colors.white} />
-                  </View>
-                </View>
-                <Text style={styles.handmadeExamples} numberOfLines={2}>
-                  {t('shop.roomHandmadeExamples')}
-                </Text>
-              </LinearGradient>
-            </Pressable>
-          ) : null}
         </ScrollView>
       ) : tab === 'products' ? (
         loading && !refreshing ? (
@@ -1542,13 +1521,21 @@ function createStyles(fonts: UiFonts, compact = false) {
       color: colors.white,
     },
     // The row reaches the band edges, so a third card peeks in at the right.
-    yarnRowScroll: {
-      marginHorizontal: -12,
-      flexGrow: 0,
-    },
     yarnRow: {
-      paddingHorizontal: 12,
-      gap: 12,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      rowGap: 10,
+    },
+    yarnFour: {
+      width: '50%',
+      paddingHorizontal: 4,
+    },
+    yarnHint: {
+      paddingHorizontal: 4,
+      fontFamily: fonts.semiBold,
+      fontSize: 11,
+      lineHeight: 15,
+      color: colors.muted,
     },
     // Gold frame around each yarn card, with a warm glow, like the arch cards below.
     yarnFrame: {
@@ -1606,7 +1593,7 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     yarnThumb: {
       width: '100%',
-      height: compact ? 62 : 70,
+      height: 104,
       paddingTop: 14,
       borderRadius: 12,
       overflow: 'hidden',
