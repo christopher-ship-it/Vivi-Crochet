@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { getFeedbackSummary } from '../api/feedback';
 import { getSupportUnreadCount } from '../api/support';
 import { useAuth } from '../auth/AuthContext';
 import { GlobalSearch } from '../components/GlobalSearch';
@@ -82,12 +83,12 @@ const NAV_ITEMS: { to: string; label: string; icon: IconName; end?: boolean }[] 
   { to: '/products', label: 'Shop products', icon: 'shop' },
   { to: '/payments', label: 'Payments', icon: 'payments' },
   { to: '/customers', label: 'Customers', icon: 'customers' },
+  { to: '/feedback', label: 'App feedback', icon: 'support' },
   { to: '/user-metrics', label: 'Daily user metrics', icon: 'customers' },
   { to: '/phone-otps', label: 'Phone OTPs', icon: 'phone' },
   { to: '/notifications', label: 'Notifications', icon: 'bell' },
   { to: '/support', label: 'Support', icon: 'support' },
   { to: '/app-health', label: 'App health', icon: 'health' },
-  { to: '/feedback', label: 'App feedback', icon: 'support' },
   { to: '/backend-check', label: 'Backend check', icon: 'health' },
 ];
 
@@ -156,6 +157,7 @@ export function AdminLayout() {
   const [bookingsOpen, setBookingsOpen] = useState(bookingsActive);
   const [courseDashOpen, setCourseDashOpen] = useState(courseDashActive);
   const [supportUnread, setSupportUnread] = useState(0);
+  const [feedbackUnresolved, setFeedbackUnresolved] = useState(0);
   const [collapsed, setCollapsed] = useState(loadCollapsed);
 
   function setSidebarCollapsed(next: boolean) {
@@ -199,6 +201,26 @@ export function AdminLayout() {
   useEffect(() => {
     if (courseDashActive) setCourseDashOpen(true);
   }, [courseDashActive]);
+
+  const refreshFeedbackUnresolved = useCallback(async () => {
+    try {
+      setFeedbackUnresolved((await getFeedbackSummary()).unresolved);
+    } catch {
+      // Keep last known count if the badge poll fails.
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshFeedbackUnresolved();
+    const timer = window.setInterval(() => void refreshFeedbackUnresolved(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [refreshFeedbackUnresolved]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/feedback')) {
+      void refreshFeedbackUnresolved();
+    }
+  }, [location.pathname, refreshFeedbackUnresolved]);
 
   useEffect(() => {
     void refreshSupportUnread();
@@ -385,6 +407,15 @@ export function AdminLayout() {
                     title={collapsed ? `${supportUnread} unread support queries` : undefined}
                   >
                     {supportUnread > 99 ? '99+' : supportUnread}
+                  </span>
+                ) : null}
+                {item.to === '/feedback' && feedbackUnresolved > 0 ? (
+                  <span
+                    className="admin-nav__badge"
+                    aria-label={`${feedbackUnresolved} open feedback`}
+                    title={collapsed ? `${feedbackUnresolved} open feedback` : undefined}
+                  >
+                    {feedbackUnresolved > 99 ? '99+' : feedbackUnresolved}
                   </span>
                 ) : null}
               </span>
