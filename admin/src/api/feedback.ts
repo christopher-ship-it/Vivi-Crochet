@@ -1,8 +1,8 @@
 import { apiRequest } from './client';
 
+/** Something a customer was looking for in the app and could not find. */
 export interface AppFeedbackItem {
   id: string;
-  rating: number;
   message: string | null;
   screen: string | null;
   appVersion: string | null;
@@ -15,11 +15,8 @@ export interface AppFeedbackItem {
 
 export interface AppFeedbackSummary {
   total: number;
-  averageRating: number;
   last7Days: number;
   unresolved: number;
-  /** Count of answers per star, index 0 = 1 star. */
-  ratingCounts: number[];
 }
 
 const BASE = '/api/admin/feedback';

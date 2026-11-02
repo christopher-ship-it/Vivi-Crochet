@@ -7,7 +7,7 @@ using VIVI.Infrastructure.Data;
 
 namespace VIVI.Api.Controllers;
 
-/// <summary>In-app feedback from the mobile prompt. Anonymous, validated, and rate limited like the telemetry routes.</summary>
+/// <summary>"Couldn't find what I was looking for" reports from the mobile app. Anonymous, validated, and rate limited.</summary>
 [ApiController]
 [Route("api/app-feedback")]
 [AllowAnonymous]
@@ -25,8 +25,7 @@ public sealed class AppFeedbackController : ControllerBase
         _db.AppFeedbacks.Add(new AppFeedback
         {
             Id = Guid.NewGuid(),
-            Rating = request.Rating,
-            Message = string.IsNullOrWhiteSpace(request.Message) ? null : request.Message.Trim(),
+            Message = request.Message.Trim(),
             Screen = request.Screen?.Trim(),
             AppVersion = request.AppVersion?.Trim(),
             Platform = request.Platform?.Trim(),

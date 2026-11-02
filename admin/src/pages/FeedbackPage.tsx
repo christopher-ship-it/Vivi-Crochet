@@ -15,11 +15,7 @@ function errMessage(err: unknown, fallback: string): string {
   return err instanceof ApiClientError ? err.message : fallback;
 }
 
-function stars(n: number): string {
-  return '★'.repeat(n) + '☆'.repeat(5 - n);
-}
-
-/** What customers said after staying in the app for a while (the in-app feedback prompt). */
+/** What customers were looking for in the app and could not find. */
 export function FeedbackPage() {
   const [summary, setSummary] = useState<AppFeedbackSummary | null>(null);
   const [items, setItems] = useState<AppFeedbackItem[]>([]);
@@ -53,18 +49,16 @@ export function FeedbackPage() {
       await setFeedbackResolved(item.id, !item.isResolved);
       await load();
     } catch (err) {
-      setError(errMessage(err, 'Could not update this feedback.'));
+      setError(errMessage(err, 'Could not update this item.'));
     }
   }
-
-  const maxCount = Math.max(1, ...(summary?.ratingCounts ?? [0]));
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>App feedback</h1>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Couldn't find</h1>
         <p style={{ margin: '4px 0 0', color: '#6b6b6b' }}>
-          Ratings and messages from customers who stayed in the app for 30 seconds or more.
+          What customers were looking for in the app and could not find. Sent from the prompt shown after 30 seconds in the app.
         </p>
       </div>
 
@@ -72,28 +66,9 @@ export function FeedbackPage() {
 
       {summary ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <Metric label="Average rating" value={summary.total ? `${summary.averageRating} / 5` : '—'} />
-          <Metric label="Total responses" value={String(summary.total)} />
+          <Metric label="Total reports" value={String(summary.total)} />
           <Metric label="Last 7 days" value={String(summary.last7Days)} />
-          <Metric label="Unresolved" value={String(summary.unresolved)} />
-        </div>
-      ) : null}
-
-      {summary && summary.total > 0 ? (
-        <div style={{ background: '#fff', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: 16 }}>
-          <p style={{ margin: '0 0 10px', fontWeight: 600 }}>Ratings</p>
-          {[5, 4, 3, 2, 1].map((star) => {
-            const count = summary.ratingCounts[star - 1] ?? 0;
-            return (
-              <div key={star} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 40px', gap: 10, alignItems: 'center', marginBottom: 6 }}>
-                <span style={{ color: '#c8145a' }}>{stars(star)}</span>
-                <div style={{ background: '#f3f3f3', borderRadius: 6, height: 10, overflow: 'hidden' }}>
-                  <div style={{ width: `${(count / maxCount) * 100}%`, background: '#e8215b', height: '100%' }} />
-                </div>
-                <span style={{ textAlign: 'right', color: '#6b6b6b' }}>{count}</span>
-              </div>
-            );
-          })}
+          <Metric label="Not yet handled" value={String(summary.unresolved)} />
         </div>
       ) : null}
 
@@ -112,13 +87,13 @@ export function FeedbackPage() {
               cursor: 'pointer',
             }}
           >
-            {s === 'open' ? 'Open' : s === 'resolved' ? 'Resolved' : 'All'}
+            {s === 'open' ? 'Open' : s === 'resolved' ? 'Handled' : 'All'}
           </button>
         ))}
       </div>
 
       {loading ? <p style={{ color: '#6b6b6b' }}>Loading…</p> : null}
-      {!loading && items.length === 0 ? <p style={{ color: '#6b6b6b' }}>No feedback in this view yet.</p> : null}
+      {!loading && items.length === 0 ? <p style={{ color: '#6b6b6b' }}>Nothing in this view yet.</p> : null}
 
       <div style={{ display: 'grid', gap: 10 }}>
         {items.map((item) => (
@@ -127,10 +102,10 @@ export function FeedbackPage() {
             style={{ background: '#fff', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: 14, opacity: item.isResolved ? 0.6 : 1 }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-              <span style={{ color: '#c8145a', fontSize: 16 }}>{stars(item.rating)}</span>
+              <span style={{ fontSize: 13, color: '#6b6b6b' }}>Looking for</span>
               <span style={{ color: '#6b6b6b', fontSize: 13 }}>{formatDate(item.createdAt)}</span>
             </div>
-            {item.message ? <p style={{ margin: '8px 0 0' }}>{item.message}</p> : <p style={{ margin: '8px 0 0', color: '#8a8a8a' }}>No message</p>}
+            <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 500 }}>{item.message ?? '—'}</p>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, gap: 12, flexWrap: 'wrap' }}>
               <span style={{ color: '#6b6b6b', fontSize: 12 }}>
                 {[item.platform, item.appVersion ? `v${item.appVersion}` : null, `${item.secondsInApp}s in app`, item.screen]
@@ -142,7 +117,7 @@ export function FeedbackPage() {
                 onClick={() => void toggle(item)}
                 style={{ padding: '4px 12px', borderRadius: 8, border: '0.5px solid #d9d9d9', background: '#fff', cursor: 'pointer' }}
               >
-                {item.isResolved ? 'Reopen' : 'Mark resolved'}
+                {item.isResolved ? 'Reopen' : 'Mark handled'}
               </button>
             </div>
           </div>

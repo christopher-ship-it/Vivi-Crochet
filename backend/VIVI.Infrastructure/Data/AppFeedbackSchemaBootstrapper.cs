@@ -2,7 +2,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace VIVI.Infrastructure.Data;
 
-/// <summary>Ensures the AppFeedbacks table exists when AutoMigrate is false (same pattern as AppHealthSchemaBootstrapper).</summary>
+/// <summary>
+/// Ensures the AppFeedbacks table exists when AutoMigrate is false. The table records what customers
+/// were looking for and could not find. An earlier star-rating column is removed if it is still there.
+/// </summary>
 public static class AppFeedbackSchemaBootstrapper
 {
     public static async Task EnsureAsync(ViviDbContext db, CancellationToken cancellationToken)
@@ -13,7 +16,6 @@ public static class AppFeedbackSchemaBootstrapper
             BEGIN
                 CREATE TABLE [AppFeedbacks] (
                     [Id] uniqueidentifier NOT NULL,
-                    [Rating] int NOT NULL,
                     [Message] nvarchar(1000) NULL,
                     [Screen] nvarchar(200) NULL,
                     [AppVersion] nvarchar(40) NULL,
@@ -25,6 +27,14 @@ public static class AppFeedbackSchemaBootstrapper
                     CONSTRAINT [PK_AppFeedbacks] PRIMARY KEY ([Id])
                 );
             END
+            """,
+            cancellationToken);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF OBJECT_ID(N'[AppFeedbacks]', N'U') IS NOT NULL
+               AND COL_LENGTH(N'AppFeedbacks', N'Rating') IS NOT NULL
+                ALTER TABLE [AppFeedbacks] DROP COLUMN [Rating];
             """,
             cancellationToken);
 

@@ -1,11 +1,13 @@
 namespace VIVI.Core.Entities;
 
-/// <summary>Feedback a customer gives from the in-app prompt shown after they have stayed in the app for a while.</summary>
+/// <summary>
+/// Something a customer was looking for in the app and could not find, sent from the in-app prompt
+/// that appears after they have been in the app for a while.
+/// </summary>
 public sealed class AppFeedback
 {
     public Guid Id { get; set; }
-    /// <summary>1 to 5 stars.</summary>
-    public int Rating { get; set; }
+    /// <summary>What the customer was looking for, in their own words.</summary>
     public string? Message { get; set; }
     public string? Screen { get; set; }
     public string? AppVersion { get; set; }

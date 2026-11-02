@@ -22,19 +22,11 @@ public sealed class AdminFeedbackController : ControllerBase
     {
         var weekAgo = DateTime.UtcNow.AddDays(-7);
         var all = _db.AppFeedbacks.AsNoTracking();
-        var total = await all.CountAsync(cancellationToken);
-        var average = total == 0 ? 0 : await all.AverageAsync(f => (double)f.Rating, cancellationToken);
-        var counts = new int[5];
-        for (var star = 1; star <= 5; star++)
-            counts[star - 1] = await all.CountAsync(f => f.Rating == star, cancellationToken);
-
         return Ok(new AdminFeedbackSummaryResponse
         {
-            Total = total,
-            AverageRating = Math.Round(average, 1),
+            Total = await all.CountAsync(cancellationToken),
             Last7Days = await all.CountAsync(f => f.CreatedAt >= weekAgo, cancellationToken),
-            Unresolved = await all.CountAsync(f => !f.IsResolved, cancellationToken),
-            RatingCounts = counts
+            Unresolved = await all.CountAsync(f => !f.IsResolved, cancellationToken)
         });
     }
 
@@ -54,7 +46,6 @@ public sealed class AdminFeedbackController : ControllerBase
             .Select(f => new AdminFeedbackItemResponse
             {
                 Id = f.Id,
-                Rating = f.Rating,
                 Message = f.Message,
                 Screen = f.Screen,
                 AppVersion = f.AppVersion,
@@ -82,7 +73,6 @@ public sealed class AdminFeedbackController : ControllerBase
         return Ok(new AdminFeedbackItemResponse
         {
             Id = item.Id,
-            Rating = item.Rating,
             Message = item.Message,
             Screen = item.Screen,
             AppVersion = item.AppVersion,
