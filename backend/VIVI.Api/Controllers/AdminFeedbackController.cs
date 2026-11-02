@@ -47,6 +47,7 @@ public sealed class AdminFeedbackController : ControllerBase
             {
                 Id = f.Id,
                 Message = f.Message,
+                Phone = f.Phone,
                 Screen = f.Screen,
                 AppVersion = f.AppVersion,
                 Platform = f.Platform,
@@ -74,6 +75,7 @@ public sealed class AdminFeedbackController : ControllerBase
         {
             Id = item.Id,
             Message = item.Message,
+            Phone = item.Phone,
             Screen = item.Screen,
             AppVersion = item.AppVersion,
             Platform = item.Platform,

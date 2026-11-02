@@ -17,6 +17,7 @@ public static class AppFeedbackSchemaBootstrapper
                 CREATE TABLE [AppFeedbacks] (
                     [Id] uniqueidentifier NOT NULL,
                     [Message] nvarchar(1000) NULL,
+                    [Phone] nvarchar(20) NULL,
                     [Screen] nvarchar(200) NULL,
                     [AppVersion] nvarchar(40) NULL,
                     [Platform] nvarchar(40) NULL,
@@ -27,6 +28,14 @@ public static class AppFeedbackSchemaBootstrapper
                     CONSTRAINT [PK_AppFeedbacks] PRIMARY KEY ([Id])
                 );
             END
+            """,
+            cancellationToken);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF OBJECT_ID(N'[AppFeedbacks]', N'U') IS NOT NULL
+               AND COL_LENGTH(N'AppFeedbacks', N'Phone') IS NULL
+                ALTER TABLE [AppFeedbacks] ADD [Phone] nvarchar(20) NULL;
             """,
             cancellationToken);
 

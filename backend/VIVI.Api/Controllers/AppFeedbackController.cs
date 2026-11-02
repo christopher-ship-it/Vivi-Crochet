@@ -26,6 +26,7 @@ public sealed class AppFeedbackController : ControllerBase
         {
             Id = Guid.NewGuid(),
             Message = request.Message.Trim(),
+            Phone = request.Phone.Trim(),
             Screen = request.Screen?.Trim(),
             AppVersion = request.AppVersion?.Trim(),
             Platform = request.Platform?.Trim(),

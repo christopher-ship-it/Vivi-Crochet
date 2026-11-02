@@ -106,6 +106,7 @@ export function FeedbackPage() {
               <span style={{ color: '#6b6b6b', fontSize: 13 }}>{formatDate(item.createdAt)}</span>
             </div>
             <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 500 }}>{item.message ?? '—'}</p>
+            <p style={{ margin: '4px 0 0', fontSize: 14, color: '#6b6b6b' }}>Phone: {item.phone ?? 'not given'}</p>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, gap: 12, flexWrap: 'wrap' }}>
               <span style={{ color: '#6b6b6b', fontSize: 12 }}>
                 {[item.platform, item.appVersion ? `v${item.appVersion}` : null, `${item.secondsInApp}s in app`, item.screen]

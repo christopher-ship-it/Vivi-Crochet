@@ -81,6 +81,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<string>("Message")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Phone")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Platform")
                         .HasColumnType("nvarchar(max)");
 

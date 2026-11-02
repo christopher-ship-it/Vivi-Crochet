@@ -4,6 +4,7 @@ import { apiRequest } from './client';
 export interface AppFeedbackItem {
   id: string;
   message: string | null;
+  phone: string | null;
   screen: string | null;
   appVersion: string | null;
   platform: string | null;

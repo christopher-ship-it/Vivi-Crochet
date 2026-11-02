@@ -9,6 +9,11 @@ public sealed class SubmitFeedbackRequest
     [MinLength(2)]
     [MaxLength(1000)]
     public string Message { get; set; } = string.Empty;
+    /// <summary>Phone number so the team can reply: digits, optionally with a leading +.</summary>
+    [Required]
+    [MaxLength(20)]
+    [RegularExpression(@"^\+?[0-9 \-]{7,20}$", ErrorMessage = "Enter a valid phone number.")]
+    public string Phone { get; set; } = string.Empty;
     [MaxLength(200)]
     public string? Screen { get; set; }
     [MaxLength(40)]
@@ -23,6 +28,7 @@ public sealed class AdminFeedbackItemResponse
 {
     public Guid Id { get; set; }
     public string? Message { get; set; }
+    public string? Phone { get; set; }
     public string? Screen { get; set; }
     public string? AppVersion { get; set; }
     public string? Platform { get; set; }
