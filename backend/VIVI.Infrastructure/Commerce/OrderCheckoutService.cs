@@ -117,6 +117,7 @@ public sealed class OrderCheckoutService
 
         _delivery.EnsureOnlinePaymentOrThrow(paymentMethod);
         EnsureNotMixed(items);
+        await EnsureYarnLimitAsync(items, cancellationToken);
 
         var market = await LoadMarketAsync(customerId, cancellationToken);
         var hasPhysical = items.Any(i => i.ItemType == OrderItemType.Product);
@@ -391,6 +392,32 @@ public sealed class OrderCheckoutService
 
     private const int MaxYarnQuantity = 10;
 
+    /// <summary>Yarn is capped per order: every yarn shade/product in the order counts toward the same limit.</summary>
+    private async Task EnsureYarnLimitAsync(IReadOnlyList<CheckoutLineInput> items, CancellationToken cancellationToken)
+    {
+        var lines = items.Where(i => i.ItemType == OrderItemType.Product && i.ProductId.HasValue).ToList();
+        if (lines.Count == 0)
+            return;
+
+        var ids = lines.Select(l => l.ProductId!.Value).Distinct().ToList();
+        var categories = await _db.Products
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .Select(p => new { p.Id, Category = string.IsNullOrWhiteSpace(p.Category) ? p.Parent!.Category : p.Category })
+            .ToListAsync(cancellationToken);
+        var yarnIds = categories
+            .Where(p => string.Equals(p.Category?.Trim(), "Yarn", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Id)
+            .ToHashSet();
+
+        if (lines.Where(l => yarnIds.Contains(l.ProductId!.Value)).Sum(l => l.Quantity) > MaxYarnQuantity)
+        {
+            throw ViviException.Conflict(
+                "YARN_LIMIT_EXCEEDED",
+                $"You can select only a maximum of {MaxYarnQuantity} pieces per order.");
+        }
+    }
+
     private async Task<(OrderItem Item, ProductType? ProductType)> BuildProductItemAsync(
         CheckoutLineInput line,
         CancellationToken cancellationToken)
@@ -415,15 +442,6 @@ public sealed class OrderCheckoutService
             throw ViviException.Conflict(
                 "SELECT_VARIANT",
                 "Choose a colour/variant before adding this product to the order.");
-        }
-
-        var category = string.IsNullOrWhiteSpace(product.Category) ? product.Parent?.Category : product.Category;
-        if (line.Quantity > MaxYarnQuantity
-            && string.Equals(category?.Trim(), "Yarn", StringComparison.OrdinalIgnoreCase))
-        {
-            throw ViviException.Conflict(
-                "YARN_LIMIT_EXCEEDED",
-                $"You can select only a maximum of {MaxYarnQuantity} pieces per order.");
         }
 
         _inventory.EnsureAvailableOrThrow(product, line.Quantity);
