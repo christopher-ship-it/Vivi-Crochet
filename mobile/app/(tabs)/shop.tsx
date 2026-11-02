@@ -760,7 +760,7 @@ export default function ShopScreen() {
                 </View>
                 <Pressable
                   style={styles.viewAllPill}
-                  onPress={() => enterRoom('essentials', YARN_FILTER)}
+                  onPress={() => enterRoom('essentials')}
                   hitSlop={8}
                   accessibilityRole="button"
                 >
@@ -1474,10 +1474,10 @@ function createStyles(fonts: UiFonts, compact = false) {
     yarnBand: {
       borderRadius: 24,
       overflow: 'hidden',
-      paddingTop: 22,
-      paddingBottom: 16,
+      paddingTop: 16,
+      paddingBottom: 12,
       paddingHorizontal: 12,
-      gap: 12,
+      gap: 8,
     },
     sectionHeader: {
       flexDirection: 'row',
@@ -1524,7 +1524,7 @@ function createStyles(fonts: UiFonts, compact = false) {
     yarnRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      rowGap: 10,
+      rowGap: 8,
     },
     yarnFour: {
       width: '50%',
@@ -1593,7 +1593,7 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     yarnThumb: {
       width: '100%',
-      height: 104,
+      height: 84,
       paddingTop: 14,
       borderRadius: 12,
       overflow: 'hidden',
