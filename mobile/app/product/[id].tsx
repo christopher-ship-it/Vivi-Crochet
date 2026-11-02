@@ -238,8 +238,6 @@ export default function ProductDetailScreen() {
       product.needleSize?.trim(),
   );
   const hasDescription = description.length > 0;
-  const showYarnLink = market.canOrderProducts && /yarn/i.test(product.category);
-  const colourCount = product.variants?.length ?? 0;
   // The yarn limit is per order, so the page counts every yarn shade already in the cart.
   const yarnInCart = cartItems
     .filter((i) => i.productId && isYarnCategory(i.category))
@@ -652,33 +650,8 @@ export default function ProductDetailScreen() {
               </Pressable>
             ) : null}
 
-            {hasSpecs || hasDescription || showYarnLink ? (
+            {hasSpecs || hasDescription ? (
               <View style={styles.detailsBlock}>
-                {showYarnLink ? (
-                  <Pressable
-                    style={styles.yarnLink}
-                    onPress={() => {
-                      // Opens this yarn's full colour list; a yarn without shades opens the Yarn shop instead.
-                      if (selectedVariantId) {
-                        setColourSheetOpen(true);
-                        return;
-                      }
-                      router.push({
-                        pathname: '/(tabs)/shop',
-                        params: { shopRoom: 'essentials', shopYarn: '1', at: String(Date.now()) },
-                      });
-                    }}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="color-palette-outline" size={20} color={colors.pink} />
-                    <Text style={styles.yarnLinkText}>
-                      {colourCount > 0
-                        ? `${colourCount} yarn ${colourCount === 1 ? 'colour' : 'colours'}`
-                        : 'Browse yarn'}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-                  </Pressable>
-                ) : null}
                 {hasSpecs || hasDescription ? (
                 <Pressable
                   style={styles.detailsHeader}

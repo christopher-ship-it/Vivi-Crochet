@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,8 +31,9 @@ interface ProductVariantPickerProps {
 }
 
 /** Shades in the swipe row; the rest are behind the "Show all" tile. */
-const ROW_COUNT = 10;
+const ROW_COUNT = 16;
 const GRID_COLUMNS = 4;
+const GRID_GAP = 8;
 
 /** Swipe row of shades for parent products with variant SKUs; "Show all" opens the full searchable grid. */
 export function ProductVariantPicker({
@@ -52,6 +54,9 @@ export function ProductVariantPicker({
   const fonts = uiFonts(language);
   const styles = useMemo(() => createStyles(fonts), [language]);
   const [filter, setFilter] = useState('');
+  // Four shades fill the row: each cell is a quarter of the measured width, less the gaps between them.
+  const [gridWidth, setGridWidth] = useState(0);
+  const cellWidth = gridWidth > 0 ? (gridWidth - 3 * GRID_GAP) / 4 : undefined;
 
   const variants = product.variants ?? [];
   if (variants.length === 0) return null;
@@ -92,11 +97,7 @@ export function ProductVariantPicker({
           </Text>
         </Text>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.row}
-      >
+      <View style={styles.grid4} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
         {rowVariants.map((variant) => (
           <VariantCard
             key={variant.id}
@@ -104,33 +105,39 @@ export function ProductVariantPicker({
             selected={variant.id === selected.id}
             showPrice={variant.price !== selected.price}
             onPress={() => onSelect(variant.id)}
-            cardStyle={styles.rowCard}
+            cardStyle={{ width: cellWidth }}
             styles={styles}
           />
         ))}
-        {variants.length > ROW_COUNT ? (
-          <Pressable
-            onPress={() => onSheetOpenChange(true)}
-            style={[styles.rowCard, styles.moreTile]}
-            accessibilityRole="button"
-          >
-            <Text style={styles.moreText} numberOfLines={3}>
-              {t('product.showAllColours', { count: variants.length })}
-            </Text>
-          </Pressable>
-        ) : null}
-      </ScrollView>
+      </View>
+      {variants.length > ROW_COUNT ? (
+        <Pressable
+          onPress={() => onSheetOpenChange(true)}
+          style={styles.showAllButton}
+          accessibilityRole="button"
+        >
+          <Text style={styles.showAllText}>
+            {t('product.showAllColours', { count: variants.length })}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={closeSheet}>
         <View style={styles.sheetRoot}>
           <Pressable style={styles.backdrop} onPress={closeSheet} />
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>
+              <Text style={styles.sheetTitle} numberOfLines={2}>
                 {t('product.showAllColours', { count: variants.length })}
               </Text>
-              <Pressable onPress={closeSheet} hitSlop={8} accessibilityRole="button">
-                <Text style={styles.sheetClose}>{t('common.close')}</Text>
+              <Pressable
+                onPress={closeSheet}
+                hitSlop={10}
+                style={styles.sheetCloseIcon}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
+              >
+                <Ionicons name="close" size={22} color={colors.ink} />
               </Pressable>
             </View>
             <TextInput
@@ -331,12 +338,32 @@ function createStyles(fonts: UiFonts) {
       flex: 1,
       marginBottom: 0,
     },
+    /* Four shades per row; tapping one shows its name and code in the label above. */
+    showAllButton: {
+      marginTop: 10,
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: colors.pink,
+      backgroundColor: colors.white,
+    },
+    showAllText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 14,
+      color: colors.pinkDark,
+    },
+    grid4: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: GRID_GAP,
+    },
     row: {
       gap: 6,
       paddingRight: spacing.md,
     },
     rowCard: {
-      width: 78,
+      width: '23.5%',
     },
     moreTile: {
       alignItems: 'center',
@@ -516,9 +543,19 @@ function createStyles(fonts: UiFonts) {
       justifyContent: 'space-between',
       marginBottom: spacing.sm,
     },
+    sheetCloseIcon: {
+      flexShrink: 0,
+      width: 36,
+      height: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     sheetTitle: {
+      flex: 1,
+      marginRight: spacing.sm,
       fontFamily: fonts.extraBold,
       fontSize: 17,
+      lineHeight: 22,
       color: colors.ink,
     },
     sheetClose: {

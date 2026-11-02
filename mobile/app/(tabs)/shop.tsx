@@ -45,6 +45,7 @@ import { useWishlist } from '../../src/wishlist/WishlistContext';
 import { AppImage, prefetchImages } from '../../src/components/AppImage';
 import { findBeginnerKit } from '../../src/cart/beginnerKit';
 import { formatInr } from '../../src/utils/format';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type ShopTab = 'products' | 'orders';
 type ShopRoom = 'handmade' | 'essentials';
@@ -75,6 +76,8 @@ const BULBS = [
 const YARN_PHOTO_BG = '#ffffff';
 /** Last loaded Essentials list, so the landing shows the kit card at once on revisits. */
 let essentialsCache: Product[] = [];
+/** Last Essentials list saved on the device, so the Shop shows its cards at once on the next open. */
+const ESSENTIALS_STORAGE_KEY = 'vivi_shop_essentials_v1';
 
 /** Small icon per category chip — keyword match against free-text category names. */
 function categoryChipIcon(cat: string): keyof typeof Ionicons.glyphMap {
@@ -237,6 +240,8 @@ export default function ShopScreen() {
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [availability, setAvailability] = useState<'all' | 'in' | 'out'>('all');
   const [priceLowToHigh, setPriceLowToHigh] = useState(false);
+  /** The yarn tapped on the yarn page; its first four colours show in a sheet. */
+  const [yarnSheet, setYarnSheet] = useState<Product | null>(null);
   const hasLoadedOnce = useRef(false);
   const requestId = useRef(0);
   // Shop landing: the beginner kit card and the yarn highlight come from the real Essentials products.
@@ -398,7 +403,10 @@ export default function ShopScreen() {
 
   // A last row with fewer cards than columns must keep each card in its own column slot,
   // so it is topped up with invisible spacers (otherwise the cards drift to the row's ends).
-  const gridColumns = room === 'essentials' ? 3 : 2;
+  // The yarn page (a yarn chip or View all) shows four per row; other lists keep their grids.
+  const yarnView = room === 'essentials' && (activeCategory === YARN_FILTER || /yarn/i.test(activeCategory));
+  const gridColumns = room === 'essentials' ? (yarnView ? 4 : 3) : 2;
+  const yarnTileWidth = Math.floor((windowWidth - spacing.sm * 2 - 3 * spacing.sm) / 4);
   const gridData: (Product | { id: string; spacer: true })[] = [...displayedProducts];
   while (gridData.length % gridColumns !== 0 && gridData.length > 0) {
     gridData.push({ id: `spacer-${gridData.length}`, spacer: true });
@@ -495,6 +503,25 @@ export default function ShopScreen() {
   const showAddedBar = justAdded && itemCount > 0 && tab === 'products' && room !== null;
   const showingChooser = tab === 'products' && !room;
 
+  // On a cold start, show the last saved list straight away while the fresh one loads.
+  useEffect(() => {
+    if (essentialsCache.length > 0) return;
+    let cancelled = false;
+    AsyncStorage.getItem(ESSENTIALS_STORAGE_KEY)
+      .then((raw) => {
+        if (cancelled || !raw) return;
+        const saved = JSON.parse(raw) as Product[];
+        if (!Array.isArray(saved) || saved.length === 0) return;
+        essentialsCache = saved;
+        setEssentials(saved);
+        setEssentialsLoading(false);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Reloaded each time the landing is shown, so a sold-out kit or a new price is picked up.
   // A failed lookup just hides the kit card and yarn highlight; the two room cards still work.
   useEffect(() => {
@@ -505,6 +532,7 @@ export default function ShopScreen() {
         if (cancelled) return;
         essentialsCache = list;
         setEssentials(list);
+        void AsyncStorage.setItem(ESSENTIALS_STORAGE_KEY, JSON.stringify(list)).catch(() => undefined);
       })
       .catch(() => undefined)
       .finally(() => {
@@ -933,7 +961,7 @@ export default function ShopScreen() {
           <ErrorView message={error} onRetry={() => load()} actionLabel={t('common.retry')} />
         ) : (
           <FlatList
-            key={`shop-products-${room}`}
+            key={`shop-products-${room}-${gridColumns}`}
             data={gridData}
             keyExtractor={(item) => item.id}
             numColumns={gridColumns}
@@ -979,6 +1007,20 @@ export default function ShopScreen() {
             renderItem={({ item, index }) =>
               'spacer' in item ? (
                 <View style={{ flex: 1, maxWidth: gridColumns === 3 ? '33.333%' : '50%' }} />
+              ) : yarnView ? (
+                // Yarn page: just the photo. Tapping it opens the colours sheet.
+                <Pressable
+                  style={({ pressed }) => [styles.yarnPhotoTile, { width: yarnTileWidth, height: yarnTileWidth }, pressed && styles.roomCardPressed]}
+                  onPress={() => setYarnSheet(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.name}
+                >
+                  {item.imageUrl ? (
+                    <AppImage uri={item.imageUrl} style={styles.kitThumbImage} contentFit="contain" backgroundColor={colors.white} accessibilityLabel={item.name} />
+                  ) : (
+                    <Ionicons name="color-palette-outline" size={22} color={colors.pinkDark} />
+                  )}
+                </Pressable>
               ) : (
               <ProductCard
                 product={item}
@@ -987,7 +1029,9 @@ export default function ShopScreen() {
                 compact={room === 'essentials'}
                 dense={room === 'essentials'}
                 searchQuery={debouncedQuery}
-                onPress={(variantId) => router.push(`/product/${variantId ?? item.id}`)}
+                onPress={(variantId) =>
+                  yarnView && !variantId ? setYarnSheet(item) : router.push(`/product/${variantId ?? item.id}`)
+                }
               />
               )
             }
@@ -1096,6 +1140,50 @@ export default function ShopScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      <Modal visible={yarnSheet !== null} transparent animationType="slide" onRequestClose={() => setYarnSheet(null)}>
+        <View style={styles.yarnSheetRoot}>
+          <Pressable style={styles.yarnSheetBackdrop} onPress={() => setYarnSheet(null)} />
+          {yarnSheet ? (
+            <View style={[styles.yarnSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+              <View style={styles.filterHandle} />
+              <Text style={styles.yarnSheetTitle} numberOfLines={2}>{yarnSheet.name}</Text>
+              {(yarnSheet.variants ?? []).slice(0, 4).map((variant) => (
+                <Pressable
+                  key={variant.id}
+                  style={styles.yarnSheetRow}
+                  onPress={() => {
+                    setYarnSheet(null);
+                    router.push(`/product/${variant.id}`);
+                  }}
+                  accessibilityRole="button"
+                >
+                  <View style={[styles.yarnSheetSwatch, !variant.colourHex && { backgroundColor: colors.mediaWash }]}>
+                    {variant.colourHex ? (
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: variant.colourHex }]} />
+                    ) : variant.imageUrl ? (
+                      <AppImage uri={variant.imageUrl} style={styles.kitThumbImage} contentFit="cover" />
+                    ) : null}
+                  </View>
+                  <Text style={styles.yarnSheetName} numberOfLines={1}>{variant.colourName ?? '—'}</Text>
+                  <Text style={styles.yarnSheetCode} numberOfLines={1}>{variant.productCode ?? ''}</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+                </Pressable>
+              ))}
+              <Pressable
+                style={styles.yarnSheetAll}
+                onPress={() => {
+                  setYarnSheet(null);
+                  router.push(`/product/${yarnSheet.id}`);
+                }}
+                accessibilityRole="button"
+              >
+                <Text style={styles.yarnSheetAllText}>{t('product.showAllColours', { count: yarnSheet.variantCount ?? yarnSheet.variants?.length ?? 0 })}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
 
       <Modal
         visible={filterOpen}
@@ -1927,6 +2015,76 @@ function createStyles(fonts: UiFonts, compact = false) {
       fontFamily: fonts.extraBold,
       fontSize: 12,
       color: colors.pinkDark,
+    },
+    yarnPhotoTile: {
+      borderRadius: 14,
+      overflow: 'hidden',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.white,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.softBorder,
+    },
+    yarnSheetRoot: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    yarnSheetBackdrop: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(34, 26, 30, 0.4)',
+    },
+    yarnSheet: {
+      backgroundColor: colors.white,
+      borderTopLeftRadius: 22,
+      borderTopRightRadius: 22,
+      paddingHorizontal: spacing.md,
+      paddingTop: 10,
+      gap: 4,
+    },
+    yarnSheetTitle: {
+      fontFamily: fonts.extraBold,
+      fontSize: 16,
+      color: colors.ink,
+      marginBottom: 6,
+    },
+    yarnSheetRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.softBorder,
+    },
+    yarnSheetSwatch: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      overflow: 'hidden',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    yarnSheetName: {
+      flex: 1,
+      fontFamily: fonts.semiBold,
+      fontSize: 15,
+      color: colors.ink,
+    },
+    yarnSheetCode: {
+      fontFamily: fonts.regular,
+      fontSize: 12,
+      color: colors.muted,
+    },
+    yarnSheetAll: {
+      alignItems: 'center',
+      marginTop: 10,
+      paddingVertical: 13,
+      borderRadius: 14,
+      backgroundColor: colors.pink,
+    },
+    yarnSheetAllText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 14,
+      color: colors.white,
     },
     filterSheetRoot: {
       flex: 1,

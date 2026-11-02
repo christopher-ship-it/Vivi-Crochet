@@ -10,16 +10,24 @@ const SHOW_AFTER_MS = 30_000;
 /** Ask at most once every 30 days per install. */
 const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 const LAST_PROMPT_KEY = 'vivi_feedback_last_prompt_v1';
-const MIN_LENGTH = 2;
+const MIN_MESSAGE_LENGTH = 2;
+const MIN_PHONE_DIGITS = 7;
+
+/** The phone number the server accepts: 7 to 20 characters of digits, spaces or dashes, optionally with a leading +. */
+function isValidPhone(value: string): boolean {
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= MIN_PHONE_DIGITS && /^\+?[0-9 -]{7,20}$/.test(value.trim());
+}
 
 /**
  * Counts time the app is open and in the foreground. After 30 seconds, asks "Couldn't find something?"
- * and collects what the customer was looking for. Background time does not count, and the sheet is
- * never shown more than once every 30 days.
+ * and collects what the customer was looking for plus a phone number so the team can reply.
+ * Background time does not count, and the sheet is never shown more than once every 30 days.
  */
 export function FeedbackPrompt() {
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState('');
+  const [phone, setPhone] = useState('');
   const [sending, setSending] = useState(false);
   const [thanks, setThanks] = useState(false);
   const activeMs = useRef(0);
@@ -81,19 +89,23 @@ export function FeedbackPrompt() {
   function close() {
     setVisible(false);
     setMessage('');
+    setPhone('');
     setThanks(false);
   }
 
+  const canSend =
+    message.trim().length >= MIN_MESSAGE_LENGTH && isValidPhone(phone) && !sending;
+
   async function send() {
-    const text = message.trim();
-    if (text.length < MIN_LENGTH || sending) return;
+    if (!canSend) return;
     setSending(true);
     const totalSeconds = Math.round(
       (activeMs.current + (activeSince.current != null ? Date.now() - activeSince.current : 0)) / 1000,
     );
     try {
       await submitAppFeedback({
-        message: text,
+        message: message.trim(),
+        phone: phone.trim(),
         platform: Platform.OS,
         secondsInApp: totalSeconds,
       });
@@ -107,8 +119,6 @@ export function FeedbackPrompt() {
     }
   }
 
-  const canSend = message.trim().length >= MIN_LENGTH && !sending;
-
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
       <View style={styles.backdrop}>
@@ -120,7 +130,7 @@ export function FeedbackPrompt() {
                 <Ionicons name="heart" size={26} color={colors.pink} />
               </View>
               <Text style={styles.title}>Thank you</Text>
-              <Text style={styles.body}>We'll use this to make things easier to find.</Text>
+              <Text style={styles.body}>We'll call or message you on that number.</Text>
             </>
           ) : (
             <>
@@ -136,11 +146,22 @@ export function FeedbackPrompt() {
                 maxLength={1000}
                 autoFocus
               />
+              <Text style={styles.label}>Your phone number</Text>
+              <TextInput
+                style={styles.phoneInput}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="We'll reply on this number"
+                placeholderTextColor={colors.muted}
+                keyboardType="phone-pad"
+                maxLength={20}
+              />
               <Pressable
                 style={[styles.primary, !canSend && styles.disabled]}
                 onPress={() => void send()}
                 disabled={!canSend}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: !canSend }}
               >
                 <Text style={styles.primaryText}>{sending ? 'Sending…' : 'Send'}</Text>
               </Pressable>
@@ -184,6 +205,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.muted,
   },
+  label: {
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: 2,
+  },
   input: {
     minHeight: 84,
     borderRadius: 12,
@@ -193,6 +219,14 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     color: colors.ink,
   },
+  phoneInput: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.softBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.ink,
+  },
   primary: {
     alignItems: 'center',
     paddingVertical: 13,
@@ -200,7 +234,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.pink,
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   primaryText: {
     fontSize: 15,
