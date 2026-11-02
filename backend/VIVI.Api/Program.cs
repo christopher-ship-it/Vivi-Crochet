@@ -527,6 +527,8 @@ using (var scope = app.Services.CreateScope())
             {
                 await AppHealthSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
                 logger.LogInformation("App health schema verified.");
+                await AppFeedbackSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
+                logger.LogInformation("App feedback schema verified.");
             }
             catch (Exception appHealthEx)
             {

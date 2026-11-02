@@ -27,6 +27,7 @@ import { ViralProjectsPage } from './pages/ViralProjectsPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { SupportPage } from './pages/SupportPage';
 import { AppHealthPage } from './pages/AppHealthPage';
+import { FeedbackPage } from './pages/FeedbackPage';
 import { BackendCheckPage } from './pages/BackendCheckPage';
 import { PhoneOtpsPage } from './pages/PhoneOtpsPage';
 import { UserMetricsPage } from './pages/UserMetricsPage';
@@ -74,6 +75,7 @@ export default function App() {
               <Route path="phone-otps" element={<PhoneOtpsPage />} />
               <Route path="user-metrics" element={<UserMetricsPage />} />
               <Route path="app-health" element={<AppHealthPage />} />
+              <Route path="feedback" element={<FeedbackPage />} />
               <Route path="backend-check" element={<BackendCheckPage />} />
               <Route path="products" element={<ProductsPage />} />
               <Route path="products/import" element={<ProductImportPage />} />

@@ -84,6 +84,7 @@ public sealed class ViviDbContext : DbContext
     public DbSet<SupportInquiry> SupportInquiries => Set<SupportInquiry>();
     public DbSet<DevicePushToken> DevicePushTokens => Set<DevicePushToken>();
     public DbSet<AppIssue> AppIssues => Set<AppIssue>();
+    public DbSet<AppFeedback> AppFeedbacks => Set<AppFeedback>();
     public DbSet<ScreenTapCell> ScreenTapCells => Set<ScreenTapCell>();
     public DbSet<VideoProgress> VideoProgress => Set<VideoProgress>();
 
