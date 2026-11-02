@@ -406,7 +406,6 @@ export default function ShopScreen() {
   // The yarn page (a yarn chip or View all) shows four per row; other lists keep their grids.
   const yarnView = room === 'essentials' && (activeCategory === YARN_FILTER || /yarn/i.test(activeCategory));
   const gridColumns = room === 'essentials' ? (yarnView ? 4 : 3) : 2;
-  const yarnTileWidth = Math.floor((windowWidth - spacing.sm * 2 - 3 * spacing.sm) / 4);
   const gridData: (Product | { id: string; spacer: true })[] = [...displayedProducts];
   while (gridData.length % gridColumns !== 0 && gridData.length > 0) {
     gridData.push({ id: `spacer-${gridData.length}`, spacer: true });
@@ -1006,21 +1005,7 @@ export default function ShopScreen() {
             }
             renderItem={({ item, index }) =>
               'spacer' in item ? (
-                <View style={{ flex: 1, maxWidth: gridColumns === 3 ? '33.333%' : '50%' }} />
-              ) : yarnView ? (
-                // Yarn page: just the photo. Tapping it opens the colours sheet.
-                <Pressable
-                  style={({ pressed }) => [styles.yarnPhotoTile, { width: yarnTileWidth, height: yarnTileWidth }, pressed && styles.roomCardPressed]}
-                  onPress={() => setYarnSheet(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={item.name}
-                >
-                  {item.imageUrl ? (
-                    <AppImage uri={item.imageUrl} style={styles.kitThumbImage} contentFit="contain" backgroundColor={colors.white} accessibilityLabel={item.name} />
-                  ) : (
-                    <Ionicons name="color-palette-outline" size={22} color={colors.pinkDark} />
-                  )}
-                </Pressable>
+                <View style={{ flex: 1, maxWidth: gridColumns === 3 ? '33.333%' : gridColumns === 4 ? '25%' : '50%' }} />
               ) : (
               <ProductCard
                 product={item}
@@ -2015,15 +2000,6 @@ function createStyles(fonts: UiFonts, compact = false) {
       fontFamily: fonts.extraBold,
       fontSize: 12,
       color: colors.pinkDark,
-    },
-    yarnPhotoTile: {
-      borderRadius: 14,
-      overflow: 'hidden',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.white,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.softBorder,
     },
     yarnSheetRoot: {
       flex: 1,
