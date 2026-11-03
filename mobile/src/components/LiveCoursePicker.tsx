@@ -90,7 +90,11 @@ export function LiveCoursePicker({ courses, selectedId, onSelect }: Props) {
           <Text style={styles.panelTitle}>
             {selected.isBundle ? t('live.packIncludesTitle') : selected.name}
           </Text>
-          {!selected.isBundle ? <Text style={styles.panelTagline}>{hoursLabel(selected.hoursPerDay)}</Text> : null}
+          {!selected.isBundle ? (
+            <Text style={styles.panelTagline}>
+              {t('live.courseDays', { count: selected.durationDays })} · {hoursLabel(selected.hoursPerDay)}
+            </Text>
+          ) : null}
           {selected.tagline && !/daily/i.test(selected.tagline) ? (
             <Text style={styles.panelTagline}>{selected.tagline}</Text>
           ) : null}

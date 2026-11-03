@@ -636,8 +636,8 @@ export const en = {
     blocked: 'BLOCKED',
     fullyBookedCaps: 'FULLY BOOKED',
     seatsOf: '{{booked}} OF {{capacity}} SEATS',
-    oneHourDaily: 'One hour daily',
-    twoHoursDaily: 'Two hours daily',
+    oneHourDaily: '1 hour daily',
+    twoHoursDaily: '2 hours daily',
     hoursDaily: '{{count}} hours daily',
     replaceNote:
       'Miss a weekday class? A Saturday replacement class is available. Sunday is always off.',
