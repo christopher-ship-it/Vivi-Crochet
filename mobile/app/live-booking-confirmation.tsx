@@ -78,6 +78,9 @@ export default function LiveBookingConfirmationScreen() {
         </HeroGradient>
 
         <View style={styles.panel}>
+          {booking.courseName ? (
+            <Row label={t('liveBookingConfirmation.course')} value={booking.courseName} styles={styles} />
+          ) : null}
           <Row
             label={t('liveBookingConfirmation.week')}
             value={t('live.week', { number: booking.weekNumber })}
@@ -91,7 +94,11 @@ export default function LiveBookingConfirmationScreen() {
           {time ? <Row label={t('liveBookingConfirmation.time')} value={time} styles={styles} /> : null}
           <Row
             label={t('liveBookingConfirmation.schedule')}
-            value={t('liveBookingConfirmation.scheduleValue')}
+            value={
+              booking.courseName && (booking.weeksHeld ?? 1) > 1
+                ? t('liveBookingConfirmation.scheduleWeeks', { count: booking.weeksHeld ?? 1 })
+                : t('liveBookingConfirmation.scheduleValue')
+            }
             styles={styles}
           />
           <Row

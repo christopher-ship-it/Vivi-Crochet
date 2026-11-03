@@ -99,7 +99,12 @@ export function LiveBookingDetailPage() {
       <header className="page-header">
         <div>
           <h1 className="page-header__title">
-            Week {booking.weekNumber} · {booking.slotName}
+            {booking.courseName ? `${booking.courseName} · ` : ''}
+            Week {booking.weekNumber}
+            {booking.weeksHeld && booking.weeksHeld > 1
+              ? `–${booking.weekNumber + booking.weeksHeld - 1}`
+              : ''}{' '}
+            · {booking.slotName}
           </h1>
           <p className="page-header__subtitle">
             {booking.customerName} · {booking.customerPhone} · {booking.status}

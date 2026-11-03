@@ -54,7 +54,6 @@ const WISHLIST_FILTER = 'Wishlist';
 const YARN_FILTER = '__yarn__';
 /** Gold frame and label gradients for the arch cards. */
 const GOLD_FRAME = ['#fbe6a2', '#f0b543', '#c98a1c'] as const;
-const GOLD_LABEL = ['#fff3c9', '#f5cd68'] as const;
 const ARCH_PHOTO_BG = '#fff6f2';
 /** String-light bulbs for the "Start here" band: a bright core with a soft halo around it. */
 const BULBS = [
@@ -184,7 +183,7 @@ export default function ShopScreen() {
   // The kit card is sized from the band width: page padding and band padding come off it.
   const yarnSize = Math.floor((windowWidth - spacing.md * 2 - 24 - 12) / 2);
   // The two arch cards (kit and materials) are smaller than the yarn cards and sit centred in their band.
-  const archSize = Math.round(yarnSize * 0.86);
+  const archSize = Math.round(yarnSize * 0.6);
   const { t, language } = useI18n();
   const { market } = usePreferences();
   const fonts = uiFonts(language);
@@ -788,7 +787,7 @@ export default function ShopScreen() {
                         {card.imageUrl ? (
                           <AppImage
                             uri={card.imageUrl}
-                            style={styles.kitThumbImage}
+                            style={[styles.kitThumbImage, styles.yarnProductImage]}
                             contentFit="contain"
                             backgroundColor={YARN_PHOTO_BG}
                             accessibilityLabel={card.name}
@@ -807,13 +806,15 @@ export default function ShopScreen() {
                       <Text style={styles.yarnText} numberOfLines={2}>
                         {card.name}
                       </Text>
-                      <Text style={styles.yarnPriceLine} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                      <View style={styles.yarnPriceLine}>
                         <Text style={styles.yarnPrice}>{formatInr(card.price)}</Text>
-                        {off != null ? <Text style={styles.yarnMrp}>{`  ${formatInr(card.mrp!)}`}</Text> : null}
+                        {off != null ? <Text style={styles.yarnMrp}>{formatInr(card.mrp!)}</Text> : null}
                         {off != null ? (
-                          <Text style={styles.yarnOff}>{`  ${t('productCard.percentOff', { percent: off })}`}</Text>
+                          <View style={styles.yarnOff}>
+                            <Text style={styles.yarnOffText}>{t('productCard.percentOff', { percent: off })}</Text>
+                          </View>
                         ) : null}
-                      </Text>
+                      </View>
                       </LinearGradient>
                     </Pressable>
                   );
@@ -827,7 +828,7 @@ export default function ShopScreen() {
                   <LinearGradient colors={GOLD_FRAME} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
                   <LinearGradient colors={['#ffffff', '#fff1e6']} style={styles.yarnTile}>
                     <View style={styles.yarnThumb}>
-                      <Image source={ESSENTIALS_HERO} style={styles.kitThumbImage} resizeMode="contain" accessibilityIgnoresInvertColors />
+                      <Image source={ESSENTIALS_HERO} style={[styles.kitThumbImage, styles.yarnImage]} resizeMode="cover" accessibilityIgnoresInvertColors />
                     </View>
                     <Text style={styles.yarnText} numberOfLines={2}>{t('shop.roomEssentialsTitle')}</Text>
                     <Text style={styles.yarnHint} numberOfLines={2}>{materialsHighlights}</Text>
@@ -896,7 +897,7 @@ export default function ShopScreen() {
                   accessibilityLabel={`${kit.name}, ${formatInr(kit.price)}. ${t('shop.kitSubtitle')}`}
                 >
                   <LinearGradient colors={GOLD_FRAME} style={[styles.archFrame, { borderTopLeftRadius: archSize / 2, borderTopRightRadius: archSize / 2 }]}>
-                    <View style={[styles.archInner, { borderTopLeftRadius: archSize / 2 - 3, borderTopRightRadius: archSize / 2 - 3 }]}>
+                    <View style={[styles.archInner, { height: Math.round(archSize * 0.78), borderTopLeftRadius: archSize / 2 - 3, borderTopRightRadius: archSize / 2 - 3 }]}>
                       <View style={styles.archPhoto}>
                         {kit.imageUrl ? (
                           <AppImage
@@ -910,21 +911,29 @@ export default function ShopScreen() {
                           <Ionicons name="cube-outline" size={30} color={colors.pinkDark} />
                         )}
                       </View>
-                      <LinearGradient colors={GOLD_LABEL} style={styles.archLabel}>
-                        <Text style={styles.archLabelText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                          {kit.mrp != null && kit.mrp > kit.price
-                            ? `${formatInr(kit.price)} · ${t('productCard.percentOff', {
-                                percent: Math.round(((kit.mrp - kit.price) / kit.mrp) * 100),
-                              })}`
-                            : formatInr(kit.price)}
-                        </Text>
-                      </LinearGradient>
                     </View>
                   </LinearGradient>
                   <Text style={styles.archCaption} numberOfLines={1}>
                     {kit.name}
                   </Text>
                 </Pressable>
+              ) : null}
+              {market.canOrderProducts && kit ? (
+                <View style={styles.archPriceCol}>
+                  {kit.mrp != null && kit.mrp > kit.price ? (
+                    <Text style={styles.archMrp}>{formatInr(kit.mrp)}</Text>
+                  ) : null}
+                  <Text style={styles.archPrice}>{formatInr(kit.price)}</Text>
+                  {kit.mrp != null && kit.mrp > kit.price ? (
+                    <View style={styles.archOffPill}>
+                      <Text style={styles.archOffText} numberOfLines={1}>
+                        {t('productCard.percentOff', {
+                          percent: Math.round(((kit.mrp - kit.price) / kit.mrp) * 100),
+                        })}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
               ) : null}
             </View>
           </LinearGradient>
@@ -1591,10 +1600,16 @@ function createStyles(fonts: UiFonts, compact = false) {
       right: 52,
       opacity: 0.8,
     },
+    // Enlarges the yarn picture inside its fixed thumb; the thumb clips any overflow, so the card size stays the same.
+    yarnImage: {
+      transform: [{ scale: 1.2 }],
+    },
+    yarnProductImage: {
+      transform: [{ scale: 1 }],
+    },
     yarnThumb: {
       width: '100%',
-      height: 84,
-      paddingTop: 14,
+      height: 66,
       borderRadius: 12,
       overflow: 'hidden',
       backgroundColor: YARN_PHOTO_BG,
@@ -1619,7 +1634,6 @@ function createStyles(fonts: UiFonts, compact = false) {
       color: colors.white,
     },
     yarnText: {
-      flex: 1,
       paddingHorizontal: 4,
       fontFamily: fonts.semiBold,
       fontSize: 12,
@@ -1627,7 +1641,13 @@ function createStyles(fonts: UiFonts, compact = false) {
       color: colors.muted,
     },
     yarnPriceLine: {
+      // Room for the discount pill, so cards without one line up with cards that have it.
+      minHeight: 26,
       paddingHorizontal: 4,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      columnGap: 4,
     },
     yarnPrice: {
       fontFamily: fonts.extraBold,
@@ -1641,9 +1661,15 @@ function createStyles(fonts: UiFonts, compact = false) {
       textDecorationLine: 'line-through',
     },
     yarnOff: {
+      borderRadius: 10,
+      backgroundColor: colors.pinkDark,
+      paddingVertical: 1,
+      paddingHorizontal: 6,
+    },
+    yarnOffText: {
       fontFamily: fonts.extraBold,
-      fontSize: 10,
-      color: colors.pinkDark,
+      fontSize: 11,
+      color: colors.white,
     },
     // Deep band behind the two arch cards, so the gold frames stand out.
     archBand: {
@@ -1755,19 +1781,35 @@ function createStyles(fonts: UiFonts, compact = false) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      // Enlarges the kit picture inside the fixed card; the card's own clipping trims any overflow.
-      transform: [{ scale: 1.12 }],
+      // Nudges the kit picture left inside the card without scaling it, so the whole product stays in view.
+      transform: [{ translateX: -6 }],
     },
-    archLabel: {
-      paddingVertical: 5,
-      paddingHorizontal: 6,
-      alignItems: 'center',
+    archPriceCol: {
+      justifyContent: 'center',
+      alignItems: 'flex-start',
     },
-    archLabelText: {
+    archMrp: {
+      fontFamily: fonts.semiBold,
+      fontSize: 13,
+      color: '#f5c6d8',
+      textDecorationLine: 'line-through',
+    },
+    archPrice: {
       fontFamily: fonts.extraBold,
-      fontSize: 10,
-      lineHeight: compact ? 19 : 16,
-      color: colors.ink,
+      fontSize: 20,
+      color: '#ffe9a8',
+    },
+    archOffPill: {
+      marginTop: 4,
+      paddingVertical: 2,
+      paddingHorizontal: 7,
+      borderRadius: 10,
+      backgroundColor: colors.pink,
+    },
+    archOffText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 11,
+      color: colors.white,
     },
     archCaption: {
       marginTop: 3,

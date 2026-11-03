@@ -46,6 +46,37 @@ export interface LiveWeekDetail extends LiveWeekSummary {
   hoursPerClassDay?: number;
 }
 
+export interface LiveCourseProject {
+  name: string;
+  imageUrl?: string | null;
+}
+
+/** A course on sale (Basic, Intermediate, Advanced) or the Artist pack that bundles them. */
+export interface LiveCourse {
+  id: string;
+  code: string;
+  name: string;
+  level: string;
+  tagline: string;
+  price: number;
+  /** Original price, shown struck through next to the price; null means no discount. */
+  mrp?: number | null;
+  durationDays: number;
+  hoursPerDay: number;
+  /** Consecutive Monday–Friday weeks the booking holds a seat for. */
+  weeksSpan: number;
+  isBundle: boolean;
+  learn: string[];
+  projects: LiveCourseProject[];
+}
+
+/** Whole-number percent off when the course has an original price above its price, else null. */
+export function liveCourseDiscount(course: Pick<LiveCourse, 'price' | 'mrp'>): number | null {
+  return course.mrp != null && course.mrp > course.price
+    ? Math.round(((course.mrp - course.price) / course.mrp) * 100)
+    : null;
+}
+
 export interface CreateLiveBookingResponse {
   bookingId: string;
   orderId: string;
@@ -59,7 +90,10 @@ export interface CreateLiveBookingResponse {
   slotName: string;
   weekNumber: number;
   startDate: string;
+  /** Last day of the last week the booking covers. */
   endDate: string;
+  courseName?: string | null;
+  weeksHeld?: number;
 }
 
 export interface LiveBooking {
@@ -75,8 +109,18 @@ export interface LiveBooking {
   endDate: string;
   packagePrice: number;
   weeklyLiveHours?: number;
+  /** The course bought; empty for the original single-week package. */
+  courseName?: string | null;
+  weeksHeld?: number;
   days: LiveDay[];
   confirmedAt?: string | null;
+}
+
+/** "2026-11-02" plus days, as a plain date (no time zone involved). */
+export function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d + days));
+  return date.toISOString().slice(0, 10);
 }
 
 function toLocalIsoDate(d: Date): string {
@@ -137,15 +181,28 @@ export function formatLiveClassWeekRange(startDate: string): string {
  * The server decides which weeks are open for booking (it knows the Morning session's start
  * time, which admin can change), so the app shows exactly what it returns.
  */
-export async function listLiveWeeks(): Promise<LiveWeekSummary[]> {
-  const weeks = await apiRequest<LiveWeekSummary[]>('/api/live/weeks', {}, false);
+export async function listLiveWeeks(courseId?: string): Promise<LiveWeekSummary[]> {
+  const query = courseId ? `?courseId=${encodeURIComponent(courseId)}` : '';
+  const weeks = await apiRequest<LiveWeekSummary[]>(`/api/live/weeks${query}`, {}, false);
   return [...weeks].sort(
     (a, b) => a.startDate.localeCompare(b.startDate) || a.weekNumber - b.weekNumber,
   );
 }
 
-export async function getLiveWeek(weekId: string): Promise<LiveWeekDetail> {
-  return apiRequest<LiveWeekDetail>(`/api/live/weeks/${weekId}`, {}, false);
+/** WhatsApp number (digits with country code) that class enquiries go to; empty means none. */
+export async function getLiveEnquiry(): Promise<{ whatsAppNumber: string }> {
+  return apiRequest<{ whatsAppNumber: string }>('/api/live/enquiry', {}, false);
+}
+
+/** The courses on sale, in the order they are shown. */
+export async function listLiveCourses(): Promise<LiveCourse[]> {
+  return apiRequest<LiveCourse[]>('/api/live/courses', {}, false);
+}
+
+/** With a course, seats and price are for every week that course runs from this week. */
+export async function getLiveWeek(weekId: string, courseId?: string): Promise<LiveWeekDetail> {
+  const query = courseId ? `?courseId=${encodeURIComponent(courseId)}` : '';
+  return apiRequest<LiveWeekDetail>(`/api/live/weeks/${weekId}${query}`, {}, false);
 }
 
 export async function getLiveWeekAvailability(weekId: string): Promise<LiveWeekDetail> {
@@ -155,10 +212,11 @@ export async function getLiveWeekAvailability(weekId: string): Promise<LiveWeekD
 export async function createLiveBooking(
   weekId: string,
   slotType: LiveSlotType,
+  courseId?: string,
 ): Promise<CreateLiveBookingResponse> {
   return apiRequest<CreateLiveBookingResponse>('/api/live/bookings', {
     method: 'POST',
-    body: JSON.stringify({ weekId, slotType }),
+    body: JSON.stringify({ weekId, slotType, courseId }),
   });
 }
 

@@ -441,6 +441,8 @@ export function LiveBookingsPage() {
           <p className="page-header__subtitle">
             Track Live class bookings from the app.{' '}
             <Link to="/live/settings">Change price, timings, language, level and sessions</Link>
+            {' · '}
+            <Link to="/live/courses">Edit courses</Link>
           </p>
           <div className="toolbar live-bookings-toolbar">
             <div className="live-view-switch" role="tablist" aria-label="Live classes view">
@@ -654,7 +656,10 @@ export function LiveBookingsPage() {
                       <td style={{ fontWeight: 600 }}>
                         W{booking.weekNumber} · {booking.seasonYear}
                       </td>
-                      <td>{booking.slotName || booking.slotType}</td>
+                      <td>
+                        {booking.courseName ? `${booking.courseName} · ` : ''}
+                        {booking.slotName || booking.slotType}
+                      </td>
                       <td>{booking.customerName || '—'}</td>
                       <td>{booking.customerPhone || '—'}</td>
                       <td>

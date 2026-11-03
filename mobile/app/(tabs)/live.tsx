@@ -3,7 +3,8 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Platform,
+import { Linking,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,13 +14,18 @@ import { Platform,
 import { appAlert } from '../../src/components/AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  addDaysIso,
   createLiveBooking,
   formatLiveClassWeekRange,
+  getLiveEnquiry,
   getLiveWeek,
+  listLiveCourses,
+  liveCourseDiscount,
   listLiveWeeks,
   listMyLiveBookings,
   sortSlotsByTime,
   type LiveBooking,
+  type LiveCourse,
   type LiveSlotAvailability,
   type LiveSlotType,
   type LiveWeekDetail,
@@ -30,6 +36,7 @@ import { verifyRazorpayPayment } from '../../src/api/payments';
 import { ApiClientError } from '../../src/api/client';
 import { useLearningCustomer, useShoppingSession } from '../../src/auth/SessionContext';
 import { EmailVerifySheet } from '../../src/components/EmailVerifySheet';
+import { LiveCoursePicker } from '../../src/components/LiveCoursePicker';
 import {
   RazorpayCheckoutModal,
   type RazorpayCheckoutPayload,
@@ -53,6 +60,10 @@ import {
 } from '../../src/utils/validation';
 
 const LIVE_HERO_GRADIENT = ['#ff8eb0', '#ffb3c9', '#ffd0e0'] as const;
+const WHATSAPP_GRADIENT = ['#2fdc7c', '#128c4a'] as const;
+
+// shortcut: classes are enquiry-only for now (the backend still accepts bookings), set true to bring online booking back.
+const LIVE_BOOKING_OPEN = false;
 
 /** Labels for the two core sessions. Additional sessions use the name set in the admin. */
 const SLOT_FALLBACK: Partial<Record<LiveSlotType, { label: string; hours: string }>> = {
@@ -61,7 +72,6 @@ const SLOT_FALLBACK: Partial<Record<LiveSlotType, { label: string; hours: string
 };
 
 /** Language and level are typed by an admin; known values are translated, others shown as typed. */
-const KNOWN_LANGUAGES = ['tamil', 'english', 'hindi'] as const;
 const KNOWN_LEVELS = ['basic', 'intermediate', 'advanced'] as const;
 
 function knownKey<T extends string>(list: readonly T[], value: string | undefined): T | null {
@@ -200,6 +210,7 @@ export default function LiveScreen() {
   const [selectedSlot, setSelectedSlot] = useState<LiveSlotType | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [courseBarHeight, setCourseBarHeight] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bookingBusy, setBookingBusy] = useState(false);
@@ -211,6 +222,46 @@ export default function LiveScreen() {
   const [verifiedEmail, setVerifiedEmail] = useState('');
   const [emailDraft, setEmailDraft] = useState('');
   const [myLiveBookings, setMyLiveBookings] = useState<LiveBooking[]>([]);
+  // Courses come first so the weeks load already priced and counted for the chosen course.
+  const [courses, setCourses] = useState<LiveCourse[]>([]);
+  const [coursesReady, setCoursesReady] = useState(false);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [whatsAppNumber, setWhatsAppNumber] = useState('');
+  const weeksLoadedRef = useRef(false);
+  const selectedCourse = useMemo(
+    () => courses.find((c) => c.id === selectedCourseId) ?? null,
+    [courses, selectedCourseId],
+  );
+  const courseWeeks = Math.max(1, selectedCourse?.weeksSpan ?? 1);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      getLiveEnquiry()
+        .then((data) => {
+          if (!cancelled) setWhatsAppNumber(data.whatsAppNumber);
+        })
+        .catch(() => {});
+      listLiveCourses()
+        .then((data) => {
+          if (cancelled) return;
+          setCourses(data);
+          setSelectedCourseId((prev) =>
+            prev && data.some((c) => c.id === prev) ? prev : (data[0]?.id ?? null),
+          );
+        })
+        // Without courses the page falls back to the original single-package booking.
+        .catch(() => {
+          if (!cancelled) setCourses([]);
+        })
+        .finally(() => {
+          if (!cancelled) setCoursesReady(true);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const loadMyBooking = useCallback(async () => {
     if (!isAuthenticated) {
@@ -227,10 +278,12 @@ export default function LiveScreen() {
 
   const loadWeeks = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    // Switching course reloads quietly instead of blanking the page.
+    else if (!weeksLoadedRef.current) setLoading(true);
     setError(null);
     try {
-      const data = await listLiveWeeks();
+      const data = await listLiveWeeks(selectedCourseId ?? undefined);
+      weeksLoadedRef.current = true;
       setWeeks(data);
       setSelectedWeekId((prev) => {
         if (preferredWeekId && data.some((w) => w.id === preferredWeekId)) {
@@ -252,14 +305,14 @@ export default function LiveScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadMyBooking, preferredWeekId, t]);
+  }, [loadMyBooking, preferredWeekId, selectedCourseId, t]);
 
   useFocusEffect(
     useCallback(() => {
       applyStatusBar('dark');
-      void loadWeeks();
+      if (coursesReady) void loadWeeks();
       return () => applyStatusBar('dark');
-    }, [loadWeeks]),
+    }, [loadWeeks, coursesReady]),
   );
 
   useFocusEffect(
@@ -313,7 +366,7 @@ export default function LiveScreen() {
     setDetailLoading(true);
     setError(null);
     try {
-      const loaded = await getLiveWeek(weekId);
+      const loaded = await getLiveWeek(weekId, selectedCourseId ?? undefined);
       // Sessions in the order they happen (Morning, any mid-day session, Evening).
       const data = { ...loaded, slots: sortSlotsByTime(loaded.slots) };
       setDetail(data);
@@ -342,7 +395,7 @@ export default function LiveScreen() {
     } finally {
       setDetailLoading(false);
     }
-  }, [t]);
+  }, [selectedCourseId, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -370,22 +423,23 @@ export default function LiveScreen() {
   }, [detail?.tutorPhotoUrl, weeks, selectedWeekId]);
 
   const packagePrice = detail?.packagePrice ?? weeks[0]?.packagePrice;
-  const classHours = hoursPerClassDay(detail);
+  const classHours = selectedCourse?.hoursPerDay ?? hoursPerClassDay(detail);
 
   const selectedWeekSummary = weeks.find((w) => w.id === selectedWeekId);
-  const rawLanguage = (detail?.language ?? selectedWeekSummary?.language ?? '').trim();
   const rawLevel = (detail?.level ?? selectedWeekSummary?.level ?? '').trim();
-  const languageKey = knownKey(KNOWN_LANGUAGES, rawLanguage);
   const levelKey = knownKey(KNOWN_LEVELS, rawLevel);
-  const languageLabel = languageKey ? t(`live.languageNames.${languageKey}`) : rawLanguage;
-  const levelLabel = levelKey ? t(`live.levelNames.${levelKey}`) : rawLevel;
+  // A booking in the way: any class in the weeks the chosen course would run.
   const bookingForSelectedWeek = useMemo(() => {
     if (!detail) return null;
     const start = String(detail.startDate).slice(0, 10);
+    const end = addDaysIso(start, 7 * courseWeeks - 1);
     return (
-      myLiveBookings.find((b) => String(b.startDate).slice(0, 10) === start) ?? null
+      myLiveBookings.find(
+        (b) =>
+          String(b.startDate).slice(0, 10) <= end && String(b.endDate).slice(0, 10) >= start,
+      ) ?? null
     );
-  }, [detail, myLiveBookings]);
+  }, [detail, myLiveBookings, courseWeeks]);
   const bookedRange = useMemo(
     () =>
       bookingForSelectedWeek
@@ -431,7 +485,7 @@ export default function LiveScreen() {
 
     setBookingBusy(true);
     try {
-      const created = await createLiveBooking(detail.id, selectedSlot);
+      const created = await createLiveBooking(detail.id, selectedSlot, selectedCourse?.id);
       setPendingOrderId(created.orderId);
       setPendingBookingId(created.bookingId);
 
@@ -441,7 +495,7 @@ export default function LiveScreen() {
         amountPaise: created.amountPaise,
         currency: created.currency,
         name: 'VIVI Crochet',
-        description: `${created.slotName} · Week ${created.weekNumber}`,
+        description: `${created.courseName ? `${created.courseName} · ` : ''}${created.slotName} · Week ${created.weekNumber}`,
         prefillName: realCustomerName(user?.name, learningProfile?.fullName) || undefined,
         prefillEmail: readyEmail,
         prefillContact: learningProfile?.phone || user?.phone || undefined,
@@ -507,6 +561,24 @@ export default function LiveScreen() {
     if (selectedWeekId) void loadDetail(selectedWeekId);
   }
 
+  /** Opens a WhatsApp chat with the studio, already saying which course, week and circle. */
+  function onEnquire() {
+    if (!whatsAppNumber) return;
+    const course = selectedCourse
+      ? selectedCourse.isBundle
+        ? t('live.allThreeCourses')
+        : selectedCourse.name
+      : t('live.title');
+    const price = selectedCourse?.price ?? packagePrice;
+    const text = t('live.enquiryMessage', {
+      course,
+      price: price != null ? formatInr(price) : '',
+    });
+    void Linking.openURL(`https://wa.me/${whatsAppNumber}?text=${encodeURIComponent(text)}`).catch(() =>
+      appAlert(t('live.enquireWhatsApp'), t('live.enquiryFailed')),
+    );
+  }
+
   function onChooseCircle() {
     if (bookingForSelectedWeek) {
       router.push({
@@ -558,7 +630,7 @@ export default function LiveScreen() {
     <View style={styles.root}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: dockClearance + 28 }}
+        contentContainerStyle={{ paddingBottom: dockClearance + 28 + (selectedCourse ? courseBarHeight + 26 : 0) }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -603,27 +675,13 @@ export default function LiveScreen() {
             <Text style={styles.heroTitleLive}>{t('live.heroLive')}</Text>
           </Text>
 
-          {packagePrice != null ? (
+          {packagePrice != null && !selectedCourse ? (
             <View style={styles.heroPriceRow}>
               <Text style={styles.heroPrice}>{formatInr(packagePrice)}</Text>
               <Text style={styles.heroPriceMeta}>{t('live.packageMeta')}</Text>
             </View>
           ) : null}
 
-          <View style={styles.heroPills}>
-            {levelLabel ? (
-              <View style={styles.heroNote}>
-                <Ionicons name="leaf-outline" size={15} color={colors.pinkDark} />
-                <Text style={styles.heroNoteText}>{levelLabel}</Text>
-              </View>
-            ) : null}
-            {languageLabel ? (
-              <View style={styles.heroNote}>
-                <Ionicons name="language-outline" size={15} color={colors.pinkDark} />
-                <Text style={styles.heroNoteText}>{languageLabel}</Text>
-              </View>
-            ) : null}
-          </View>
         </LinearGradient>
 
         {!market.canBookLive ? <MarketNotice text={t('market.liveIndiaOnly')} /> : null}
@@ -635,7 +693,7 @@ export default function LiveScreen() {
               <Text style={styles.tutorBadgeLabel}>{t('live.yourTutor')}</Text>
               <Text style={styles.tutorBadgeName}>{toNameCase(tutorName)}</Text>
               <Text style={styles.tutorCopyHint}>{t('live.tutorLead')}</Text>
-              {levelKey === 'basic' ? (
+              {(selectedCourse ? selectedCourse.code === 'basic' : levelKey === 'basic') ? (
                 <View style={styles.tutorChips}>
                   <View style={styles.tutorChip}>
                     <Ionicons name="leaf-outline" size={13} color={colors.pinkDark} />
@@ -663,12 +721,25 @@ export default function LiveScreen() {
           </View>
         </View>
 
-        {/* Week selector */}
-        <Text style={styles.sectionLabel}>{t('live.selectWeek')}</Text>
+        {courses.length > 0 ? (
+          <LiveCoursePicker
+            courses={courses}
+            selectedId={selectedCourseId}
+            onSelect={setSelectedCourseId}
+          />
+        ) : null}
+
+        {/* Week selector: only needed while customers can book a week themselves. */}
+        {LIVE_BOOKING_OPEN ? (
+          <Text style={styles.sectionLabel}>
+            {courseWeeks > 1 ? t('live.startWeek') : t('live.selectWeek')}
+          </Text>
+        ) : null}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.weekRail}
+          style={LIVE_BOOKING_OPEN ? undefined : styles.weekRailHidden}
         >
           {weeks.map((week) => {
             const active = week.id === selectedWeekId;
@@ -739,6 +810,8 @@ export default function LiveScreen() {
           </View>
         ) : detail ? (
           <>
+            {LIVE_BOOKING_OPEN ? (
+            <>
             {/* One column per session: Morning | Evening, plus any additional sessions (2 per row) */}
             <View style={styles.circlesPanelOuter}>
               <LiveGlass
@@ -779,12 +852,16 @@ export default function LiveScreen() {
                         if (!unavailable) setSelectedSlot(type);
                       }}
                     >
-                      <Text style={[styles.circleWeek, selected && styles.circleTextOnPink]}>
-                        {t('live.week', { number: detail.weekNumber }).toUpperCase()}
-                      </Text>
-                      <Text style={[styles.circleDates, selected && styles.circleDatesOnPink]}>
-                        {formatLiveClassWeekRange(detail.startDate)}
-                      </Text>
+                      {LIVE_BOOKING_OPEN ? (
+                        <>
+                          <Text style={[styles.circleWeek, selected && styles.circleTextOnPink]}>
+                            {t('live.week', { number: detail.weekNumber }).toUpperCase()}
+                          </Text>
+                          <Text style={[styles.circleDates, selected && styles.circleDatesOnPink]}>
+                            {formatLiveClassWeekRange(detail.startDate)}
+                          </Text>
+                        </>
+                      ) : null}
 
                       <Text style={[styles.circleSlotLabel, selected && styles.circleMutedOnPink]}>
                         {fallback.label}
@@ -840,46 +917,69 @@ export default function LiveScreen() {
               })}
               </LiveGlass>
             </View>
+            </>
+            ) : null}
 
-            <Text style={styles.planNote}>{t('live.planNote')}</Text>
-            <Text style={styles.replaceNote}>{t('live.replaceNote')}</Text>
+            {LIVE_BOOKING_OPEN ? (
+              <>
+                <Text style={styles.planNote}>
+                  {courseWeeks > 1
+                    ? t('live.courseWeeksNote', { count: courseWeeks })
+                    : t('live.planNote')}
+                </Text>
+                <Text style={styles.replaceNote}>{t('live.replaceNote')}</Text>
+              </>
+            ) : null}
 
-            <Pressable
-              style={[
-                styles.chooseCta,
-                bookingForSelectedWeek ? styles.chooseCtaBooked : null,
-                (!canBook && !bookingForSelectedWeek) || bookingBusy
-                  ? styles.chooseCtaDisabled
-                  : null,
-              ]}
-              disabled={(!canBook && !bookingForSelectedWeek) || bookingBusy}
-              onPress={onChooseCircle}
-            >
-              <Text
+            {/* With courses the button lives in the bar pinned above the tab dock. */}
+            {!selectedCourse && !LIVE_BOOKING_OPEN && whatsAppNumber ? (
+              <Pressable style={[styles.chooseCta, styles.whatsAppCta]} onPress={onEnquire}>
+                <Ionicons name="logo-whatsapp" size={20} color={colors.white} />
+                <Text style={styles.chooseCtaText}>{t('live.enquireWhatsApp')}</Text>
+              </Pressable>
+            ) : null}
+            {!selectedCourse && LIVE_BOOKING_OPEN ? (
+              <Pressable
                 style={[
-                  styles.chooseCtaText,
-                  bookingForSelectedWeek ? styles.chooseCtaTextBooked : null,
+                  styles.chooseCta,
+                  bookingForSelectedWeek ? styles.chooseCtaBooked : null,
+                  (!canBook && !bookingForSelectedWeek) || bookingBusy
+                    ? styles.chooseCtaDisabled
+                    : null,
                 ]}
+                disabled={(!canBook && !bookingForSelectedWeek) || bookingBusy}
+                onPress={onChooseCircle}
               >
-                {bookingBusy
-                  ? t('live.pleaseWait')
-                  : !market.canBookLive
-                    ? t('market.liveUnavailableShort')
-                    : bookingForSelectedWeek
-                      ? t('live.viewYourBooking')
-                      : t('live.chooseYourCircle')}
-              </Text>
-              {!bookingBusy ? (
-                <Ionicons
-                  name="arrow-forward"
-                  size={18}
-                  color={bookingForSelectedWeek ? colors.pinkDark : colors.white}
-                />
-              ) : null}
-            </Pressable>
+                <Text
+                  style={[
+                    styles.chooseCtaText,
+                    bookingForSelectedWeek ? styles.chooseCtaTextBooked : null,
+                  ]}
+                >
+                  {bookingBusy
+                    ? t('live.pleaseWait')
+                    : !market.canBookLive
+                      ? t('market.liveUnavailableShort')
+                      : bookingForSelectedWeek
+                        ? t('live.viewYourBooking')
+                        : t('live.chooseYourCircle')}
+                </Text>
+                {!bookingBusy ? (
+                  <Ionicons
+                    name="arrow-forward"
+                    size={18}
+                    color={bookingForSelectedWeek ? colors.pinkDark : colors.white}
+                  />
+                ) : null}
+              </Pressable>
+            ) : null}
 
             <Text style={styles.cancelNote}>
-              {bookingForSelectedWeek ? t('live.bookedNote') : t('live.bookingsFinal')}
+              {!LIVE_BOOKING_OPEN
+                ? t('live.enquiryNote')
+                : bookingForSelectedWeek
+                  ? t('live.bookedNote')
+                  : t('live.bookingsFinal')}
             </Text>
           </>
         ) : error ? (
@@ -891,6 +991,76 @@ export default function LiveScreen() {
           />
         ) : null}
       </ScrollView>
+
+      {selectedCourse && (detail || !LIVE_BOOKING_OPEN) ? (
+        <View
+          style={[styles.courseBar, { bottom: dockClearance + 14 }]}
+          onLayout={(e) => setCourseBarHeight(e.nativeEvent.layout.height)}
+        >
+          <View style={styles.courseBarCopy}>
+            <Text style={styles.courseBarLabel} numberOfLines={1}>
+              {t('live.pickedShort')}
+            </Text>
+            <View style={styles.courseBarPriceRow}>
+              <Text style={styles.courseBarPrice} numberOfLines={1}>
+                {formatInr(selectedCourse.price)}
+              </Text>
+            </View>
+          </View>
+          {!LIVE_BOOKING_OPEN ? (
+            whatsAppNumber ? (
+              <Pressable
+                style={({ pressed }) => [styles.whatsAppPill, pressed && styles.whatsAppPillPressed]}
+                onPress={onEnquire}
+                accessibilityRole="button"
+                accessibilityLabel={t('live.enquireWhatsApp')}
+              >
+                <LinearGradient
+                  colors={WHATSAPP_GRADIENT}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
+                />
+                <View style={styles.whatsAppBadge}>
+                  <Ionicons name="logo-whatsapp" size={15} color="#128c4a" />
+                </View>
+                <Text style={styles.whatsAppPillText} numberOfLines={2}>
+                  {t('live.enquireWhatsApp')}
+                </Text>
+              </Pressable>
+            ) : null
+          ) : (
+          <Pressable
+            style={[
+              styles.courseBarCta,
+              bookingForSelectedWeek ? styles.courseBarCtaBooked : null,
+              (!canBook && !bookingForSelectedWeek) || bookingBusy
+                ? styles.chooseCtaDisabled
+                : null,
+            ]}
+            disabled={(!canBook && !bookingForSelectedWeek) || bookingBusy}
+            onPress={onChooseCircle}
+            accessibilityRole="button"
+          >
+            <Text
+              style={[
+                styles.courseBarCtaText,
+                bookingForSelectedWeek ? styles.courseBarCtaTextBooked : null,
+              ]}
+              numberOfLines={1}
+            >
+              {bookingBusy
+                ? t('live.pleaseWait')
+                : !market.canBookLive
+                  ? t('market.liveUnavailableShort')
+                  : bookingForSelectedWeek
+                    ? t('live.viewYourBooking')
+                    : t('live.bookThisCourse')}
+            </Text>
+          </Pressable>
+          )}
+        </View>
+      ) : null}
 
       <EmailVerifySheet
         visible={emailSheetVisible}
@@ -995,29 +1165,6 @@ function createStyles(fonts: UiFonts) {
     fontSize: 34,
     lineHeight: 38,
     color: colors.ink,
-  },
-  heroPills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: spacing.sm,
-  },
-  heroNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-  },
-  heroNoteText: {
-    flexShrink: 1,
-    fontFamily: fonts.semiBold,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.pinkDark,
-    textAlign: 'center',
   },
   heroPriceMeta: {
     fontFamily: fonts.semiBold,
@@ -1126,6 +1273,9 @@ function createStyles(fonts: UiFonts) {
     marginTop: 2,
     marginBottom: 6,
   },
+  weekRailHidden: {
+    display: 'none',
+  },
   weekRail: {
     paddingHorizontal: spacing.md,
     gap: 8,
@@ -1224,6 +1374,111 @@ function createStyles(fonts: UiFonts) {
   },
   detailLoading: {
     minHeight: 120,
+  },
+
+  // Price and book button pinned just above the tab dock when a course is chosen.
+  courseBar: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    boxShadow: '0px 1px 2px rgba(34, 26, 30, 0.06), 0px 10px 22px -8px rgba(34, 26, 30, 0.22)',
+  },
+  courseBarCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  courseBarLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.muted,
+  },
+  courseBarPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    columnGap: 8,
+  },
+  courseBarMrp: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.muted,
+    textDecorationLine: 'line-through',
+  },
+  courseBarPrice: {
+    flexShrink: 1,
+    fontFamily: fonts.extraBold,
+    fontSize: 20,
+    lineHeight: 24,
+    color: colors.ink,
+  },
+  courseBarCta: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: colors.pink,
+  },
+  courseBarCtaBooked: {
+    backgroundColor: colors.pinkSoft,
+    borderWidth: 1.5,
+    borderColor: colors.pinkDark,
+  },
+  courseBarCtaText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 13,
+    color: colors.white,
+  },
+  courseBarCtaTextBooked: {
+    color: colors.pinkDark,
+  },
+  whatsAppCta: {
+    backgroundColor: '#1fa855',
+  },
+  whatsAppBarCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  whatsAppPill: {
+    maxWidth: '55%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 6,
+    paddingRight: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    overflow: 'hidden',
+    boxShadow: '0px 6px 12px -4px rgba(18, 140, 74, 0.45)',
+  },
+  whatsAppPillPressed: {
+    opacity: 0.85,
+  },
+  whatsAppBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  whatsAppPillText: {
+    flexShrink: 1,
+    fontFamily: fonts.extraBold,
+    fontSize: 13,
+    lineHeight: 17,
+    color: colors.white,
   },
 
   circlesPanelOuter: {

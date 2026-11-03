@@ -494,12 +494,42 @@ export interface AdminLiveBookingListItem {
   endDate: string;
   slotType: string;
   slotName: string;
+  /** The course bought; empty for the original single-week package. */
+  courseName?: string | null;
+  /** Weeks the booking holds a seat for (a 10-day course holds 2). */
+  weeksHeld?: number;
   orderId: string;
   orderNumber: string;
   totalAmount: number;
   paymentStatus?: string | null;
   createdAt: string;
   confirmedAt?: string | null;
+}
+
+export interface AdminLiveCourseProject {
+  name: string;
+  imageUrl?: string | null;
+}
+
+/** A sellable Live course, or the Artist pack that bundles them. */
+export interface AdminLiveCourse {
+  id: string;
+  code: string;
+  name: string;
+  level: string;
+  tagline: string;
+  price: number;
+  /** Original price shown struck through next to the price; null means no discount. */
+  mrp?: number | null;
+  durationDays: number;
+  hoursPerDay: number;
+  /** Consecutive weeks a booking holds a seat for (5 days = 1, 10 days = 2). */
+  weeksSpan: number;
+  isBundle: boolean;
+  isActive: boolean;
+  sortOrder: number;
+  learn: string[];
+  projects: AdminLiveCourseProject[];
 }
 
 export interface AdminLiveBookingDetail extends AdminLiveBookingListItem {
@@ -548,6 +578,8 @@ export interface AdminLiveSettings {
   hoursPerClassDay: number;
   language: string;
   level: string;
+  /** WhatsApp number for class enquiries, digits with country code; empty hides the button. */
+  enquiryWhatsApp: string;
   sessions: AdminLiveSession[];
 }
 

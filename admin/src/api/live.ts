@@ -2,6 +2,7 @@ import { apiRequest } from './client';
 import type {
   AdminLiveBookingDetail,
   AdminLiveBookingListItem,
+  AdminLiveCourse,
   AdminLiveSettings,
   AdminLiveTutorDefault,
   AdminLiveWeek,
@@ -86,6 +87,17 @@ export async function updateLiveSettings(settings: AdminLiveSettings): Promise<A
   return apiRequest<AdminLiveSettings>('/api/admin/live/settings', {
     method: 'PUT',
     body: JSON.stringify(settings),
+  });
+}
+
+export async function listAdminLiveCourses(): Promise<AdminLiveCourse[]> {
+  return apiRequest<AdminLiveCourse[]>('/api/admin/live/courses');
+}
+
+export async function updateAdminLiveCourse(course: AdminLiveCourse): Promise<AdminLiveCourse> {
+  return apiRequest<AdminLiveCourse>(`/api/admin/live/courses/${course.id}`, {
+    method: 'PUT',
+    body: JSON.stringify(course),
   });
 }
 

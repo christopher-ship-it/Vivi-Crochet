@@ -127,6 +127,22 @@ export function LiveSettingsPage() {
 
           <div className="form-field span-2" />
 
+          <div className="form-field span-6">
+            <label htmlFor="liveWhatsApp">WhatsApp number for class enquiries</label>
+            <input
+              id="liveWhatsApp"
+              inputMode="tel"
+              maxLength={20}
+              placeholder="918438034181"
+              value={form.enquiryWhatsApp}
+              onChange={(e) => update({ enquiryWhatsApp: e.target.value })}
+            />
+            <p className="form-hint">
+              Country code first, for example 91 then the number. The Live page opens a WhatsApp chat
+              with this number. Leave empty to hide the button.
+            </p>
+          </div>
+
           <div className="form-field span-3">
             <label htmlFor="liveLanguage">Class language</label>
             <input
