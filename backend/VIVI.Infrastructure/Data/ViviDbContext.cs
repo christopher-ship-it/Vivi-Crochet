@@ -81,6 +81,7 @@ public sealed class ViviDbContext : DbContext
     public DbSet<LiveTutorDefault> LiveTutorDefaults => Set<LiveTutorDefault>();
     public DbSet<LiveSettings> LiveSettings => Set<LiveSettings>();
     public DbSet<LiveCourse> LiveCourses => Set<LiveCourse>();
+    public DbSet<LiveEnquiry> LiveEnquiries => Set<LiveEnquiry>();
     public DbSet<LiveSessionDefinition> LiveSessionDefinitions => Set<LiveSessionDefinition>();
     public DbSet<SupportInquiry> SupportInquiries => Set<SupportInquiry>();
     public DbSet<DevicePushToken> DevicePushTokens => Set<DevicePushToken>();
@@ -451,6 +452,21 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.Language).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Level).HasMaxLength(40).IsRequired();
             entity.Property(x => x.EnquiryWhatsApp).HasMaxLength(20).IsRequired();
+        });
+
+        modelBuilder.Entity<LiveEnquiry>(entity =>
+        {
+            entity.ToTable("LiveEnquiries");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Phone).HasMaxLength(30);
+            entity.Property(x => x.CourseName).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Price).HasPrecision(18, 2);
+            entity.Property(x => x.SlotName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.SlotHours).HasMaxLength(60).IsRequired();
+            entity.Property(x => x.PaymentReference).HasMaxLength(120).IsRequired();
+            entity.HasIndex(x => x.CreatedAt);
         });
 
         modelBuilder.Entity<LiveCourse>(entity =>

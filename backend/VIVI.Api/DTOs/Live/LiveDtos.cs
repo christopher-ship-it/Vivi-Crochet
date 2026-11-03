@@ -302,6 +302,36 @@ public sealed class LiveTutorPhotoUploadCompleteRequest
     public string ContentType { get; set; } = string.Empty;
 }
 
+/// <summary>An enquiry the admin confirmed outside the app. Price comes from the course.</summary>
+public sealed class CreateLiveEnquiryRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? Phone { get; set; }
+    public Guid CourseId { get; set; }
+    public Guid WeekId { get; set; }
+    public LiveSlotType SlotType { get; set; }
+    public string PaymentReference { get; set; } = string.Empty;
+}
+
+public sealed class LiveEnquiryDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? Phone { get; set; }
+    public string CourseName { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public int WeekNumber { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public string SlotName { get; set; } = string.Empty;
+    public string SlotHours { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
+    public DateTime? SentAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
 public sealed class SetLiveWeekTutorRequest
 {
     public string TutorName { get; set; } = "SRI";

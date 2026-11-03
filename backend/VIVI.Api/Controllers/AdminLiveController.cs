@@ -6,11 +6,13 @@ using VIVI.Api.DTOs.Live;
 using VIVI.Api.Mapping;
 using VIVI.Api.Services;
 using VIVI.Core;
+using VIVI.Core.Entities;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
 using VIVI.Core.Interfaces;
 using VIVI.Infrastructure.Commerce;
 using VIVI.Infrastructure.Data;
+using VIVI.Infrastructure.Email.Templates;
 
 namespace VIVI.Api.Controllers;
 
@@ -26,6 +28,7 @@ public sealed class AdminLiveController : ControllerBase
     private readonly IBlobStorageService _blob;
     private readonly AdminDataCleanupService _cleanup;
     private readonly ILogger<AdminLiveController> _logger;
+    private readonly IEmailService _email;
 
     public AdminLiveController(
         ViviDbContext db,
@@ -34,7 +37,8 @@ public sealed class AdminLiveController : ControllerBase
         LiveCourseService courses,
         IBlobStorageService blob,
         AdminDataCleanupService cleanup,
-        ILogger<AdminLiveController> logger)
+        ILogger<AdminLiveController> logger,
+        IEmailService email)
     {
         _db = db;
         _calendar = calendar;
@@ -43,7 +47,141 @@ public sealed class AdminLiveController : ControllerBase
         _blob = blob;
         _cleanup = cleanup;
         _logger = logger;
+        _email = email;
     }
+
+    /// <summary>Enquiries confirmed outside the app, newest first.</summary>
+    [HttpGet("enquiries")]
+    [ProducesResponseType(typeof(IReadOnlyList<LiveEnquiryDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<LiveEnquiryDto>>> ListEnquiries(CancellationToken cancellationToken)
+    {
+        var rows = await _db.LiveEnquiries
+            .AsNoTracking()
+            .OrderByDescending(e => e.CreatedAt)
+            .Take(200)
+            .ToListAsync(cancellationToken);
+        return Ok(rows.Select(MapEnquiry).ToList());
+    }
+
+    /// <summary>
+    /// Records an enquiry the student paid for outside the app, then emails the class plan.
+    /// If the email cannot be sent the record is kept and can be resent from the list.
+    /// </summary>
+    [HttpPost("enquiries")]
+    [ProducesResponseType(typeof(LiveEnquiryDto), StatusCodes.Status201Created)]
+    public async Task<ActionResult<LiveEnquiryDto>> CreateEnquiry(
+        [FromBody] CreateLiveEnquiryRequest request,
+        CancellationToken cancellationToken)
+    {
+        var name = (request.Name ?? string.Empty).Trim();
+        var email = LiveEnquiryValidation.NormalizeEmail(request.Email);
+        var phone = string.IsNullOrWhiteSpace(request.Phone)
+            ? null
+            : new string(request.Phone.Where(char.IsDigit).ToArray());
+        var reference = (request.PaymentReference ?? string.Empty).Trim();
+        if (name.Length is 0 or > 120)
+            throw new ViviException("INVALID_ENQUIRY", "Student name is required, up to 120 characters.");
+        if (!LiveEnquiryValidation.IsValidEmail(email))
+            throw new ViviException("INVALID_ENQUIRY", "Enter a valid email address.");
+        if (phone is { Length: > 30 })
+            throw new ViviException("INVALID_ENQUIRY", "Phone number is too long.");
+        if (reference.Length is 0 or > 120)
+            throw new ViviException("INVALID_ENQUIRY", "Payment reference is required, up to 120 characters.");
+
+        var course = await _db.LiveCourses.AsNoTracking()
+            .SingleOrDefaultAsync(c => c.Id == request.CourseId, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_COURSE_NOT_FOUND", "Live course was not found.");
+        var week = await _db.LiveWeeks.AsNoTracking()
+            .SingleOrDefaultAsync(w => w.Id == request.WeekId, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
+        var weeksHeld = Math.Max(1, course.WeeksSpan);
+
+        var enquiry = new LiveEnquiry
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Email = email,
+            Phone = phone,
+            CourseId = course.Id,
+            CourseName = course.Name,
+            Price = course.Price,
+            WeekId = week.Id,
+            WeekNumber = week.WeekNumber,
+            StartDate = week.StartDate,
+            EndDate = week.StartDate.AddDays(7 * weeksHeld - 1),
+            WeeksHeld = weeksHeld,
+            SlotName = _calendar.SlotName(request.SlotType),
+            SlotHours = _calendar.SlotHours(request.SlotType),
+            PaymentReference = reference,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.LiveEnquiries.Add(enquiry);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        await TrySendPlanAsync(enquiry, course, cancellationToken);
+        return CreatedAtAction(nameof(ListEnquiries), MapEnquiry(enquiry));
+    }
+
+    /// <summary>Sends the class-plan email again, for an enquiry whose first send failed.</summary>
+    [HttpPost("enquiries/{id:guid}/send")]
+    [ProducesResponseType(typeof(LiveEnquiryDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<LiveEnquiryDto>> SendEnquiry(Guid id, CancellationToken cancellationToken)
+    {
+        var enquiry = await _db.LiveEnquiries
+            .SingleOrDefaultAsync(e => e.Id == id, cancellationToken)
+            ?? throw ViviException.NotFound("LIVE_ENQUIRY_NOT_FOUND", "Enquiry was not found.");
+        var course = enquiry.CourseId is { } courseId
+            ? await _db.LiveCourses.AsNoTracking().SingleOrDefaultAsync(c => c.Id == courseId, cancellationToken)
+            : null;
+
+        await TrySendPlanAsync(enquiry, course, cancellationToken);
+        return Ok(MapEnquiry(enquiry));
+    }
+
+    /// <summary>Emails the class plan and stamps SentAt on success. A failed send is logged, not thrown.</summary>
+    private async Task TrySendPlanAsync(LiveEnquiry enquiry, LiveCourse? course, CancellationToken cancellationToken)
+    {
+        if (!_email.IsConfigured)
+            return;
+
+        var learn = course is null ? Array.Empty<string>() : LiveCourseService.ParseLearn(course.LearnJson);
+        var projects = course is null
+            ? new List<string>()
+            : LiveCourseService.ParseProjects(course.ProjectsJson).Select(p => p.Name).ToList();
+        var (subject, html, text) = LiveEnquiryEmail.Render(enquiry, learn, projects);
+        var result = await _email.SendAsync(
+            new EmailSendRequest(enquiry.Email, subject, html, text),
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            _logger.LogWarning("Live class plan email failed for enquiry {EnquiryId}: {Error}", enquiry.Id, result.Error);
+            return;
+        }
+
+        var tracked = await _db.LiveEnquiries.SingleAsync(e => e.Id == enquiry.Id, cancellationToken);
+        tracked.SentAt = DateTime.UtcNow;
+        enquiry.SentAt = tracked.SentAt;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static LiveEnquiryDto MapEnquiry(LiveEnquiry e) => new()
+    {
+        Id = e.Id,
+        Name = e.Name,
+        Email = e.Email,
+        Phone = e.Phone,
+        CourseName = e.CourseName,
+        Price = e.Price,
+        WeekNumber = e.WeekNumber,
+        StartDate = e.StartDate,
+        EndDate = e.EndDate,
+        SlotName = e.SlotName,
+        SlotHours = e.SlotHours,
+        PaymentReference = e.PaymentReference,
+        SentAt = e.SentAt,
+        CreatedAt = e.CreatedAt
+    };
 
     [HttpPost("ensure-season")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

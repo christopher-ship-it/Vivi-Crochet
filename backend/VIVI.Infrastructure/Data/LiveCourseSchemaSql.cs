@@ -44,6 +44,28 @@ public static class LiveCourseSchemaSql
                    WHERE [Code] = N''artist-pack'' AND [Price] = 4999');
         END
 
+        IF OBJECT_ID(N'[LiveEnquiries]', N'U') IS NULL
+            CREATE TABLE [LiveEnquiries] (
+                [Id] uniqueidentifier NOT NULL,
+                [Name] nvarchar(120) NOT NULL,
+                [Email] nvarchar(200) NOT NULL,
+                [Phone] nvarchar(30) NULL,
+                [CourseId] uniqueidentifier NULL,
+                [CourseName] nvarchar(80) NOT NULL,
+                [Price] decimal(18,2) NOT NULL,
+                [WeekId] uniqueidentifier NOT NULL,
+                [WeekNumber] int NOT NULL,
+                [StartDate] date NOT NULL,
+                [EndDate] date NOT NULL,
+                [WeeksHeld] int NOT NULL,
+                [SlotName] nvarchar(100) NOT NULL,
+                [SlotHours] nvarchar(60) NOT NULL,
+                [PaymentReference] nvarchar(120) NOT NULL,
+                [SentAt] datetime2 NULL,
+                [CreatedAt] datetime2 NOT NULL,
+                CONSTRAINT [PK_LiveEnquiries] PRIMARY KEY ([Id])
+            );
+
         -- Existing studios start on the official business WhatsApp number; the admin can change it.
         IF OBJECT_ID(N'[LiveSettings]', N'U') IS NOT NULL
            AND COL_LENGTH('LiveSettings', 'EnquiryWhatsApp') IS NULL

@@ -3,6 +3,7 @@ import type {
   AdminLiveBookingDetail,
   AdminLiveBookingListItem,
   AdminLiveCourse,
+  AdminLiveEnquiry,
   AdminLiveSettings,
   AdminLiveTutorDefault,
   AdminLiveWeek,
@@ -88,6 +89,32 @@ export async function updateLiveSettings(settings: AdminLiveSettings): Promise<A
     method: 'PUT',
     body: JSON.stringify(settings),
   });
+}
+
+export interface CreateAdminLiveEnquiry {
+  name: string;
+  email: string;
+  phone: string;
+  courseId: string;
+  weekId: string;
+  slotType: LiveSlotType;
+  paymentReference: string;
+}
+
+export async function listAdminLiveEnquiries(): Promise<AdminLiveEnquiry[]> {
+  return apiRequest<AdminLiveEnquiry[]>('/api/admin/live/enquiries');
+}
+
+/** Records the enquiry and emails the class plan to the student. */
+export async function createAdminLiveEnquiry(body: CreateAdminLiveEnquiry): Promise<AdminLiveEnquiry> {
+  return apiRequest<AdminLiveEnquiry>('/api/admin/live/enquiries', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function sendAdminLiveEnquiry(id: string): Promise<AdminLiveEnquiry> {
+  return apiRequest<AdminLiveEnquiry>(`/api/admin/live/enquiries/${id}/send`, { method: 'POST' });
 }
 
 export async function listAdminLiveCourses(): Promise<AdminLiveCourse[]> {

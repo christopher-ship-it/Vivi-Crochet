@@ -13,6 +13,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { LiveBookingDetailPage } from './pages/LiveBookingDetailPage';
 import { LiveBookingsPage } from './pages/LiveBookingsPage';
 import { LiveCoursesPage } from './pages/LiveCoursesPage';
+import { LiveEnquiriesPage } from './pages/LiveEnquiriesPage';
 import { LiveSettingsPage } from './pages/LiveSettingsPage';
 import { LiveClassBookingsPage } from './pages/LiveClassBookingsPage';
 import { LoginPage } from './pages/LoginPage';
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="live" element={<LiveBookingsPage />} />
               <Route path="live/settings" element={<LiveSettingsPage />} />
               <Route path="live/courses" element={<LiveCoursesPage />} />
+              <Route path="live/enquiries" element={<LiveEnquiriesPage />} />
               <Route path="live/bookings/:id" element={<LiveBookingDetailPage />} />
               <Route path="courses" element={<CoursesPage />} />
               <Route path="courses/new" element={<CourseFormPage />} />

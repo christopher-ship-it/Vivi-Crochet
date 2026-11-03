@@ -88,6 +88,34 @@ public sealed class LiveCourse
 }
 
 /// <summary>
+/// A class enquiry taken outside the app (WhatsApp) and confirmed by the admin: the student pays
+/// outside the app, and the class plan is emailed to them. Needs no app account.
+/// Week and circle details are copied in, so the record stays right if the schedule changes.
+/// </summary>
+public sealed class LiveEnquiry
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? Phone { get; set; }
+    public Guid? CourseId { get; set; }
+    public string CourseName { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public Guid WeekId { get; set; }
+    public int WeekNumber { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public int WeeksHeld { get; set; } = 1;
+    public string SlotName { get; set; } = string.Empty;
+    public string SlotHours { get; set; } = string.Empty;
+    /// <summary>Reference the student paid under (UPI or bank reference), kept for the books.</summary>
+    public string PaymentReference { get; set; } = string.Empty;
+    /// <summary>When the class-plan email was accepted for sending. Null means it still needs sending.</summary>
+    public DateTime? SentAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>
 /// Name, timing and on/off state of one class session. Morning and Evening are always enabled;
 /// Extra1–Extra3 are the optional additional sessions an admin can switch on.
 /// </summary>

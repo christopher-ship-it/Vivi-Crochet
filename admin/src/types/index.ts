@@ -506,6 +506,25 @@ export interface AdminLiveBookingListItem {
   confirmedAt?: string | null;
 }
 
+/** An enquiry confirmed outside the app: the class plan is emailed to the student. */
+export interface AdminLiveEnquiry {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  courseName: string;
+  price: number;
+  weekNumber: number;
+  startDate: string;
+  endDate: string;
+  slotName: string;
+  slotHours: string;
+  paymentReference: string;
+  /** Null until the class-plan email has been accepted for sending. */
+  sentAt?: string | null;
+  createdAt: string;
+}
+
 export interface AdminLiveCourseProject {
   name: string;
   imageUrl?: string | null;
