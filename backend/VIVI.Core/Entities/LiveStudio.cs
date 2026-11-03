@@ -70,6 +70,8 @@ public sealed class LiveCourse
     public string Level { get; set; } = string.Empty;
     public string Tagline { get; set; } = string.Empty;
     public decimal Price { get; set; }
+    /// <summary>Original price shown struck through next to <see cref="Price"/>; null means no discount.</summary>
+    public decimal? Mrp { get; set; }
     public int DurationDays { get; set; }
     public int HoursPerDay { get; set; }
     /// <summary>Consecutive Monday-start weeks a booking holds a seat for (5 days = 1, 10 days = 2).</summary>

@@ -13,6 +13,7 @@ public sealed record LiveCourseUpdate(
     string Level,
     string Tagline,
     decimal Price,
+    decimal? Mrp,
     int DurationDays,
     int HoursPerDay,
     int WeeksSpan,
@@ -30,22 +31,22 @@ public sealed class LiveCourseService
     public LiveCourseService(ViviDbContext db) => _db = db;
 
     /// <summary>Starting content, written once when the table is empty. The admin edits it from then on.</summary>
-    private static readonly (string Code, string Name, string Level, string Tagline, decimal Price, int Days, int Hours, int Weeks, bool Bundle, string[] Learn, string[] Projects)[] Defaults =
+    private static readonly (string Code, string Name, string Level, string Tagline, decimal Price, decimal? Mrp, int Days, int Hours, int Weeks, bool Bundle, string[] Learn, string[] Projects)[] Defaults =
     {
-        ("basic", "Basic", "Beginner friendly", "Learn. Create. Love.", 999m, 5, 2, 1, false,
+        ("basic", "Basic", "Beginner friendly", "Learn. Create. Love.", 999m, null, 5, 2, 1, false,
             new[] { "Introduction to crochet", "Basic stitches", "Different types of stitches", "Easy projects", "Step by step learning" },
             new[] { "Flower", "Keychain", "Hairclip", "Hair band", "Coin pouch (no zip)" }),
-        ("intermediate", "Intermediate", "Intermediate", "Daily 1 hour", 1499m, 10, 1, 2, false,
+        ("intermediate", "Intermediate", "Intermediate", "Daily 1 hour", 1499m, null, 10, 1, 2, false,
             new[] { "Step-by-step guidance", "Learn 5 beautiful projects", "Improve your skills", "Create with confidence", "Supportive crochet community" },
             new[] { "Headband", "Mobile pouch", "Flowers making", "Kids cap", "Bow making" }),
-        ("advanced", "Advanced", "Advanced", "Daily 1 hour", 2499m, 10, 1, 2, false,
+        ("advanced", "Advanced", "Advanced", "Daily 1 hour", 2499m, null, 10, 1, 2, false,
             new[]
             {
                 "Advanced stitches and techniques", "Project assembly and finishing", "Professional neat finishing",
                 "Size adjustment methods", "Colour combination", "Creative detailing", "Create 5 beautiful projects"
             },
             new[] { "Slim zip pouch", "Crochet crop top", "Kids baby sweater set", "Crochet lunch bag", "Amigurumi doll" }),
-        ("artist-pack", "Artist pack", "All levels", "3 courses, 1 complete journey", 4999m, 25, 1, 5, true,
+        ("artist-pack", "Artist pack", "All levels", "3 courses, 1 complete journey", 4499m, 4999m, 25, 1, 5, true,
             new[] { "Basic, Intermediate and Advanced courses", "15+ projects from start to finish", "One complete journey from beginner to artist" },
             Array.Empty<string>())
     };
@@ -67,6 +68,7 @@ public sealed class LiveCourseService
                 Level = d.Level,
                 Tagline = d.Tagline,
                 Price = d.Price,
+                Mrp = d.Mrp,
                 DurationDays = d.Days,
                 HoursPerDay = d.Hours,
                 WeeksSpan = d.Weeks,
@@ -109,6 +111,8 @@ public sealed class LiveCourseService
             throw new ViviException("INVALID_COURSE", "Tagline must be 120 characters or fewer.");
         if (update.Price < 1m || update.Price > 100000m)
             throw new ViviException("INVALID_PRICE", "Price must be between ₹1 and ₹1,00,000.");
+        if (update.Mrp is { } mrp && (mrp > 100000m || mrp <= update.Price))
+            throw new ViviException("INVALID_PRICE", "Original price must be higher than the price, or left empty.");
         if (update.DurationDays is < 1 or > 60)
             throw new ViviException("INVALID_COURSE", "Duration must be between 1 and 60 days.");
         if (update.HoursPerDay is < 1 or > 8)
@@ -141,6 +145,7 @@ public sealed class LiveCourseService
         course.Level = level;
         course.Tagline = tagline;
         course.Price = update.Price;
+        course.Mrp = update.Mrp;
         course.DurationDays = update.DurationDays;
         course.HoursPerDay = update.HoursPerDay;
         course.WeeksSpan = update.WeeksSpan;

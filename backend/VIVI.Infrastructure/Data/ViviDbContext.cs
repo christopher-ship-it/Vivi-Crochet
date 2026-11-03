@@ -462,6 +462,7 @@ public sealed class ViviDbContext : DbContext
             entity.Property(x => x.Level).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Tagline).HasMaxLength(120).IsRequired();
             entity.Property(x => x.Price).HasPrecision(18, 2);
+            entity.Property(x => x.Mrp).HasPrecision(18, 2);
             entity.Property(x => x.LearnJson).IsRequired();
             entity.Property(x => x.ProjectsJson).IsRequired();
             entity.HasIndex(x => x.Code).IsUnique();

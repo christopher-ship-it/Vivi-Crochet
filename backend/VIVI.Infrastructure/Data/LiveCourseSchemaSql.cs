@@ -34,6 +34,16 @@ public static class LiveCourseSchemaSql
                   AND object_id = OBJECT_ID(N'[LiveCourses]'))
             CREATE UNIQUE INDEX [IX_LiveCourses_Code] ON [LiveCourses] ([Code]);
 
+        IF OBJECT_ID(N'[LiveCourses]', N'U') IS NOT NULL
+           AND COL_LENGTH('LiveCourses', 'Mrp') IS NULL
+        BEGIN
+            ALTER TABLE [LiveCourses] ADD [Mrp] decimal(18,2) NULL;
+            -- The Artist pack launched at 4999; it is now 4499 with 4999 struck through (10% off).
+            -- Dynamic SQL because the new column cannot be used in the batch that adds it.
+            EXEC(N'UPDATE [LiveCourses] SET [Mrp] = 4999, [Price] = 4499
+                   WHERE [Code] = N''artist-pack'' AND [Price] = 4999');
+        END
+
         -- Existing studios start on the official business WhatsApp number; the admin can change it.
         IF OBJECT_ID(N'[LiveSettings]', N'U') IS NOT NULL
            AND COL_LENGTH('LiveSettings', 'EnquiryWhatsApp') IS NULL

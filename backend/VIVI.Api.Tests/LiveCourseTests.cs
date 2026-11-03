@@ -68,7 +68,9 @@ public sealed class LiveCourseTests
 
         var courses = await CoursesAsync(factory);
         Assert.Equal(new[] { "basic", "intermediate", "advanced", "artist-pack" }, courses.Select(c => c.Code));
-        Assert.Equal(new[] { 999m, 1499m, 2499m, 4999m }, courses.Select(c => c.Price));
+        Assert.Equal(new[] { 999m, 1499m, 2499m, 4499m }, courses.Select(c => c.Price));
+        // The Artist pack shows 4999 struck through (10% off); single courses have no discount.
+        Assert.Equal(new decimal?[] { null, null, null, 4999m }, courses.Select(c => c.Mrp));
         Assert.Equal(new[] { 5, 10, 10, 25 }, courses.Select(c => c.DurationDays));
         Assert.Equal(new[] { 1, 2, 2, 5 }, courses.Select(c => c.WeeksSpan));
         Assert.Equal(new[] { 2, 1, 1 }, courses.Take(3).Select(c => c.HoursPerDay));
@@ -157,8 +159,8 @@ public sealed class LiveCourseTests
 
         var checkout = await BookAsync(customer, weeks[20].Id, "Evening", pack.Id);
 
-        Assert.Equal(4999m, checkout.TotalAmount);
-        Assert.Equal(499900, checkout.AmountPaise);
+        Assert.Equal(4499m, checkout.TotalAmount);
+        Assert.Equal(449900, checkout.AmountPaise);
         Assert.Equal(5, checkout.WeeksHeld);
         Assert.Equal(weeks[24].EndDate, checkout.EndDate);
 
@@ -223,6 +225,7 @@ public sealed class LiveCourseTests
             Level = c.Level,
             Tagline = c.Tagline,
             Price = c.Price,
+            Mrp = c.Mrp,
             DurationDays = c.DurationDays,
             HoursPerDay = c.HoursPerDay,
             WeeksSpan = c.WeeksSpan,
@@ -241,6 +244,7 @@ public sealed class LiveCourseTests
 
         var seen = await CourseAsync(factory, "basic");
         Assert.Equal(1099m, seen.Price);
+        Assert.Null(seen.Mrp);
         Assert.Equal(6, seen.Learn.Count);
         Assert.Equal("https://example.com/flower.jpg", seen.Projects[0].ImageUrl);
         Assert.Equal(1099m, (await BookAsync(customer, weeks[4].Id, "Morning", basic.Id)).TotalAmount);
@@ -251,6 +255,9 @@ public sealed class LiveCourseTests
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync($"/api/admin/live/courses/{basic.Id}", bad, Json)).StatusCode);
         bad = Edit(basic);
         bad.Projects[0].ImageUrl = "javascript:alert(1)";
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync($"/api/admin/live/courses/{basic.Id}", bad, Json)).StatusCode);
+        bad = Edit(basic);
+        bad.Mrp = 900m; // original price must be above the price
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync($"/api/admin/live/courses/{basic.Id}", bad, Json)).StatusCode);
         bad = Edit(basic);
         bad.WeeksSpan = 0;

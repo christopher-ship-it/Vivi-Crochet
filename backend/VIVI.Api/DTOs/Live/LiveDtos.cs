@@ -76,6 +76,8 @@ public sealed class LiveCourseResponse
     public string Level { get; set; } = string.Empty;
     public string Tagline { get; set; } = string.Empty;
     public decimal Price { get; set; }
+    /// <summary>Original price shown struck through; null means no discount.</summary>
+    public decimal? Mrp { get; set; }
     public int DurationDays { get; set; }
     public int HoursPerDay { get; set; }
     public int WeeksSpan { get; set; }
@@ -92,6 +94,7 @@ public sealed class UpdateLiveCourseRequest
     public string Level { get; set; } = string.Empty;
     public string Tagline { get; set; } = string.Empty;
     public decimal Price { get; set; }
+    public decimal? Mrp { get; set; }
     public int DurationDays { get; set; }
     public int HoursPerDay { get; set; }
     public int WeeksSpan { get; set; }
