@@ -139,6 +139,9 @@ public sealed class LiveEnquiryTests
         Assert.Equal(
             "11:30 PM – 1:30 AM Eastern Time (US)",
             LiveClassTime.ToUsEastern("10:00 AM – 12:00 PM", new DateOnly(2026, 11, 2)));
+        Assert.Equal(
+            "9:30 PM – 11:30 PM Eastern Time (US)",
+            LiveClassTime.ToUsEastern("08:00 – 10:00", new DateOnly(2026, 11, 2)));
         Assert.Null(LiveClassTime.ToUsEastern("Mon–Fri · late", new DateOnly(2026, 11, 2)));
     }
 

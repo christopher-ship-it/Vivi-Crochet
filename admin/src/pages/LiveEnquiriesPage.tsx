@@ -10,9 +10,9 @@ import {
 } from '../api/live';
 import type { AdminLiveCourse, AdminLiveEnquiry, AdminLiveWeek, LiveSlotType } from '../types';
 
-type TimePart = { hour: string; minute: string; period: '' | 'AM' | 'PM' };
+type TimePart = { hour: string; minute: string };
 
-const EMPTY_TIME: TimePart = { hour: '', minute: '', period: '' };
+const EMPTY_TIME: TimePart = { hour: '', minute: '' };
 
 const EMPTY_FORM = {
   name: '',
@@ -26,13 +26,14 @@ const EMPTY_FORM = {
   paymentReference: '',
 };
 
-const HOURS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+// 24-hour clock, so 8 to 10 is 08:00 – 10:00 and 18 to 20 is 18:00 – 20:00.
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = ['00', '15', '30', '45'];
 
-/** "10:00 AM", or '' until hour, minute and AM/PM are all chosen. */
+/** "08:00", or '' until both hour and minute are chosen. */
 function formatTime(part: TimePart): string {
-  if (!part.hour || !part.minute || !part.period) return '';
-  return `${part.hour}:${part.minute} ${part.period}`;
+  if (!part.hour || !part.minute) return '';
+  return `${part.hour}:${part.minute}`;
 }
 
 function TimeSelect({
@@ -47,9 +48,9 @@ function TimeSelect({
   onChange: (next: TimePart) => void;
 }) {
   return (
-    <div className="form-field" style={{ flex: 1 }}>
+    <div className="form-field" style={{ width: 200 }}>
       <label htmlFor={`${idPrefix}-hour`}>{label}</label>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
         <select id={`${idPrefix}-hour`} value={value.hour} onChange={(e) => onChange({ ...value, hour: e.target.value })}>
           <option value="">Hour</option>
           {HOURS.map((h) => (
@@ -65,15 +66,6 @@ function TimeSelect({
               {m}
             </option>
           ))}
-        </select>
-        <select
-          id={`${idPrefix}-period`}
-          value={value.period}
-          onChange={(e) => onChange({ ...value, period: e.target.value as TimePart['period'] })}
-        >
-          <option value="">AM/PM</option>
-          <option value="AM">AM</option>
-          <option value="PM">PM</option>
         </select>
       </div>
     </div>
@@ -121,7 +113,10 @@ export function LiveEnquiriesPage() {
   const classTime = formatTime(form.start) && formatTime(form.end)
     ? `${formatTime(form.start)} – ${formatTime(form.end)}`
     : '';
-  const canSubmit = Boolean(form.courseId && form.weekId && form.slotType && classTime);
+  // The class must end after it starts; the server works out the US time from this range.
+  const minutesOf = (p: TimePart) => Number(p.hour) * 60 + Number(p.minute);
+  const rangeOk = !classTime || minutesOf(form.end) > minutesOf(form.start);
+  const canSubmit = Boolean(form.courseId && form.weekId && form.slotType && classTime && rangeOk);
 
   function update(patch: Partial<typeof EMPTY_FORM>) {
     setForm((cur) => ({ ...cur, ...patch }));

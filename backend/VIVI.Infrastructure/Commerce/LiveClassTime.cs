@@ -6,12 +6,13 @@ namespace VIVI.Infrastructure.Commerce;
 /// <summary>Converts a class time typed in India time (IST) into US Eastern time for the class plan email.</summary>
 public static class LiveClassTime
 {
+    // 24-hour "08:00 – 10:00" (what the admin picks) or the older "10:00 AM – 12:00 PM".
     private static readonly Regex Range = new(
-        @"^\s*(\d{1,2}):(\d{2})\s*(AM|PM)\s*[–-]\s*(\d{1,2}):(\d{2})\s*(AM|PM)\s*$",
+        @"^\s*(\d{1,2}):(\d{2})\s*(AM|PM)?\s*[–-]\s*(\d{1,2}):(\d{2})\s*(AM|PM)?\s*$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>
-    /// "10:00 AM – 12:00 PM" on <paramref name="day"/> in India becomes "12:30 AM – 2:30 AM Eastern Time (US)".
+    /// "08:00 – 10:00" on <paramref name="day"/> in India becomes "9:30 PM – 11:30 PM Eastern Time (US)".
     /// Returns null when the text is not a plain range, so the email simply leaves the US line out.
     /// </summary>
     public static string? ToUsEastern(string indiaTime, DateOnly day)
@@ -38,9 +39,14 @@ public static class LiveClassTime
 
     private static TimeOnly ToTime(string hour, string minute, string period)
     {
-        var h = int.Parse(hour, CultureInfo.InvariantCulture) % 12;
-        if (period.Equals("PM", StringComparison.OrdinalIgnoreCase))
-            h += 12;
+        var h = int.Parse(hour, CultureInfo.InvariantCulture);
+        if (period.Length > 0)
+        {
+            // 12-hour text: 12 AM is midnight, 12 PM is noon.
+            h %= 12;
+            if (period.Equals("PM", StringComparison.OrdinalIgnoreCase))
+                h += 12;
+        }
         return new TimeOnly(h, int.Parse(minute, CultureInfo.InvariantCulture));
     }
 
