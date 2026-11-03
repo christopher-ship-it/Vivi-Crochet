@@ -20,7 +20,8 @@ public sealed record LiveCheckoutResult(
     string? RazorpayOrderId,
     string? RazorpayKeyId,
     int AmountPaise,
-    string Currency);
+    string Currency,
+    string? CourseName = null);
 
 public sealed class LiveBookingService
 {
@@ -142,26 +143,69 @@ public sealed class LiveBookingService
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Books a week and circle. With a <paramref name="courseId"/> the booking is priced from that
+    /// course and holds a seat in the same circle for every week the course runs; without one it is
+    /// the original single-week package.
+    /// </summary>
     public Task<LiveCheckoutResult> CreateBookingCheckoutAsync(
         Guid customerId,
         Guid weekId,
         LiveSlotType slotType,
-        CancellationToken cancellationToken)
-        => _db.RunRetryableAsync(() => CreateBookingCheckoutCoreAsync(customerId, weekId, slotType, cancellationToken));
+        CancellationToken cancellationToken,
+        Guid? courseId = null)
+        => _db.RunRetryableAsync(() => CreateBookingCheckoutCoreAsync(customerId, weekId, slotType, courseId, cancellationToken));
 
     private async Task<LiveCheckoutResult> CreateBookingCheckoutCoreAsync(
         Guid customerId,
         Guid weekId,
         LiveSlotType slotType,
+        Guid? courseId,
         CancellationToken cancellationToken)
     {
         await _calendar.EnsureSeasonAsync(cancellationToken);
         await ReleaseExpiredReservationsAsync(cancellationToken);
 
-        var gate = SeatGates.GetOrAdd($"{weekId:N}:{slotType}", _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken);
+        LiveCourse? course = null;
+        if (courseId is { } requestedCourseId)
+        {
+            course = await _db.LiveCourses.AsNoTracking()
+                .SingleOrDefaultAsync(c => c.Id == requestedCourseId, cancellationToken)
+                ?? throw ViviException.NotFound("LIVE_COURSE_NOT_FOUND", "Live course was not found.");
+            if (!course.IsActive)
+                throw ViviException.Conflict("COURSE_NOT_AVAILABLE", "This course is not open for booking.");
+        }
+
+        var span = Math.Max(1, course?.WeeksSpan ?? 1);
+        // An unknown week is reported once the customer checks below have passed.
+        var knownStart = await _db.LiveWeeks
+            .Where(w => w.Id == weekId)
+            .Select(w => (DateOnly?)w.StartDate)
+            .SingleOrDefaultAsync(cancellationToken);
+        var startDate = knownStart ?? default;
+        var lastStart = startDate.AddDays(7 * (span - 1));
+
+        // Every week the booking holds is locked, always in the same order, so two multi-week
+        // bookings can never wait on each other.
+        var gateKeys = knownStart is null
+            ? new List<string>()
+            : (await _db.LiveWeeks
+                    .Where(w => w.StartDate >= startDate && w.StartDate <= lastStart)
+                    .Select(w => w.Id)
+                    .ToListAsync(cancellationToken))
+                .Select(id => $"{id:N}:{slotType}")
+                .OrderBy(k => k, StringComparer.Ordinal)
+                .ToList();
+        var held = new List<SemaphoreSlim>();
         try
         {
+            foreach (var key in gateKeys)
+            {
+                var gate = SeatGates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+                await gate.WaitAsync(cancellationToken);
+                held.Add(gate);
+            }
+
             await using var transaction = _db.Database.IsRelational()
                 ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
                 : null;
@@ -187,9 +231,15 @@ public sealed class LiveBookingService
                     "Add and verify your email before booking a live class.");
             }
 
-            var week = await _db.LiveWeeks
+            if (knownStart is null)
+                throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
+
+            var weeks = await _db.LiveWeeks
                 .Include(w => w.Slots)
-                .SingleOrDefaultAsync(w => w.Id == weekId, cancellationToken)
+                .Where(w => w.StartDate >= startDate && w.StartDate <= lastStart)
+                .OrderBy(w => w.StartDate)
+                .ToListAsync(cancellationToken);
+            var week = weeks.FirstOrDefault(w => w.Id == weekId)
                 ?? throw ViviException.NotFound("LIVE_WEEK_NOT_FOUND", "Live week was not found.");
 
             if (!week.IsBookable)
@@ -200,39 +250,70 @@ public sealed class LiveBookingService
                     "WEEK_OUTSIDE_WINDOW",
                     "You can only book an upcoming open live week.");
 
-            // Validate schedule (Sunday never bookable; replacement rules).
-            _ = _calendar.BuildDayPlan(week);
+            if (weeks.Count < span)
+                throw ViviException.Conflict(
+                    "COURSE_WEEKS_UNAVAILABLE",
+                    $"This course needs {span} weeks in a row from the week you chose, and they are not all scheduled yet.");
 
-            var duplicate = await _db.LiveBookings.AnyAsync(
-                b =>
+            // Validate schedule (Sunday never bookable; replacement rules).
+            foreach (var w in weeks)
+            {
+                _ = _calendar.BuildDayPlan(w);
+                if (!w.IsBookable)
+                    throw ViviException.Conflict(
+                        "WEEK_NOT_BOOKABLE",
+                        $"Week {w.WeekNumber} of this course is not open for booking.");
+            }
+
+            // The same circle cannot be booked twice for overlapping weeks.
+            var mine = await _db.LiveBookings
+                .AsNoTracking()
+                .Where(b =>
                     b.CustomerId == customerId
-                    && b.LiveWeekId == weekId
                     && b.SlotType == slotType
-                    && (b.Status == LiveBookingStatus.Confirmed || b.Status == LiveBookingStatus.PendingPayment),
-                cancellationToken);
+                    && b.Week != null
+                    && (b.Status == LiveBookingStatus.Confirmed || b.Status == LiveBookingStatus.PendingPayment))
+                .Select(b => new { b.Week!.StartDate, b.WeeksHeld })
+                .ToListAsync(cancellationToken);
+            var duplicate = mine.Any(b =>
+                b.StartDate <= lastStart
+                && b.StartDate.AddDays(7 * Math.Max(1, b.WeeksHeld) - 1) >= startDate);
             if (duplicate)
                 throw ViviException.Conflict("ALREADY_BOOKED", "You already booked this week and slot.");
 
             await _calendar.GetSettingsAsync(cancellationToken);
-            var slot = week.Slots.SingleOrDefault(s => s.SlotType == slotType)
-                ?? throw ViviException.NotFound("LIVE_SLOT_NOT_FOUND", "Live slot was not found.");
+            var slots = new List<LiveWeekSlot>(weeks.Count);
+            foreach (var w in weeks)
+            {
+                var slot = w.Slots.SingleOrDefault(s => s.SlotType == slotType)
+                    ?? throw ViviException.NotFound("LIVE_SLOT_NOT_FOUND", "Live slot was not found.");
 
-            if (!_calendar.IsSlotEnabled(slotType))
-                throw ViviException.Conflict("SLOT_NOT_AVAILABLE", "This session is not available.");
+                var where = w.Id == weekId ? string.Empty : $" (week {w.WeekNumber} of this course)";
+                if (!_calendar.IsSlotEnabled(slotType))
+                    throw ViviException.Conflict("SLOT_NOT_AVAILABLE", "This session is not available.");
 
-            if (slot.IsBlocked)
-                throw ViviException.Conflict("SLOT_BLOCKED", "This slot is blocked by the studio.");
+                if (slot.IsBlocked)
+                    throw ViviException.Conflict("SLOT_BLOCKED", $"This slot is blocked by the studio{where}.");
 
-            if (slot.SeatsBooked >= slot.SeatCapacity)
-                throw ViviException.Conflict("FULLY_BOOKED", "This slot is fully booked.");
+                if (slot.SeatsBooked >= slot.SeatCapacity)
+                    throw ViviException.Conflict("FULLY_BOOKED", $"This slot is fully booked{where}.");
+
+                slots.Add(slot);
+            }
 
             var now = DateTime.UtcNow;
-            slot.SeatsBooked += 1;
-            slot.UpdatedAt = now;
+            foreach (var slot in slots)
+            {
+                slot.SeatsBooked += 1;
+                slot.UpdatedAt = now;
+            }
 
             // Price is read now and stored on the order, so later price changes never touch it.
-            var price = _calendar.PriceFor(week);
+            var price = course?.Price ?? _calendar.PriceFor(week);
             var slotName = _calendar.SlotName(slotType);
+            var weekLabel = span > 1
+                ? $"Weeks {week.WeekNumber}–{weeks[^1].WeekNumber}"
+                : $"Week {week.WeekNumber}";
             var order = new Order
             {
                 Id = Guid.NewGuid(),
@@ -260,7 +341,9 @@ public sealed class LiveBookingService
                 UnitPrice = price,
                 DiscountAmount = 0,
                 TotalAmount = price,
-                ItemNameSnapshot = $"{slotName} · Week {week.WeekNumber}"
+                ItemNameSnapshot = course is null
+                    ? $"{slotName} · {weekLabel}"
+                    : $"{course.Name} · {slotName} · {weekLabel}"
             };
             order.Items.Add(orderItem);
 
@@ -290,6 +373,8 @@ public sealed class LiveBookingService
                 CustomerId = customerId,
                 LiveWeekId = week.Id,
                 SlotType = slotType,
+                CourseId = course?.Id,
+                WeeksHeld = span,
                 OrderId = order.Id,
                 OrderItemId = orderItem.Id,
                 Status = LiveBookingStatus.PendingPayment,
@@ -312,24 +397,42 @@ public sealed class LiveBookingService
                 RazorpayOrderId: razorpayOrder.RazorpayOrderId,
                 RazorpayKeyId: _razorpayOptions.KeyId,
                 amountPaise,
-                order.Currency);
+                order.Currency,
+                course?.Name);
         }
         finally
         {
-            gate.Release();
+            foreach (var gate in held)
+                gate.Release();
         }
     }
 
+    /// <summary>Gives back the booking's seat in every week it held one.</summary>
     private async Task ReleaseSeatHoldAsync(LiveBooking booking, CancellationToken cancellationToken)
     {
-        var slot = await _db.LiveWeekSlots.SingleOrDefaultAsync(
-            s => s.LiveWeekId == booking.LiveWeekId && s.SlotType == booking.SlotType,
-            cancellationToken);
-        if (slot is null)
+        var start = await _db.LiveWeeks
+            .Where(w => w.Id == booking.LiveWeekId)
+            .Select(w => (DateOnly?)w.StartDate)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (start is null)
             return;
-        if (slot.SeatsBooked > 0)
-            slot.SeatsBooked -= 1;
-        slot.UpdatedAt = DateTime.UtcNow;
+
+        var first = start.Value;
+        var last = first.AddDays(7 * (Math.Max(1, booking.WeeksHeld) - 1));
+        var slots = await _db.LiveWeekSlots
+            .Where(s => s.SlotType == booking.SlotType
+                        && s.Week != null
+                        && s.Week.StartDate >= first
+                        && s.Week.StartDate <= last)
+            .ToListAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+        foreach (var slot in slots)
+        {
+            if (slot.SeatsBooked > 0)
+                slot.SeatsBooked -= 1;
+            slot.UpdatedAt = now;
+        }
     }
 
     private async Task<string> GenerateOrderNumberAsync(CancellationToken cancellationToken)

@@ -12,6 +12,9 @@ public sealed class LiveStudioOptions
 
     public int ReservationMinutes { get; set; } = 15;
 
+    /// <summary>Starting WhatsApp number for class enquiries (digits, with country code); the admin edits it.</summary>
+    public string EnquiryWhatsApp { get; set; } = "918438034181";
+
     /// <summary>Monday that starts Week 1 of the season (yyyy-MM-dd).</summary>
     public string SeasonStartMonday { get; set; } = "2026-01-05";
 

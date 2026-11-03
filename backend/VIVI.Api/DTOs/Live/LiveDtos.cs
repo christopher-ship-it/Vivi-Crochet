@@ -54,8 +54,50 @@ public sealed class LiveSlotAvailabilityResponse
 
 public sealed class CreateLiveBookingRequest
 {
+    /// <summary>First week of the booking.</summary>
     public Guid WeekId { get; set; }
     public LiveSlotType SlotType { get; set; }
+    /// <summary>Course to book; null books the original single-week package.</summary>
+    public Guid? CourseId { get; set; }
+}
+
+public sealed class LiveCourseProjectDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? ImageUrl { get; set; }
+}
+
+/// <summary>A Live course as the app and the admin both see it.</summary>
+public sealed class LiveCourseResponse
+{
+    public Guid Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Level { get; set; } = string.Empty;
+    public string Tagline { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public int DurationDays { get; set; }
+    public int HoursPerDay { get; set; }
+    public int WeeksSpan { get; set; }
+    public bool IsBundle { get; set; }
+    public bool IsActive { get; set; }
+    public int SortOrder { get; set; }
+    public IReadOnlyList<string> Learn { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<LiveCourseProjectDto> Projects { get; set; } = Array.Empty<LiveCourseProjectDto>();
+}
+
+public sealed class UpdateLiveCourseRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string Level { get; set; } = string.Empty;
+    public string Tagline { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public int DurationDays { get; set; }
+    public int HoursPerDay { get; set; }
+    public int WeeksSpan { get; set; }
+    public bool IsActive { get; set; }
+    public List<string> Learn { get; set; } = new();
+    public List<LiveCourseProjectDto> Projects { get; set; } = new();
 }
 
 public sealed class CreateLiveBookingResponse
@@ -72,7 +114,10 @@ public sealed class CreateLiveBookingResponse
     public string SlotName { get; set; } = string.Empty;
     public int WeekNumber { get; set; }
     public DateOnly StartDate { get; set; }
+    /// <summary>Last day of the last week the booking covers.</summary>
     public DateOnly EndDate { get; set; }
+    public string? CourseName { get; set; }
+    public int WeeksHeld { get; set; } = 1;
 }
 
 public sealed class LiveBookingResponse
@@ -89,6 +134,8 @@ public sealed class LiveBookingResponse
     public DateOnly EndDate { get; set; }
     public decimal PackagePrice { get; set; }
     public int WeeklyLiveHours { get; set; }
+    public string? CourseName { get; set; }
+    public int WeeksHeld { get; set; } = 1;
     public IReadOnlyList<LiveDayResponse> Days { get; set; } = Array.Empty<LiveDayResponse>();
     public DateTime? ConfirmedAt { get; set; }
 }
@@ -127,6 +174,8 @@ public class AdminLiveBookingListItemResponse
     public DateOnly EndDate { get; set; }
     public string SlotType { get; set; } = string.Empty;
     public string SlotName { get; set; } = string.Empty;
+    public string? CourseName { get; set; }
+    public int WeeksHeld { get; set; } = 1;
     public Guid OrderId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public decimal TotalAmount { get; set; }
@@ -193,7 +242,15 @@ public sealed class AdminLiveSettingsResponse
     public int HoursPerClassDay { get; set; }
     public string Language { get; set; } = string.Empty;
     public string Level { get; set; } = string.Empty;
+    /// <summary>WhatsApp number for class enquiries (digits with country code); empty hides the button.</summary>
+    public string EnquiryWhatsApp { get; set; } = string.Empty;
     public IReadOnlyList<AdminLiveSessionDto> Sessions { get; set; } = Array.Empty<AdminLiveSessionDto>();
+}
+
+/// <summary>What the Live page needs to send a class enquiry.</summary>
+public sealed class LiveEnquiryResponse
+{
+    public string WhatsAppNumber { get; set; } = string.Empty;
 }
 
 public sealed class UpdateLiveSettingsRequest
@@ -202,6 +259,7 @@ public sealed class UpdateLiveSettingsRequest
     public int HoursPerClassDay { get; set; }
     public string Language { get; set; } = string.Empty;
     public string Level { get; set; } = string.Empty;
+    public string EnquiryWhatsApp { get; set; } = string.Empty;
     public List<AdminLiveSessionDto> Sessions { get; set; } = new();
 }
 

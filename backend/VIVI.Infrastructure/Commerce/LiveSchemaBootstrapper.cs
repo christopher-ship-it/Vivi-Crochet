@@ -13,6 +13,8 @@ public static class LiveSchemaBootstrapper
     {
         // Admin-editable Live settings (price, language, level, sessions) and per-week overrides.
         await db.Database.ExecuteSqlRawAsync(LiveSettingsSchemaSql.Ddl, cancellationToken);
+        // Live courses and the course columns on LiveBookings.
+        await db.Database.ExecuteSqlRawAsync(LiveCourseSchemaSql.Ddl, cancellationToken);
 
         // Always ensure slot block + tutor photo columns exist (tables may already be present).
         await db.Database.ExecuteSqlRawAsync(
@@ -170,6 +172,9 @@ public static class LiveSchemaBootstrapper
             END
             """,
             cancellationToken);
+
+        // LiveBookings was just created above, so add its course columns now.
+        await db.Database.ExecuteSqlRawAsync(LiveCourseSchemaSql.Ddl, cancellationToken);
 
         // Record migration so EF history stays consistent when present.
         await db.Database.ExecuteSqlRawAsync(

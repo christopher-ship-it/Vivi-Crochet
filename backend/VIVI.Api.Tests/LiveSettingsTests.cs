@@ -35,6 +35,7 @@ public sealed class LiveSettingsTests
         HoursPerClassDay = s.HoursPerClassDay,
         Language = s.Language,
         Level = s.Level,
+        EnquiryWhatsApp = s.EnquiryWhatsApp,
         Sessions = s.Sessions.ToList()
     };
 

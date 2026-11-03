@@ -77,7 +77,7 @@ public sealed class AdminUserMetricsController : ControllerBase
             .Select(e => e.CustomerId).Distinct().CountAsync(cancellationToken);
         var todayDate = DateOnly.FromDateTime(todayIndia);
         var live = await _db.LiveBookings.AsNoTracking()
-            .Where(b => b.Status == LiveBookingStatus.Confirmed && b.Week!.EndDate >= todayDate)
+            .Where(b => b.Status == LiveBookingStatus.Confirmed && b.Week!.StartDate.AddDays(7 * b.WeeksHeld - 1) >= todayDate)
             .Select(b => b.CustomerId).Distinct().CountAsync(cancellationToken);
 
         return Ok(new UserMetricsResponse

@@ -931,6 +931,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("ConfirmedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("CourseId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -958,6 +961,9 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("WeeksHeld")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("LiveWeekId");
@@ -970,6 +976,73 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.HasIndex("CustomerId", "LiveWeekId", "SlotType");
 
                     b.ToTable("LiveBookings", (string)null);
+                });
+
+            modelBuilder.Entity("VIVI.Core.Entities.LiveCourse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("DurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HoursPerDay")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsBundle")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LearnJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ProjectsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Tagline")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WeeksSpan")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("LiveCourses", (string)null);
                 });
 
             modelBuilder.Entity("VIVI.Core.Entities.LiveSessionDefinition", b =>
@@ -1010,6 +1083,11 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EnquiryWhatsApp")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int>("HoursPerClassDay")
                         .HasColumnType("int");

@@ -52,6 +52,36 @@ public sealed class LiveSettings
     public int HoursPerClassDay { get; set; }
     public string Language { get; set; } = "Tamil";
     public string Level { get; set; } = "Basic";
+    /// <summary>WhatsApp number for class enquiries, digits only with country code; empty hides the button.</summary>
+    public string EnquiryWhatsApp { get; set; } = string.Empty;
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// One sellable Live course (Basic / Intermediate / Advanced) or the Artist pack that bundles them.
+/// Everything the Live page shows about a course comes from this row, so the admin edits it.
+/// </summary>
+public sealed class LiveCourse
+{
+    public Guid Id { get; set; }
+    /// <summary>Stable key: basic, intermediate, advanced or artist-pack.</summary>
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Level { get; set; } = string.Empty;
+    public string Tagline { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public int DurationDays { get; set; }
+    public int HoursPerDay { get; set; }
+    /// <summary>Consecutive Monday-start weeks a booking holds a seat for (5 days = 1, 10 days = 2).</summary>
+    public int WeeksSpan { get; set; } = 1;
+    /// <summary>True for the Artist pack, which is all courses in one booking.</summary>
+    public bool IsBundle { get; set; }
+    public bool IsActive { get; set; } = true;
+    public int SortOrder { get; set; }
+    /// <summary>JSON array of strings: what the course teaches.</summary>
+    public string LearnJson { get; set; } = "[]";
+    /// <summary>JSON array of { name, imageUrl }: the projects students make.</summary>
+    public string ProjectsJson { get; set; } = "[]";
     public DateTime UpdatedAt { get; set; }
 }
 
@@ -111,6 +141,10 @@ public sealed class LiveBooking
     public LiveSlotType SlotType { get; set; }
     public Guid OrderId { get; set; }
     public Guid OrderItemId { get; set; }
+    /// <summary>The <see cref="LiveCourse"/> bought; null for the original single-week package.</summary>
+    public Guid? CourseId { get; set; }
+    /// <summary>Consecutive weeks (from <see cref="LiveWeekId"/>) in which this booking holds a seat.</summary>
+    public int WeeksHeld { get; set; } = 1;
     public LiveBookingStatus Status { get; set; }
     public DateTime? ReservationExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; }

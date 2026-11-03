@@ -20,6 +20,7 @@ public sealed record LiveSettingsSnapshot(
     int HoursPerClassDay,
     string Language,
     string Level,
+    string EnquiryWhatsApp,
     IReadOnlyDictionary<LiveSlotType, LiveSessionInfo> Sessions);
 
 public sealed class LiveCalendarService
@@ -78,6 +79,7 @@ public sealed class LiveCalendarService
             row?.HoursPerClassDay ?? _options.HoursPerClassDay,
             row?.Language ?? DefaultLanguage,
             row?.Level ?? DefaultLevel,
+            row?.EnquiryWhatsApp ?? _options.EnquiryWhatsApp,
             map);
     }
 
@@ -321,10 +323,15 @@ public sealed class LiveCalendarService
         int hoursPerClassDay,
         string language,
         string level,
+        string enquiryWhatsApp,
         IReadOnlyList<LiveSessionUpdate> sessions,
         CancellationToken cancellationToken)
     {
         ValidatePrice(packagePrice);
+        // Digits only with country code (wa.me format); empty switches the enquiry button off.
+        enquiryWhatsApp = new string((enquiryWhatsApp ?? string.Empty).Where(char.IsAsciiDigit).ToArray());
+        if (enquiryWhatsApp.Length != 0 && enquiryWhatsApp.Length is < 8 or > 15)
+            throw new ViviException("INVALID_WHATSAPP", "WhatsApp number must be 8 to 15 digits including the country code.");
         if (hoursPerClassDay is < 1 or > 8)
             throw new ViviException("INVALID_HOURS", "Hours per class day must be between 1 and 8.");
         language = RequireText(language, 40, "INVALID_LANGUAGE", "Language");
@@ -353,6 +360,7 @@ public sealed class LiveCalendarService
         row.HoursPerClassDay = hoursPerClassDay;
         row.Language = language;
         row.Level = level;
+        row.EnquiryWhatsApp = enquiryWhatsApp;
         row.UpdatedAt = now;
 
         var existing = await _db.LiveSessionDefinitions.ToListAsync(cancellationToken);
@@ -371,7 +379,7 @@ public sealed class LiveCalendarService
                 var hasBookings = await _db.LiveBookings.AnyAsync(
                     b => b.SlotType == update.SlotType
                          && b.Week != null
-                         && b.Week.EndDate >= today
+                         && b.Week.StartDate.AddDays(7 * b.WeeksHeld - 1) >= today
                          && (b.Status == LiveBookingStatus.Confirmed
                              || b.Status == LiveBookingStatus.PendingPayment),
                     cancellationToken);

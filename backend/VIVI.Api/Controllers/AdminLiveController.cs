@@ -22,6 +22,7 @@ public sealed class AdminLiveController : ControllerBase
     private readonly ViviDbContext _db;
     private readonly LiveCalendarService _calendar;
     private readonly LiveBookingService _bookings;
+    private readonly LiveCourseService _courses;
     private readonly IBlobStorageService _blob;
     private readonly AdminDataCleanupService _cleanup;
     private readonly ILogger<AdminLiveController> _logger;
@@ -30,6 +31,7 @@ public sealed class AdminLiveController : ControllerBase
         ViviDbContext db,
         LiveCalendarService calendar,
         LiveBookingService bookings,
+        LiveCourseService courses,
         IBlobStorageService blob,
         AdminDataCleanupService cleanup,
         ILogger<AdminLiveController> logger)
@@ -37,6 +39,7 @@ public sealed class AdminLiveController : ControllerBase
         _db = db;
         _calendar = calendar;
         _bookings = bookings;
+        _courses = courses;
         _blob = blob;
         _cleanup = cleanup;
         _logger = logger;
@@ -398,12 +401,36 @@ public sealed class AdminLiveController : ControllerBase
             request.HoursPerClassDay,
             request.Language,
             request.Level,
+            request.EnquiryWhatsApp,
             request.Sessions
                 .Select(s => new LiveSessionUpdate(s.SlotType, s.Name, s.Hours, s.IsEnabled))
                 .ToList(),
             cancellationToken);
         return Ok(MapSettings(snapshot));
     }
+
+    /// <summary>Every Live course, including ones switched off, in the order customers see them.</summary>
+    [HttpGet("courses")]
+    [ProducesResponseType(typeof(IReadOnlyList<LiveCourseResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<LiveCourseResponse>>> ListCourses(CancellationToken cancellationToken)
+    {
+        var courses = await _courses.ListAsync(activeOnly: false, cancellationToken);
+        return Ok(courses.Select(LiveCourseMapper.ToResponse).ToList());
+    }
+
+    [HttpPut("courses/{id:guid}")]
+    [ProducesResponseType(typeof(LiveCourseResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<LiveCourseResponse>> UpdateCourse(
+        Guid id,
+        [FromBody] UpdateLiveCourseRequest request,
+        CancellationToken cancellationToken)
+    {
+        var course = await _courses.UpdateAsync(id, LiveCourseMapper.ToUpdate(request), cancellationToken);
+        return Ok(LiveCourseMapper.ToResponse(course));
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, string>> CourseNamesAsync(CancellationToken cancellationToken)
+        => await _db.LiveCourses.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
 
     [HttpPut("weeks/{weekId:guid}/overrides")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -439,6 +466,7 @@ public sealed class AdminLiveController : ControllerBase
         HoursPerClassDay = settings.HoursPerClassDay,
         Language = settings.Language,
         Level = settings.Level,
+        EnquiryWhatsApp = settings.EnquiryWhatsApp,
         Sessions = settings.Sessions.Values
             .OrderBy(s => s.SlotType)
             .Select(s => new AdminLiveSessionDto
@@ -531,7 +559,8 @@ public sealed class AdminLiveController : ControllerBase
             .Take(200)
             .ToListAsync(cancellationToken);
 
-        return Ok(bookings.Select(MapListItem).ToList());
+        var names = await CourseNamesAsync(cancellationToken);
+        return Ok(bookings.Select(b => MapListItem(b, names)).ToList());
     }
 
     [HttpGet("bookings/{id:guid}")]
@@ -552,7 +581,7 @@ public sealed class AdminLiveController : ControllerBase
             .SingleOrDefaultAsync(b => b.Id == id, cancellationToken)
             ?? throw ViviException.NotFound("LIVE_BOOKING_NOT_FOUND", "Live booking was not found.");
 
-        return Ok(MapDetail(booking));
+        return Ok(MapDetail(booking, await CourseNamesAsync(cancellationToken)));
     }
 
     [HttpPost("bookings/{id:guid}/cancel")]
@@ -572,7 +601,7 @@ public sealed class AdminLiveController : ControllerBase
             .ThenInclude(o => o.Payments)
             .SingleAsync(b => b.Id == id, cancellationToken);
 
-        return Ok(MapDetail(booking));
+        return Ok(MapDetail(booking, await CourseNamesAsync(cancellationToken)));
     }
 
     /// <summary>
@@ -674,9 +703,12 @@ public sealed class AdminLiveController : ControllerBase
         };
     }
 
-    private AdminLiveBookingListItemResponse MapListItem(Core.Entities.LiveBooking booking)
+    private AdminLiveBookingListItemResponse MapListItem(
+        Core.Entities.LiveBooking booking,
+        IReadOnlyDictionary<Guid, string> courseNames)
     {
         var week = booking.Week ?? throw ViviException.Conflict("LIVE_WEEK_MISSING", "Booking week is missing.");
+        var weeksHeld = Math.Max(1, booking.WeeksHeld);
         var payment = booking.Order?.Payments.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
         return new AdminLiveBookingListItemResponse
         {
@@ -688,9 +720,11 @@ public sealed class AdminLiveController : ControllerBase
             WeekNumber = week.WeekNumber,
             SeasonYear = week.SeasonYear,
             StartDate = week.StartDate,
-            EndDate = week.EndDate,
+            EndDate = week.StartDate.AddDays(7 * weeksHeld - 1),
             SlotType = booking.SlotType.ToString(),
             SlotName = _calendar.SlotName(booking.SlotType),
+            CourseName = booking.CourseId is { } courseId ? courseNames.GetValueOrDefault(courseId) : null,
+            WeeksHeld = weeksHeld,
             OrderId = booking.OrderId,
             OrderNumber = booking.Order?.OrderNumber ?? string.Empty,
             TotalAmount = booking.Order?.TotalAmount
@@ -701,9 +735,11 @@ public sealed class AdminLiveController : ControllerBase
         };
     }
 
-    private AdminLiveBookingDetailResponse MapDetail(Core.Entities.LiveBooking booking)
+    private AdminLiveBookingDetailResponse MapDetail(
+        Core.Entities.LiveBooking booking,
+        IReadOnlyDictionary<Guid, string> courseNames)
     {
-        var list = MapListItem(booking);
+        var list = MapListItem(booking, courseNames);
         var week = booking.Week!;
         var slot = week.Slots.SingleOrDefault(s => s.SlotType == booking.SlotType);
         var remaining = slot is null ? 0 : Math.Max(0, slot.SeatCapacity - slot.SeatsBooked);
@@ -721,6 +757,8 @@ public sealed class AdminLiveController : ControllerBase
             EndDate = list.EndDate,
             SlotType = list.SlotType,
             SlotName = list.SlotName,
+            CourseName = list.CourseName,
+            WeeksHeld = list.WeeksHeld,
             OrderId = list.OrderId,
             OrderNumber = list.OrderNumber,
             TotalAmount = list.TotalAmount,
