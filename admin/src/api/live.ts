@@ -98,6 +98,8 @@ export interface CreateAdminLiveEnquiry {
   courseId: string;
   weekId: string;
   slotType: LiveSlotType;
+  /** Typed by the admin for this student; never filled in from a default. */
+  classTime: string;
   paymentReference: string;
 }
 

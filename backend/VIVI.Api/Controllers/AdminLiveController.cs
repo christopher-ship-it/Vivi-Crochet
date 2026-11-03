@@ -85,6 +85,9 @@ public sealed class AdminLiveController : ControllerBase
             throw new ViviException("INVALID_ENQUIRY", "Enter a valid email address.");
         if (phone is { Length: > 30 })
             throw new ViviException("INVALID_ENQUIRY", "Phone number is too long.");
+        var classTime = (request.ClassTime ?? string.Empty).Trim();
+        if (classTime.Length is 0 or > 60)
+            throw new ViviException("INVALID_ENQUIRY", "Class time is required, up to 60 characters.");
         if (reference.Length is 0 or > 120)
             throw new ViviException("INVALID_ENQUIRY", "Payment reference is required, up to 120 characters.");
 
@@ -111,7 +114,7 @@ public sealed class AdminLiveController : ControllerBase
             EndDate = week.StartDate.AddDays(7 * weeksHeld - 1),
             WeeksHeld = weeksHeld,
             SlotName = _calendar.SlotName(request.SlotType),
-            SlotHours = _calendar.SlotHours(request.SlotType),
+            SlotHours = classTime,
             PaymentReference = reference,
             CreatedAt = DateTime.UtcNow
         };

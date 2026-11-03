@@ -311,6 +311,8 @@ public sealed class CreateLiveEnquiryRequest
     public Guid CourseId { get; set; }
     public Guid WeekId { get; set; }
     public LiveSlotType SlotType { get; set; }
+    /// <summary>Class time the admin sets for this student, e.g. 10:00 AM – 12:00 PM. Not a default.</summary>
+    public string ClassTime { get; set; } = string.Empty;
     public string PaymentReference { get; set; } = string.Empty;
 }
 

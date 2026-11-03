@@ -49,6 +49,7 @@ public sealed class LiveEnquiryTests
             courseId,
             weekId,
             slotType = "Morning",
+            classTime = "11:00 AM – 1:00 PM",
             paymentReference = "UPI 1234567890"
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -67,6 +68,8 @@ public sealed class LiveEnquiryTests
         Assert.Contains("Intermediate", sent.Subject);
         Assert.Contains("UPI 1234567890", sent.TextBody);
         Assert.Contains("Morning Crochet Circle", sent.TextBody);
+        Assert.Contains("11:00 AM – 1:00 PM", sent.TextBody);
+        Assert.Equal("11:00 AM – 1:00 PM", created.SlotHours);
 
         var list = await admin.GetFromJsonAsync<List<LiveEnquiryDto>>("/api/admin/live/enquiries", Json);
         Assert.Contains(list!, e => e.Id == created.Id);
@@ -88,6 +91,7 @@ public sealed class LiveEnquiryTests
             courseId,
             weekId,
             slotType = "Evening",
+            classTime = "6:00 PM – 8:00 PM",
             paymentReference = "BANK-889"
         })).Content.ReadFromJsonAsync<LiveEnquiryDto>(Json))!;
 
@@ -115,6 +119,7 @@ public sealed class LiveEnquiryTests
                 courseId,
                 weekId,
                 slotType = "Morning",
+                classTime = "10:00 AM – 12:00 PM",
                 paymentReference = reference
             })).StatusCode;
 

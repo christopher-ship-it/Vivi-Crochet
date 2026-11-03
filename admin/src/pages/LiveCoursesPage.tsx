@@ -134,7 +134,7 @@ function CourseCard({ initial }: { initial: AdminLiveCourse }) {
             onChange={(e) => update({ tagline: e.target.value })}
           />
         </div>
-        <div className="form-field span-1">
+        <div className="form-field span-2">
           <label htmlFor={`${id}-days`}>Days</label>
           <input
             id={`${id}-days`}
@@ -145,7 +145,7 @@ function CourseCard({ initial }: { initial: AdminLiveCourse }) {
             onChange={(e) => update({ durationDays: parseNumberDraft(e.target.value) })}
           />
         </div>
-        <div className="form-field span-1">
+        <div className="form-field span-2">
           <label htmlFor={`${id}-hours`}>Hours a day</label>
           <input
             id={`${id}-hours`}
@@ -156,7 +156,7 @@ function CourseCard({ initial }: { initial: AdminLiveCourse }) {
             onChange={(e) => update({ hoursPerDay: parseNumberDraft(e.target.value) })}
           />
         </div>
-        <div className="form-field span-1">
+        <div className="form-field span-2">
           <label htmlFor={`${id}-weeks`}>Weeks in a row</label>
           <input
             id={`${id}-weeks`}
@@ -167,16 +167,15 @@ function CourseCard({ initial }: { initial: AdminLiveCourse }) {
             onChange={(e) => update({ weeksSpan: parseNumberDraft(e.target.value) })}
           />
         </div>
-        <p className="form-hint span-6" style={{ marginTop: -8 }}>
-          “Weeks in a row” is how many Monday-to-Friday weeks a booking holds a seat for. A 5-day
-          course is 1, a 10-day course is 2, the Artist pack is 5.
+        <p className="form-hint span-6" style={{ margin: 0 }}>
+          Weeks in a row: 1 for a 5-day course, 2 for a 10-day course, 5 for the pack.
         </p>
 
         <div className="form-field span-3">
           <label htmlFor={`${id}-learn`}>What you will learn (one per line)</label>
           <textarea
             id={`${id}-learn`}
-            rows={7}
+            rows={4}
             value={learnText}
             onChange={(e) => {
               setLearnText(e.target.value);
@@ -188,7 +187,7 @@ function CourseCard({ initial }: { initial: AdminLiveCourse }) {
           <label htmlFor={`${id}-projects`}>Projects (one per line, optional picture link)</label>
           <textarea
             id={`${id}-projects`}
-            rows={7}
+            rows={4}
             placeholder={'Flower | https://…/flower.jpg\nKeychain'}
             value={projectsText}
             onChange={(e) => {
