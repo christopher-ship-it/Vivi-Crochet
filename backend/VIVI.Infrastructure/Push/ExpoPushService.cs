@@ -14,7 +14,8 @@ public sealed record ExpoPushMessage(
     string Title,
     string Body,
     IReadOnlyDictionary<string, string> Data,
-    string? Sound = "default");
+    string? Sound = "default",
+    string? ImageUrl = null);
 
 /// <summary>Sends notifications via the Expo Push API.</summary>
 public sealed class ExpoPushService
@@ -63,6 +64,8 @@ public sealed class ExpoPushService
                 body = m.Body,
                 data = m.Data,
                 sound = m.Sound,
+                // Expo's rich content: Android shows the picture; null is left out of the request.
+                richContent = m.ImageUrl is null ? null : new { image = m.ImageUrl },
                 priority = "high"
             }).ToList();
 

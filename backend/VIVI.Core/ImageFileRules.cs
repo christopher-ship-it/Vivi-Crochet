@@ -85,4 +85,11 @@ public static class ImageFileRules
 
     public static bool IsOwnedLiveTutorDefaultPhotoPath(string blobPath)
         => blobPath.StartsWith("live/tutor-default/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Picture shown in an admin notification (broadcast push).</summary>
+    public static string BuildPushImageBlobPath(string sanitizedFileName)
+        => $"push/images/{sanitizedFileName}";
+
+    public static bool IsOwnedPushImagePath(string blobPath)
+        => blobPath.StartsWith("push/images/", StringComparison.OrdinalIgnoreCase);
 }

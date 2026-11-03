@@ -6,6 +6,13 @@ public sealed class AdminBroadcastPushRequest
     public string Body { get; set; } = string.Empty;
     /// <summary>Expo Router path, e.g. /(tabs)/shop</summary>
     public string Screen { get; set; } = "/(tabs)/shop";
+    /// <summary>Optional picture shown with the notification (https link from the picture upload).</summary>
+    public string? ImageUrl { get; set; }
+}
+
+public sealed class AdminPushImageResponse
+{
+    public string ImageUrl { get; set; } = string.Empty;
 }
 
 public sealed class AdminPushReachResponse

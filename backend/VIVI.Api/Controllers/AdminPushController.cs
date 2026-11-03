@@ -1,9 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VIVI.Api.Auth;
+using VIVI.Api.DTOs.Live;
 using VIVI.Api.DTOs.Push;
+using VIVI.Api.Services;
+using VIVI.Core;
 using VIVI.Core.Enums;
 using VIVI.Core.Exceptions;
+using VIVI.Core.Interfaces;
 using VIVI.Infrastructure.Push;
 
 namespace VIVI.Api.Controllers;
@@ -14,10 +18,58 @@ namespace VIVI.Api.Controllers;
 public sealed class AdminPushController : ControllerBase
 {
     private readonly CustomerPushService _push;
+    private readonly IBlobStorageService _blob;
 
-    public AdminPushController(CustomerPushService push)
+    public AdminPushController(CustomerPushService push, IBlobStorageService blob)
     {
         _push = push;
+        _blob = blob;
+    }
+
+    /// <summary>Starts an upload for the picture of a notification (same flow as the tutor photo).</summary>
+    [HttpPost("image-upload-url")]
+    [ProducesResponseType(typeof(LiveTutorPhotoUploadUrlResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<LiveTutorPhotoUploadUrlResponse>> CreateImageUploadUrl(
+        [FromBody] LiveTutorPhotoUploadUrlRequest request,
+        CancellationToken cancellationToken)
+    {
+        ImageFileRules.Validate(request.FileName, request.ContentType, request.FileSizeBytes, ImageFileRules.DefaultMaxBytes);
+
+        var safeName = ImageFileRules.SanitizeFileName(request.FileName);
+        var blobPath = ImageFileRules.BuildPushImageBlobPath($"{Guid.NewGuid():N}-{safeName}");
+        var ticket = await _blob.CreateUploadSasAsync(blobPath, request.ContentType.Trim(), cancellationToken);
+
+        return Ok(new LiveTutorPhotoUploadUrlResponse
+        {
+            UploadUrl = ticket.UploadUrl,
+            ExpiresAt = ticket.ExpiresAt,
+            BlobPath = blobPath,
+            MaxFileSizeBytes = ImageFileRules.DefaultMaxBytes
+        });
+    }
+
+    /// <summary>Confirms the picture is stored and returns the link a notification can use.</summary>
+    [HttpPost("image-upload-complete")]
+    [ProducesResponseType(typeof(AdminPushImageResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminPushImageResponse>> CompleteImageUpload(
+        [FromBody] LiveTutorPhotoUploadCompleteRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ImageFileRules.IsOwnedPushImagePath(request.BlobPath))
+            throw new ViviException("INVALID_BLOB_PATH", "The blob path does not belong to a notification picture.");
+
+        ImageFileRules.Validate(Path.GetFileName(request.BlobPath), request.ContentType, request.FileSizeBytes, ImageFileRules.DefaultMaxBytes);
+
+        var completed = await _blob.TryCompleteUploadAsync(
+            request.BlobPath,
+            request.FileSizeBytes,
+            request.ContentType.Trim(),
+            cancellationToken);
+        if (!completed)
+            throw ViviException.Conflict("BLOB_MISSING", "The image file was not found in storage. Upload it, then retry.");
+
+        var url = await ProductImageResolver.ResolveAsync(request.BlobPath, _blob, cancellationToken);
+        return Ok(new AdminPushImageResponse { ImageUrl = url ?? string.Empty });
     }
 
     [HttpGet("reach")]
@@ -59,7 +111,8 @@ public sealed class AdminPushController : ControllerBase
                 request.Title,
                 request.Body,
                 request.Screen,
-                cancellationToken);
+                cancellationToken,
+                request.ImageUrl);
             return Ok(new AdminBroadcastPushResponse { SentToDevices = sent });
         }
         catch (ArgumentException ex)

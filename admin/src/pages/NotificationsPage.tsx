@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiClientError } from '../api/client';
-import { broadcastPush, getPushReach, sendWeeklyPushNow } from '../api/push';
+import {
+  broadcastPush,
+  completePushImageUpload,
+  getPushReach,
+  requestPushImageUploadUrl,
+  sendWeeklyPushNow,
+} from '../api/push';
 import { confirmDialog } from '../components/AppDialog';
+import { uploadToBlob } from '../utils/videoUpload';
+
+const PICTURE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const SCREENS = [
   { value: '/(tabs)/shop', label: 'Shop' },
@@ -18,6 +27,9 @@ export function NotificationsPage() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [screen, setScreen] = useState('/(tabs)/shop');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [weeklySending, setWeeklySending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,13 +52,49 @@ export function NotificationsPage() {
     void loadReach();
   }, [loadReach]);
 
+  async function handlePickPicture(file: File | undefined) {
+    if (!file) return;
+    if (!PICTURE_TYPES.includes(file.type)) {
+      setError('Use a JPG, PNG or WebP picture.');
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const ticket = await requestPushImageUploadUrl({
+        fileName: file.name,
+        contentType: file.type,
+        fileSizeBytes: file.size,
+      });
+      await uploadToBlob(ticket.uploadUrl, file, file.type);
+      const done = await completePushImageUpload({
+        blobPath: ticket.blobPath,
+        fileSizeBytes: file.size,
+        contentType: file.type,
+      });
+      setImageUrl(done.imageUrl);
+      setImagePreview(URL.createObjectURL(file));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not upload the picture.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function removePicture() {
+    setImageUrl('');
+    setImagePreview('');
+  }
+
   async function handleBroadcast(e: FormEvent) {
     e.preventDefault();
     setSending(true);
     setError(null);
     setInfo(null);
     try {
-      const result = await broadcastPush({ title, body, screen });
+      const result = await broadcastPush({ title, body, screen, imageUrl: imageUrl || undefined });
+      removePicture();
       setInfo(
         result.sentToDevices === 0
           ? 'No devices have registered for push yet.'
@@ -160,7 +208,31 @@ export function NotificationsPage() {
               ))}
             </select>
           </div>
-          <button type="submit" className="btn btn--primary" disabled={sending || !title.trim() || !body.trim()}>
+          <div className="form-field">
+            <label htmlFor="push-picture">Picture (optional)</label>
+            {imagePreview ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <img
+                  src={imagePreview}
+                  alt="Notification picture"
+                  style={{ width: 160, height: 90, objectFit: 'cover', borderRadius: 10 }}
+                />
+                <button type="button" className="btn btn--sm" onClick={removePicture}>
+                  Remove picture
+                </button>
+              </div>
+            ) : (
+              <input
+                id="push-picture"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={uploading}
+                onChange={(e) => void handlePickPicture(e.target.files?.[0])}
+              />
+            )}
+            {uploading ? <p className="form-hint">Uploading picture…</p> : null}
+          </div>
+          <button type="submit" className="btn btn--primary" disabled={sending || uploading || !title.trim() || !body.trim()}>
             {sending ? 'Sending…' : 'Send to all devices'}
           </button>
         </form>

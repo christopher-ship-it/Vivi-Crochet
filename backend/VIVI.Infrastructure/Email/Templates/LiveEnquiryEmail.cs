@@ -9,7 +9,8 @@ public static class LiveEnquiryEmail
     public static (string Subject, string Html, string Text) Render(
         LiveEnquiry enquiry,
         IReadOnlyList<string> learn,
-        IReadOnlyList<string> projects)
+        IReadOnlyList<string> projects,
+        string? usClassTime = null)
     {
         var dates = $"{enquiry.StartDate:dd MMM yyyy} – {enquiry.EndDate:dd MMM yyyy}";
         var price = EmailLayout.FormatInr(enquiry.Price);
@@ -21,7 +22,8 @@ public static class LiveEnquiryEmail
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;font-size:14px;">
   <tr><td><strong>Course</strong></td><td align="right">{WebUtility.HtmlEncode(enquiry.CourseName)}</td></tr>
   <tr><td><strong>Circle</strong></td><td align="right">{WebUtility.HtmlEncode(enquiry.SlotName)}</td></tr>
-  <tr><td><strong>Class time</strong></td><td align="right">{WebUtility.HtmlEncode(enquiry.SlotHours)}</td></tr>
+  <tr><td><strong>Class time (India)</strong></td><td align="right">{WebUtility.HtmlEncode(enquiry.SlotHours)} IST</td></tr>
+  {(usClassTime is null ? "" : $"<tr><td><strong>Class time (US)</strong></td><td align=\"right\">{WebUtility.HtmlEncode(usClassTime)}</td></tr>")}
   <tr><td><strong>Starts</strong></td><td align="right">Week {enquiry.WeekNumber}</td></tr>
   <tr><td><strong>Dates</strong></td><td align="right">{WebUtility.HtmlEncode(dates)}</td></tr>
   <tr><td><strong>Amount paid</strong></td><td align="right">{price}</td></tr>
@@ -42,8 +44,8 @@ Thank you for choosing VIVI Crochet live classes. Your place is confirmed. Here 
 
 Course: {enquiry.CourseName}
 Circle: {enquiry.SlotName}
-Class time: {enquiry.SlotHours}
-Starts: Week {enquiry.WeekNumber}
+Class time (India): {enquiry.SlotHours} IST
+{(usClassTime is null ? "" : $"Class time (US): {usClassTime}\n")}Starts: Week {enquiry.WeekNumber}
 Dates: {dates}
 Amount paid: {price}
 Payment reference: {enquiry.PaymentReference}

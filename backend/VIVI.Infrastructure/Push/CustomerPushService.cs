@@ -294,11 +294,13 @@ public sealed class CustomerPushService
         string title,
         string body,
         string screen,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? imageUrl = null)
     {
         var trimmedTitle = title.Trim();
         var trimmedBody = body.Trim();
         var trimmedScreen = string.IsNullOrWhiteSpace(screen) ? "/(tabs)/shop" : screen.Trim();
+        var trimmedImage = string.IsNullOrWhiteSpace(imageUrl) ? null : imageUrl.Trim();
 
         if (trimmedTitle.Length is < 1 or > 80)
             throw new ArgumentException("Title must be 1–80 characters.", nameof(title));
@@ -306,6 +308,9 @@ public sealed class CustomerPushService
             throw new ArgumentException("Body must be 1–240 characters.", nameof(body));
         if (trimmedScreen.Length > 120)
             throw new ArgumentException("Screen path is too long.", nameof(screen));
+        if (trimmedImage is not null
+            && (trimmedImage.Length > 500 || !trimmedImage.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("Picture must be an https link under 500 characters.", nameof(imageUrl));
 
         var tokens = await _db.DevicePushTokens
             .AsNoTracking()
@@ -319,7 +324,7 @@ public sealed class CustomerPushService
 
         var data = ScreenData(trimmedScreen);
         var messages = tokens
-            .Select(to => new ExpoPushMessage(to, trimmedTitle, trimmedBody, data))
+            .Select(to => new ExpoPushMessage(to, trimmedTitle, trimmedBody, data, ImageUrl: trimmedImage))
             .ToList();
 
         await _expo.SendAsync(messages, cancellationToken);

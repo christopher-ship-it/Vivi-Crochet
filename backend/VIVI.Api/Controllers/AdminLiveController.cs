@@ -151,7 +151,8 @@ public sealed class AdminLiveController : ControllerBase
         var projects = course is null
             ? new List<string>()
             : LiveCourseService.ParseProjects(course.ProjectsJson).Select(p => p.Name).ToList();
-        var (subject, html, text) = LiveEnquiryEmail.Render(enquiry, learn, projects);
+        var usTime = LiveClassTime.ToUsEastern(enquiry.SlotHours, enquiry.StartDate);
+        var (subject, html, text) = LiveEnquiryEmail.Render(enquiry, learn, projects, usTime);
         var result = await _email.SendAsync(
             new EmailSendRequest(enquiry.Email, subject, html, text),
             cancellationToken);

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Xunit;
 using VIVI.Api.DTOs.Live;
+using VIVI.Infrastructure.Commerce;
 
 namespace VIVI.Api.Tests;
 
@@ -69,6 +70,7 @@ public sealed class LiveEnquiryTests
         Assert.Contains("UPI 1234567890", sent.TextBody);
         Assert.Contains("Morning Crochet Circle", sent.TextBody);
         Assert.Contains("11:00 AM – 1:00 PM", sent.TextBody);
+        Assert.Contains("Eastern Time (US)", sent.TextBody);
         Assert.Equal("11:00 AM – 1:00 PM", created.SlotHours);
 
         var list = await admin.GetFromJsonAsync<List<LiveEnquiryDto>>("/api/admin/live/enquiries", Json);
@@ -128,6 +130,16 @@ public sealed class LiveEnquiryTests
 
         var after = (await admin.GetFromJsonAsync<List<LiveEnquiryDto>>("/api/admin/live/enquiries", Json))!.Count;
         Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public void India_class_time_is_converted_to_us_eastern_time()
+    {
+        // 2 Nov 2026 is after US daylight saving ends (1 Nov), so Eastern is UTC-5.
+        Assert.Equal(
+            "11:30 PM – 1:30 AM Eastern Time (US)",
+            LiveClassTime.ToUsEastern("10:00 AM – 12:00 PM", new DateOnly(2026, 11, 2)));
+        Assert.Null(LiveClassTime.ToUsEastern("Mon–Fri · late", new DateOnly(2026, 11, 2)));
     }
 
     [Fact]

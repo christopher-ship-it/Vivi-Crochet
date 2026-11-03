@@ -10,6 +10,10 @@ import {
 } from '../api/live';
 import type { AdminLiveCourse, AdminLiveEnquiry, AdminLiveWeek, LiveSlotType } from '../types';
 
+type TimePart = { hour: string; minute: string; period: '' | 'AM' | 'PM' };
+
+const EMPTY_TIME: TimePart = { hour: '', minute: '', period: '' };
+
 const EMPTY_FORM = {
   name: '',
   email: '',
@@ -17,9 +21,64 @@ const EMPTY_FORM = {
   courseId: '',
   weekId: '',
   slotType: '' as LiveSlotType | '',
-  classTime: '',
+  start: EMPTY_TIME,
+  end: EMPTY_TIME,
   paymentReference: '',
 };
+
+const HOURS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+const MINUTES = ['00', '15', '30', '45'];
+
+/** "10:00 AM", or '' until hour, minute and AM/PM are all chosen. */
+function formatTime(part: TimePart): string {
+  if (!part.hour || !part.minute || !part.period) return '';
+  return `${part.hour}:${part.minute} ${part.period}`;
+}
+
+function TimeSelect({
+  label,
+  idPrefix,
+  value,
+  onChange,
+}: {
+  label: string;
+  idPrefix: string;
+  value: TimePart;
+  onChange: (next: TimePart) => void;
+}) {
+  return (
+    <div className="form-field" style={{ flex: 1 }}>
+      <label htmlFor={`${idPrefix}-hour`}>{label}</label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+        <select id={`${idPrefix}-hour`} value={value.hour} onChange={(e) => onChange({ ...value, hour: e.target.value })}>
+          <option value="">Hour</option>
+          {HOURS.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+        </select>
+        <select id={`${idPrefix}-minute`} value={value.minute} onChange={(e) => onChange({ ...value, minute: e.target.value })}>
+          <option value="">Min</option>
+          {MINUTES.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+        <select
+          id={`${idPrefix}-period`}
+          value={value.period}
+          onChange={(e) => onChange({ ...value, period: e.target.value as TimePart['period'] })}
+        >
+          <option value="">AM/PM</option>
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
+        </select>
+      </div>
+    </div>
+  );
+}
 
 function formatDate(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
@@ -59,7 +118,10 @@ export function LiveEnquiriesPage() {
 
   const selectedWeek = useMemo(() => weeks.find((w) => w.id === form.weekId) ?? null, [weeks, form.weekId]);
   const circles = selectedWeek?.slots ?? [];
-  const canSubmit = Boolean(form.courseId && form.weekId && form.slotType && form.classTime.trim());
+  const classTime = formatTime(form.start) && formatTime(form.end)
+    ? `${formatTime(form.start)} – ${formatTime(form.end)}`
+    : '';
+  const canSubmit = Boolean(form.courseId && form.weekId && form.slotType && classTime);
 
   function update(patch: Partial<typeof EMPTY_FORM>) {
     setForm((cur) => ({ ...cur, ...patch }));
@@ -79,7 +141,7 @@ export function LiveEnquiriesPage() {
         courseId: form.courseId,
         weekId: form.weekId,
         slotType: form.slotType as LiveSlotType,
-        classTime: form.classTime,
+        classTime,
         paymentReference: form.paymentReference,
       });
       setNotice(
@@ -188,9 +250,9 @@ export function LiveEnquiriesPage() {
             </select>
           </div>
 
-          <div className="form-field span-2">
-            <label htmlFor="enqTime">Class time</label>
-            <input id="enqTime" maxLength={60} required value={form.classTime} onChange={(e) => update({ classTime: e.target.value })} />
+          <div className="form-field span-4" style={{ display: 'flex', gap: 12 }}>
+            <TimeSelect label="Class starts (India, IST)" idPrefix="enqStart" value={form.start} onChange={(start) => update({ start })} />
+            <TimeSelect label="Class ends (India, IST)" idPrefix="enqEnd" value={form.end} onChange={(end) => update({ end })} />
           </div>
           <div className="form-field span-4">
             <label htmlFor="enqRef">Payment reference (UPI or bank)</label>
