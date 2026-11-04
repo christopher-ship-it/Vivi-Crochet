@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  Linking,
   Image,
   Pressable,
   ScrollView,
@@ -18,10 +19,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourse, listCourses } from '../../src/api/courses';
 import { listMyEnrollments } from '../../src/api/enrollments';
 import {
-  formatLiveClassWeekRange,
+  getLiveEnquiry,
   listLiveWeeks,
-  sortSlotsByTime,
-  type LiveSlotAvailability,
   type LiveWeekSummary,
 } from '../../src/api/live';
 import { getIntroVideo } from '../../src/api/introVideo';
@@ -58,28 +57,6 @@ type ResumeInfo = {
 };
 
 const LEARN_CHIP_ICONS = ['heart-outline', 'flower-outline', 'ribbon-outline'] as const;
-
-/** Display hours when the API sends none. */
-const SLOT_FALLBACK_HOURS: Record<string, string> = {
-  Morning: '10:00 AM – 12:00 PM',
-  Evening: '6:00 PM – 8:00 PM',
-};
-
-/** Shown until the week loads; once it does, the week's own sessions (including any additional ones) are used. */
-const DEFAULT_LIVE_SLOTS = ['Morning', 'Evening'] as const;
-
-/** The Home card has room for three session chips; the Live tab lists them all. */
-const MAX_HOME_LIVE_SLOTS = 3;
-
-/** "10:00 AM – 12:00 PM" → "10 AM–12 PM" so it fits a small chip. */
-function compactHours(hours: string, dropMeridiem = false): string {
-  const m = hours.match(/(\d{1,2})(?::\d{2})?\s*(AM|PM)?\s*[–-]\s*(\d{1,2})(?::\d{2})?\s*(AM|PM)?/i);
-  if (!m) return hours;
-  const [, start, startMer, end, endMer] = m;
-  // Tamil / Hindi rows are narrower; "காலை / सुबह" already says morning vs evening.
-  if (dropMeridiem) return `${start}–${end}`;
-  return `${start}${startMer ? ` ${startMer.toUpperCase()}` : ''}–${end}${endMer ? ` ${endMer.toUpperCase()}` : ''}`;
-}
 
 /** Round-robin across categories so the Shop card shows variety, not one category. */
 function pickShopSlides(products: Product[]): SlideItem[] {
@@ -184,7 +161,7 @@ const LIVE: Room = {
   accent: '#e8215b',
   title: 'home.roomLiveTitle',
   sub: 'home.roomLiveSub',
-  cta: 'home.roomLiveCta',
+  cta: 'live.learnWithTutor',
   // Light coral pink into hot pink.
   ctaGradient: ['#ff6f9b', '#ea2a64'],
   featured: true,
@@ -229,6 +206,7 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [liveWeek, setLiveWeek] = useState<LiveWeekSummary | null>(null);
+  const [whatsAppNumber, setWhatsAppNumber] = useState('');
   const [resume, setResume] = useState<ResumeInfo | null>(null);
   // Welcome video: the play icon in the header, and a one-time preview after 5 seconds on Home.
   const [introUrl, setIntroUrl] = useState<string | null>(null);
@@ -249,6 +227,9 @@ export default function HomeScreen() {
         .catch(() => undefined);
       void listLiveWeeks()
         .then((weeks) => !cancelled && setLiveWeek(weeks.find((w) => w.isBookable) ?? weeks[0] ?? null))
+        .catch(() => undefined);
+      void getLiveEnquiry()
+        .then((data) => !cancelled && setWhatsAppNumber(data.whatsAppNumber))
         .catch(() => undefined);
       return () => {
         cancelled = true;
@@ -409,53 +390,14 @@ export default function HomeScreen() {
     );
   }
 
-  const liveSlots = useMemo(() => {
-    const fromWeek: Pick<LiveSlotAvailability, 'slotType' | 'name' | 'hours'>[] = liveWeek?.slots?.length
-      ? sortSlotsByTime(liveWeek.slots)
-      : DEFAULT_LIVE_SLOTS.map((type) => ({ slotType: type, name: type, hours: undefined }));
 
-    return fromWeek.slice(0, MAX_HOME_LIVE_SLOTS).map((entry) => {
-      const type = String(entry.slotType);
-      const slot = liveWeek?.slots.find((s) => s.slotType === type);
-      const full = slot
-        ? slot.isBlocked === true ||
-          slot.status === 'Blocked' ||
-          slot.status === 'FullyBooked' ||
-          slot.seatsRemaining <= 0
-        : false;
-      // Morning and Evening have translated labels; additional sessions use the admin's name.
-      const label =
-        type === 'Morning'
-          ? t('home.slotMorning')
-          : type === 'Evening'
-            ? t('home.slotEvening')
-            : entry.name || type;
-      return {
-        type,
-        label,
-        icon: (type === 'Morning'
-          ? 'sunny-outline'
-          : type === 'Evening'
-            ? 'moon-outline'
-            : 'partly-sunny-outline') as 'sunny-outline' | 'moon-outline' | 'partly-sunny-outline',
-        hours: compactHours(
-          entry.hours?.trim() || SLOT_FALLBACK_HOURS[type] || '',
-          language !== 'en' && (type === 'Morning' || type === 'Evening'),
-        ),
-        full,
-        seats: slot?.seatsRemaining ?? null,
-      };
-    });
-  }, [liveWeek, language, t]);
-  const liveWeekRange = liveWeek ? formatLiveClassWeekRange(liveWeek.startDate) : '';
-
-  function openLiveSlot(type: string) {
-    if (!liveWeek) {
-      router.push('/(tabs)/live');
-      return;
-    }
-    router.push({ pathname: '/(tabs)/live', params: { weekId: liveWeek.id, slot: type } });
+  /** Opens a WhatsApp chat with the studio; the Live page carries the full course details. */
+  function enquireOnWhatsApp() {
+    if (!whatsAppNumber) return;
+    const text = encodeURIComponent(t('live.enquireGeneral'));
+    void Linking.openURL(`https://wa.me/${whatsAppNumber}?text=${text}`).catch(() => undefined);
   }
+
 
   const shopSlides = useMemo(() => pickShopSlides(products), [products]);
   const projectSlides = useMemo(() => pickProjectSlides(courses, products), [courses, products]);
@@ -559,52 +501,6 @@ export default function HomeScreen() {
           </Text>
           {room.id === 'live' ? (
             <>
-              {liveWeekRange ? (
-                <Text style={styles.tallSub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                  {liveWeekRange}
-                </Text>
-              ) : null}
-              <View style={styles.slotList}>
-                {liveSlots.map((slot) => (
-                  <Pressable
-                    key={slot.type}
-                    style={({ pressed }) => [
-                      styles.slotChip,
-                      liveSlots.length > 2 && styles.slotChipTight,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => openLiveSlot(slot.type)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${slot.label} ${slot.hours}`}
-                  >
-                    <Ionicons name={slot.icon} size={14} color={room.accent} />
-                    <View style={styles.slotCopy}>
-                      <View style={styles.slotTopRow}>
-                        <Text style={[styles.slotLabel, styles.slotLabelFlex]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                          {slot.label}
-                        </Text>
-                        {slot.seats != null ? (
-                          <Text
-                            style={[styles.slotSeats, slot.full && styles.slotSeatsFull]}
-                            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
-                          >
-                            {slot.full
-                              ? t('home.slotFull')
-                              : slot.seats === 1
-                                ? t('home.seatOneLeft')
-                                : t('home.seatsShort', { count: slot.seats })}
-                          </Text>
-                        ) : null}
-                      </View>
-                      {/* Own full-width row so the time range is never cut to "12…". */}
-                      <Text style={styles.slotHours} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
-                        {slot.hours}
-                      </Text>
-                    </View>
-
-                  </Pressable>
-                ))}
-              </View>
             </>
           ) : room.id === 'learn' ? (
             renderLearnBody(room)
@@ -633,10 +529,15 @@ export default function HomeScreen() {
                   pointerEvents="none"
                 />
               ) : null}
+              {room.id === 'live' ? (
+                <View style={styles.ctaBadge}>
+                  <Ionicons name="sparkles" size={14} color={room.accent} />
+                </View>
+              ) : null}
               <Text
                 style={[styles.ctaText, room.id === 'live' && styles.ctaTextWide]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
+                numberOfLines={room.id === 'live' ? 2 : 1}
+                adjustsFontSizeToFit={room.id !== 'live'}
                 minimumFontScale={0.8}
               >
                 {room.id === 'learn' && resume ? t('home.learnContinueCta') : t(room.cta)}
@@ -647,6 +548,26 @@ export default function HomeScreen() {
                 color={colors.white}
               />
             </Animated.View>
+          ) : null}
+          {room.id === 'live' && whatsAppNumber ? (
+            <Pressable
+              style={({ pressed }) => [styles.whatsAppBtn, pressed && styles.pressed]}
+              onPress={enquireOnWhatsApp}
+              accessibilityRole="button"
+              accessibilityLabel={t('live.enquireWhatsApp')}
+            >
+              <LinearGradient
+                colors={['#f0507f', '#c2185b']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              />
+              <Ionicons name="logo-whatsapp" size={16} color={colors.white} />
+              <Text style={[styles.whatsAppBtnText, styles.whatsAppBtnTextWrap]} numberOfLines={2}>
+                {t('live.enquireWhatsApp')}
+              </Text>
+            </Pressable>
           ) : null}
         </View>
       </Pressable>
@@ -1205,15 +1126,48 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     /* Live is the smallest card: a slimmer button and a shorter image strip. */
     ctaLive: {
-      marginTop: 6,
-      paddingVertical: 8,
+      marginTop: 8,
+      paddingVertical: 11,
+      paddingHorizontal: 12,
+      borderRadius: 16,
+      boxShadow: '0px 8px 16px -6px rgba(194, 24, 91, 0.55)',
+    },
+    ctaBadge: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.white,
     },
     tallImageWrapLive: {
       minHeight: 24,
       paddingTop: 30,
     },
-    ctaTextWide: {
+    whatsAppBtn: {
+      marginTop: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      borderRadius: 14,
+      overflow: 'hidden',
+      boxShadow: '0px 6px 12px -4px rgba(194, 24, 91, 0.45)',
+    },
+    whatsAppBtnTextWrap: {
+      flexShrink: 1,
+      textAlign: 'center',
+    },
+    whatsAppBtnText: {
+      fontFamily: fonts.extraBold,
       fontSize: 13,
+      color: colors.white,
+    },
+    ctaTextWide: {
+      flexShrink: 1,
+      fontSize: 14,
+      letterSpacing: 0.2,
       textAlign: 'center',
     },
     ctaText: {

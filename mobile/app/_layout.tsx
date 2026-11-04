@@ -82,8 +82,21 @@ function PushNotificationNavigator() {
   const router = useRouter();
 
   useEffect(() => {
-    const sub = addNotificationResponseListener((screen) => {
+    const sub = addNotificationResponseListener((screen, data) => {
       try {
+        // A picture notification opens the picture page first; its button goes to the screen.
+        if (typeof data.image === 'string') {
+          router.push({
+            pathname: '/notification-picture',
+            params: {
+              image: data.image,
+              title: typeof data.title === 'string' ? data.title : '',
+              body: typeof data.body === 'string' ? data.body : '',
+              screen,
+            },
+          });
+          return;
+        }
         const target =
           screen === '/(tabs)/index' || screen === '/(tabs)/' ? '/(tabs)' : screen;
         router.push(target as never);

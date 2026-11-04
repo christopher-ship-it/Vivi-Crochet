@@ -107,7 +107,7 @@ export function getNotificationScreen(data: Record<string, unknown> | undefined)
 }
 
 export function addNotificationResponseListener(
-  onNavigate: (screen: string) => void,
+  onNavigate: (screen: string, data: Record<string, unknown>) => void,
 ): NotificationSubscription {
   const notifications = loadNotifications();
   if (!notifications) {
@@ -115,8 +115,8 @@ export function addNotificationResponseListener(
   }
 
   return notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+    const data = (response.notification.request.content.data ?? {}) as Record<string, unknown>;
     const screen = getNotificationScreen(data);
-    if (screen) onNavigate(screen);
+    if (screen) onNavigate(screen, data);
   });
 }

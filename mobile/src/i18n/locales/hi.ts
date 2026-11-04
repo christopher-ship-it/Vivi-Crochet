@@ -580,6 +580,9 @@ export const hi: EnTranslations = {
     ctaUnlock: '{{name}} देखें',
     ctaBrowse: 'और कोर्स देखें',
   },
+  notificationPicture: {
+    open: 'खोलें',
+  },
   live: {
     languageNames: { tamil: 'तमिल', english: 'अंग्रेज़ी', hindi: 'हिंदी' },
     levelNames: {
@@ -684,6 +687,8 @@ export const hi: EnTranslations = {
     selectedCourse: 'चुना गया: {{name}}',
     bookThisCourse: 'यह कोर्स बुक करें',
     enquireWhatsApp: 'व्हाट्सऐप पर पूछें',
+    learnWithTutor: 'टीचर के साथ लाइव क्लास सीखें',
+    enquireGeneral: 'नमस्ते Vivi, मैं लाइव क्रोशिया क्लास के बारे में पूछना चाहता/चाहती हूँ।',
     enquiryMessage: 'नमस्ते Vivi, मैं {{course}} लाइव क्लास ({{price}}) के बारे में पूछना चाहता/चाहती हूँ।',
     enquiryFailed: 'व्हाट्सऐप नहीं खुल सका। कृपया जाँचें कि वह इंस्टॉल है।',
     enquiryNote: 'क्लास पूछताछ के ज़रिए बुक होती हैं। हमें व्हाट्सऐप पर संदेश भेजें, हम आपकी क्लास कन्फ़र्म करेंगे।',

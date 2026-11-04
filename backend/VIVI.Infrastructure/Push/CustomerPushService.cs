@@ -322,7 +322,14 @@ public sealed class CustomerPushService
         if (tokens.Count == 0)
             return 0;
 
+        // A picture notification also carries its text, so the app can show the picture full size on tap.
         var data = ScreenData(trimmedScreen);
+        if (trimmedImage is not null)
+        {
+            data["image"] = trimmedImage;
+            data["title"] = trimmedTitle;
+            data["body"] = trimmedBody;
+        }
         var messages = tokens
             .Select(to => new ExpoPushMessage(to, trimmedTitle, trimmedBody, data, ImageUrl: trimmedImage))
             .ToList();
