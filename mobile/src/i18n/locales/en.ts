@@ -509,6 +509,7 @@ export const en = {
     introSub: 'Step by step. Stitch by stitch.',
     mainCourses: 'Main Courses',
     mainCoursesSub: 'Build your crochet skills, stitch by stitch.',
+    freePreview: 'Free preview',
     exploreCourse: 'Explore Course →',
     percentComplete: '{{pct}}% complete',
     discover: 'Discover',

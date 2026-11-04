@@ -511,6 +511,7 @@ export const ta: EnTranslations = {
     introSub: 'ஒரு படி. ஒரு தையல்.',
     mainCourses: 'முதன்மை பாடங்கள்',
     mainCoursesSub: 'ஒவ்வொரு தையலாக உங்கள் குரோசே திறனை வளர்த்துக் கொள்ளுங்கள்.',
+    freePreview: 'இலவச முன்னோட்டம்',
     exploreCourse: 'பாடத்தை ஆராயுங்கள் →',
     percentComplete: '{{pct}}% முடிந்தது',
     discover: 'கண்டறியுங்கள்',

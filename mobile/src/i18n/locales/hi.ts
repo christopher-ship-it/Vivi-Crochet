@@ -511,6 +511,7 @@ export const hi: EnTranslations = {
     introSub: 'एक कदम। एक टांका।',
     mainCourses: 'मुख्य कोर्स',
     mainCoursesSub: 'एक-एक टांके से अपनी क्रोशे कला बनाएँ।',
+    freePreview: 'मुफ़्त पूर्वावलोकन',
     exploreCourse: 'कोर्स देखें →',
     percentComplete: '{{pct}}% पूरा',
     discover: 'खोजें',

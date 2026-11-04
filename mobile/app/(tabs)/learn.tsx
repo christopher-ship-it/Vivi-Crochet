@@ -35,7 +35,7 @@ import { useTabDockClearance } from '../../src/components/PremiumTabBar';
 import type { Course, CourseLesson, Product } from '../../src/types';
 import { useI18n } from '../../src/i18n';
 import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
-import { colors, spacing } from '../../src/theme';
+import { colors, radii, spacing } from '../../src/theme';
 import { getCourseVideoProgress, type VideoProgress } from '../../src/api/videoProgress';
 import { getCoursePathCursor } from '../../src/utils/coursePathProgress';
 import { summarizeCourseProgress } from '../../src/utils/watchProgress';
@@ -364,6 +364,23 @@ export default function LearnScreen() {
 
   const mainCourses = useMemo(() => selectMainCourses(allCourses), [allCourses]);
 
+  // The first main course is the Beginner one; its free preview lesson is shown at the top of Main courses.
+  const beginnerId = mainCourses[0]?.id;
+  const [freePreview, setFreePreview] = useState<CourseLesson | null>(null);
+  useEffect(() => {
+    setFreePreview(null);
+    if (!beginnerId) return;
+    let cancelled = false;
+    getCourse(beginnerId)
+      .then((course) => {
+        if (!cancelled) setFreePreview((course.lessons ?? []).find((lesson) => lesson.isFreePreview) ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [beginnerId]);
+
   // The collection banner: price, what the courses cost one by one, and the saving. All from the admin's offer;
   // hidden when the customer already owns the collection, the offer is off, or it is not sold in their country.
   const collectionBanner = useMemo(() => {
@@ -589,6 +606,30 @@ export default function LearnScreen() {
                 {t('learn.mainCourses')}
               </Text>
             </View>
+
+            {freePreview && beginnerId ? (
+              <Pressable
+                style={styles.previewCard}
+                onPress={() =>
+                  router.push({
+                    pathname: '/lesson/[id]',
+                    params: { id: freePreview.id, courseName: mainCourses[0]?.name ?? '', courseId: beginnerId },
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`${t('learn.freePreview')}. ${freePreview.title}`}
+              >
+                <AppImage uri={mainCourses[0]?.thumbnailUrl} style={styles.previewImage} contentFit="cover" />
+                <View style={styles.previewPlay}>
+                  <View style={styles.previewPlayBtn}>
+                    <Ionicons name="play" size={22} color={colors.white} style={{ marginLeft: 3 }} />
+                  </View>
+                </View>
+                <Text style={styles.previewLabel} numberOfLines={2}>
+                  {t('learn.freePreview')} · {freePreview.title}
+                </Text>
+              </Pressable>
+            ) : null}
 
             {mainCourses.length === 0 ? (
               <EmptyView
@@ -830,6 +871,41 @@ function createStyles(fonts: UiFonts) {
       fontFamily: fonts.semiBold,
       fontSize: 12,
       color: colors.pink,
+    },
+    previewCard: {
+      marginHorizontal: spacing.md,
+      marginBottom: spacing.md,
+      borderRadius: radii.md,
+      overflow: 'hidden',
+      backgroundColor: colors.ink,
+    },
+    previewImage: {
+      width: '100%',
+      aspectRatio: 16 / 9,
+    },
+    previewPlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    previewPlayBtn: {
+      width: 60,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: '#ff0000',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    previewLabel: {
+      fontFamily: fonts.semiBold,
+      fontSize: 13,
+      color: colors.white,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
     },
     section: {
       marginTop: 14,
