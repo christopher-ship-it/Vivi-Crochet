@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
-  Linking,
   Image,
   Pressable,
   ScrollView,
@@ -19,7 +18,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourse, listCourses } from '../../src/api/courses';
 import { listMyEnrollments } from '../../src/api/enrollments';
 import {
-  getLiveEnquiry,
   listLiveWeeks,
   type LiveWeekSummary,
 } from '../../src/api/live';
@@ -206,7 +204,6 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [liveWeek, setLiveWeek] = useState<LiveWeekSummary | null>(null);
-  const [whatsAppNumber, setWhatsAppNumber] = useState('');
   const [resume, setResume] = useState<ResumeInfo | null>(null);
   // Welcome video: the play icon in the header, and a one-time preview after 5 seconds on Home.
   const [introUrl, setIntroUrl] = useState<string | null>(null);
@@ -227,9 +224,6 @@ export default function HomeScreen() {
         .catch(() => undefined);
       void listLiveWeeks()
         .then((weeks) => !cancelled && setLiveWeek(weeks.find((w) => w.isBookable) ?? weeks[0] ?? null))
-        .catch(() => undefined);
-      void getLiveEnquiry()
-        .then((data) => !cancelled && setWhatsAppNumber(data.whatsAppNumber))
         .catch(() => undefined);
       return () => {
         cancelled = true;
@@ -391,14 +385,6 @@ export default function HomeScreen() {
   }
 
 
-  /** Opens a WhatsApp chat with the studio; the Live page carries the full course details. */
-  function enquireOnWhatsApp() {
-    if (!whatsAppNumber) return;
-    const text = encodeURIComponent(t('live.enquireGeneral'));
-    void Linking.openURL(`https://wa.me/${whatsAppNumber}?text=${text}`).catch(() => undefined);
-  }
-
-
   const shopSlides = useMemo(() => pickShopSlides(products), [products]);
   const projectSlides = useMemo(() => pickProjectSlides(courses, products), [courses, products]);
 
@@ -529,14 +515,9 @@ export default function HomeScreen() {
                   pointerEvents="none"
                 />
               ) : null}
-              {room.id === 'live' ? (
-                <View style={styles.ctaBadge}>
-                  <Ionicons name="sparkles" size={14} color={room.accent} />
-                </View>
-              ) : null}
               <Text
                 style={[styles.ctaText, room.id === 'live' && styles.ctaTextWide]}
-                numberOfLines={room.id === 'live' ? 2 : 1}
+                numberOfLines={room.id === 'live' ? undefined : 1}
                 adjustsFontSizeToFit={room.id !== 'live'}
                 minimumFontScale={0.8}
               >
@@ -548,26 +529,6 @@ export default function HomeScreen() {
                 color={colors.white}
               />
             </Animated.View>
-          ) : null}
-          {room.id === 'live' && whatsAppNumber ? (
-            <Pressable
-              style={({ pressed }) => [styles.whatsAppBtn, pressed && styles.pressed]}
-              onPress={enquireOnWhatsApp}
-              accessibilityRole="button"
-              accessibilityLabel={t('live.enquireWhatsApp')}
-            >
-              <LinearGradient
-                colors={['#f0507f', '#c2185b']}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-              />
-              <Ionicons name="logo-whatsapp" size={16} color={colors.white} />
-              <Text style={[styles.whatsAppBtnText, styles.whatsAppBtnTextWrap]} numberOfLines={2}>
-                {t('live.enquireWhatsApp')}
-              </Text>
-            </Pressable>
           ) : null}
         </View>
       </Pressable>
@@ -1132,37 +1093,9 @@ function createStyles(fonts: UiFonts, compact = false) {
       borderRadius: 16,
       boxShadow: '0px 8px 16px -6px rgba(194, 24, 91, 0.55)',
     },
-    ctaBadge: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.white,
-    },
     tallImageWrapLive: {
       minHeight: 24,
       paddingTop: 30,
-    },
-    whatsAppBtn: {
-      marginTop: 8,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-      paddingVertical: 10,
-      borderRadius: 14,
-      overflow: 'hidden',
-      boxShadow: '0px 6px 12px -4px rgba(194, 24, 91, 0.45)',
-    },
-    whatsAppBtnTextWrap: {
-      flexShrink: 1,
-      textAlign: 'center',
-    },
-    whatsAppBtnText: {
-      fontFamily: fonts.extraBold,
-      fontSize: 13,
-      color: colors.white,
     },
     ctaTextWide: {
       flexShrink: 1,

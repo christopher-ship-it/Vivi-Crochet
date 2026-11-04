@@ -686,7 +686,6 @@ export const en = {
     bookThisCourse: 'Book this course',
     enquireWhatsApp: 'Enquire on WhatsApp',
     learnWithTutor: 'Learn live class with tutor',
-    enquireGeneral: 'Hi Vivi, I would like to enquire about live crochet classes.',
     enquiryMessage: 'Hi Vivi, I would like to enquire about the {{course}} live class ({{price}}).',
     enquiryFailed: 'Could not open WhatsApp. Please check that it is installed.',
     enquiryNote: 'Classes are booked by enquiry. Message us on WhatsApp and we will confirm your class.',
