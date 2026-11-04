@@ -41,9 +41,10 @@ public sealed class InMemoryBlobStorageService : IBlobStorageService
 
     public Task<BlobReadTicket> CreateReadSasAsync(
         string blobPath,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        TimeSpan? lifetime = null)
     {
-        var expires = DateTimeOffset.UtcNow.AddMinutes(_options.ReadSasMinutes);
+        var expires = DateTimeOffset.UtcNow + (lifetime ?? TimeSpan.FromMinutes(_options.ReadSasMinutes));
         var url = BuildDevUrl(blobPath, "r", expires);
         return Task.FromResult(new BlobReadTicket(url, expires));
     }

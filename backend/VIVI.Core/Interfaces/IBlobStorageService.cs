@@ -21,9 +21,11 @@ public interface IBlobStorageService
         string contentType,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Read link; <paramref name="lifetime"/> overrides the default short expiry (e.g. a notification picture).</summary>
     Task<BlobReadTicket> CreateReadSasAsync(
         string blobPath,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        TimeSpan? lifetime = null);
 
     Task<BlobProperties> GetPropertiesAsync(
         string blobPath,

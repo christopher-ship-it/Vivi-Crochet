@@ -66,11 +66,12 @@ public sealed class AzureBlobStorageService : IBlobStorageService
 
     public async Task<BlobReadTicket> CreateReadSasAsync(
         string blobPath,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        TimeSpan? lifetime = null)
     {
         await EnsureContainerAsync(cancellationToken);
         var blob = _container.GetBlobClient(blobPath);
-        var expires = DateTimeOffset.UtcNow.AddMinutes(_options.ReadSasMinutes);
+        var expires = DateTimeOffset.UtcNow + (lifetime ?? TimeSpan.FromMinutes(_options.ReadSasMinutes));
         var sas = BuildSas(blob, expires, BlobSasPermissions.Read, CacheControlFor(blobPath));
         return new BlobReadTicket(sas, expires);
     }

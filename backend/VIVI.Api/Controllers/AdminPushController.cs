@@ -68,8 +68,9 @@ public sealed class AdminPushController : ControllerBase
         if (!completed)
             throw ViviException.Conflict("BLOB_MISSING", "The image file was not found in storage. Upload it, then retry.");
 
-        var url = await ProductImageResolver.ResolveAsync(request.BlobPath, _blob, cancellationToken);
-        return Ok(new AdminPushImageResponse { ImageUrl = url ?? string.Empty });
+        // Notifications can reach phones hours later; a 15-minute link would be dead by then.
+        var ticket = await _blob.CreateReadSasAsync(request.BlobPath, cancellationToken, TimeSpan.FromDays(7));
+        return Ok(new AdminPushImageResponse { ImageUrl = ticket.ReadUrl });
     }
 
     [HttpGet("reach")]
