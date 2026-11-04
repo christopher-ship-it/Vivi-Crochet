@@ -295,7 +295,8 @@ public sealed class CustomerPushService
         string body,
         string screen,
         CancellationToken cancellationToken,
-        string? imageUrl = null)
+        string? imageUrl = null,
+        Guid? customerId = null)
     {
         var trimmedTitle = title.Trim();
         var trimmedBody = body.Trim();
@@ -314,7 +315,7 @@ public sealed class CustomerPushService
 
         var tokens = await _db.DevicePushTokens
             .AsNoTracking()
-            .Where(t => t.IsActive)
+            .Where(t => t.IsActive && (customerId == null || t.CustomerId == customerId))
             .Select(t => t.ExpoPushToken)
             .Distinct()
             .ToListAsync(cancellationToken);

@@ -8,6 +8,8 @@ public sealed class AdminBroadcastPushRequest
     public string Screen { get; set; } = "/(tabs)/shop";
     /// <summary>Optional picture shown with the notification (https link from the picture upload).</summary>
     public string? ImageUrl { get; set; }
+    /// <summary>Send to this customer's devices only; null sends to every device.</summary>
+    public Guid? CustomerId { get; set; }
 }
 
 public sealed class AdminPushImageResponse

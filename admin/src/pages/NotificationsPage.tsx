@@ -8,6 +8,7 @@ import {
   sendWeeklyPushNow,
 } from '../api/push';
 import { confirmDialog } from '../components/AppDialog';
+import { listAdminCustomers } from '../api/customers';
 import { uploadToBlob } from '../utils/videoUpload';
 
 const PICTURE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -27,6 +28,8 @@ export function NotificationsPage() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [screen, setScreen] = useState('/(tabs)/shop');
+  const [audience, setAudience] = useState<'all' | 'one'>('all');
+  const [customerQuery, setCustomerQuery] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imagePreview, setImagePreview] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -93,7 +96,24 @@ export function NotificationsPage() {
     setError(null);
     setInfo(null);
     try {
-      const result = await broadcastPush({ title, body, screen, imageUrl: imageUrl || undefined });
+      let customerId: string | undefined;
+      if (audience === 'one') {
+        // Match the exact email or phone typed; this keeps a test from going to the wrong person.
+        const q = customerQuery.trim();
+        const digits = q.replace(/\D/g, '');
+        const matches = await listAdminCustomers(q);
+        const customer = matches.find(
+          (c) =>
+            c.email.toLowerCase() === q.toLowerCase() ||
+            (digits.length >= 8 && (c.phoneNumber ?? '').replace(/\D/g, '').endsWith(digits)),
+        );
+        if (!customer) {
+          setError('No customer found with that email or phone.');
+          return;
+        }
+        customerId = customer.id;
+      }
+      const result = await broadcastPush({ title, body, screen, imageUrl: imageUrl || undefined, customerId });
       removePicture();
       setInfo(
         result.sentToDevices === 0
@@ -232,8 +252,31 @@ export function NotificationsPage() {
             )}
             {uploading ? <p className="form-hint">Uploading picture…</p> : null}
           </div>
-          <button type="submit" className="btn btn--primary" disabled={sending || uploading || !title.trim() || !body.trim()}>
-            {sending ? 'Sending…' : 'Send to all devices'}
+          <div className="form-field">
+            <label htmlFor="push-audience">Send to</label>
+            <select id="push-audience" value={audience} onChange={(e) => setAudience(e.target.value as 'all' | 'one')}>
+              <option value="all">All devices</option>
+              <option value="one">One customer (test)</option>
+            </select>
+          </div>
+          {audience === 'one' ? (
+            <div className="form-field">
+              <label htmlFor="push-customer">Customer email or phone</label>
+              <input
+                id="push-customer"
+                value={customerQuery}
+                onChange={(e) => setCustomerQuery(e.target.value)}
+                placeholder="name@example.com or 9876543210"
+                required
+              />
+            </div>
+          ) : null}
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={sending || uploading || !title.trim() || !body.trim() || (audience === 'one' && !customerQuery.trim())}
+          >
+            {sending ? 'Sending…' : audience === 'one' ? 'Send to this customer' : 'Send to all devices'}
           </button>
         </form>
       </section>

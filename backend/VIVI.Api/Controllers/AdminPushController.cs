@@ -113,7 +113,8 @@ public sealed class AdminPushController : ControllerBase
                 request.Body,
                 request.Screen,
                 cancellationToken,
-                request.ImageUrl);
+                request.ImageUrl,
+                request.CustomerId);
             return Ok(new AdminBroadcastPushResponse { SentToDevices = sent });
         }
         catch (ArgumentException ex)

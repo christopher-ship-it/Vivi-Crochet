@@ -49,6 +49,7 @@ export async function broadcastPush(input: {
   body: string;
   screen: string;
   imageUrl?: string;
+  customerId?: string;
 }): Promise<AdminBroadcastResult> {
   return apiRequest<AdminBroadcastResult>('/api/admin/push/broadcast', {
     method: 'POST',
