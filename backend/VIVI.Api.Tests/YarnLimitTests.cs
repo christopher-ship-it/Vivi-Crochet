@@ -60,4 +60,39 @@ public sealed class YarnLimitTests : IClassFixture<ApiFactory>
         var atLimit = await OrderAsync(customer, (shadeA, 5), (shadeB, 5));
         Assert.Equal(HttpStatusCode.Created, atLimit.StatusCode);
     }
+
+    [Fact]
+    public async Task Yarn_limit_follows_the_listing_category_not_a_stale_shade_category()
+    {
+        var admin = _factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+        var tag = Guid.NewGuid().ToString("N")[..5];
+        var listing = await PublishYarnAsync(admin, $"Blankie {tag}");
+
+        async Task<Guid> StaleShadeAsync(string colour)
+        {
+            var created = await admin.PostAsJsonAsync("/api/products", new
+            {
+                name = $"Blankie {tag}",
+                category = "Old category",
+                price = 100,
+                productType = "Resell",
+                availableStock = 50,
+                parentProductId = listing,
+                colourName = colour
+            });
+            created.EnsureSuccessStatusCode();
+            var shade = (await created.Content.ReadFromJsonAsync<ProductResponse>(AuthTests.Json))!;
+            (await admin.PostAsync($"/api/products/{shade.Id}/publish", null)).EnsureSuccessStatusCode();
+            return shade.Id;
+        }
+
+        var shadeA = await StaleShadeAsync("Pink");
+        var shadeB = await StaleShadeAsync("White");
+        var customer = await AuthTests.LoginCustomerAsync(_factory.CreateClient());
+
+        var tooMany = await OrderAsync(customer, (shadeA, 6), (shadeB, 5));
+        Assert.Equal(HttpStatusCode.Conflict, tooMany.StatusCode);
+        Assert.Contains("YARN_LIMIT_EXCEEDED", await tooMany.Content.ReadAsStringAsync());
+    }
 }

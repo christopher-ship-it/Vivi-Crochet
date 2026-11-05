@@ -403,7 +403,8 @@ public sealed class OrderCheckoutService
         var categories = await _db.Products
             .AsNoTracking()
             .Where(p => ids.Contains(p.Id))
-            .Select(p => new { p.Id, Category = string.IsNullOrWhiteSpace(p.Category) ? p.Parent!.Category : p.Category })
+            // A shade's own category is a stale copy (editing the listing doesn't update it): the listing decides.
+            .Select(p => new { p.Id, Category = p.ParentProductId != null ? p.Parent!.Category : p.Category })
             .ToListAsync(cancellationToken);
         var yarnIds = categories
             .Where(p => string.Equals(p.Category?.Trim(), "Yarn", StringComparison.OrdinalIgnoreCase))
