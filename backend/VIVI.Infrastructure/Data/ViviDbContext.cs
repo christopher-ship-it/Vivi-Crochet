@@ -776,6 +776,7 @@ public sealed class ViviDbContext : DbContext
         {
             entity.ToTable("ShopSettings");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.DeliveryNotice).HasMaxLength(500);
         });
 
         modelBuilder.Entity<VideoProgress>(entity =>

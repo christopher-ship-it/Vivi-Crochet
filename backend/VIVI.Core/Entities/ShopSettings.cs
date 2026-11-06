@@ -6,5 +6,7 @@ public sealed class ShopSettings
     public Guid Id { get; set; }
     /// <summary>When false the Handmade Collection is hidden from the app and its products are not listed.</summary>
     public bool HandmadeEnabled { get; set; } = true;
+    /// <summary>Shown to customers on checkout before payment (e.g. courier delays). Empty = no notice.</summary>
+    public string? DeliveryNotice { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

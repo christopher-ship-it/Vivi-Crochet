@@ -1923,6 +1923,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("DeliveryNotice")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<bool>("HandmadeEnabled")
                         .HasColumnType("bit");
 

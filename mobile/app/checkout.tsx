@@ -25,6 +25,7 @@ import {
 } from '../src/api/me';
 import { verifyRazorpayPayment } from '../src/api/payments';
 import { ApiClientError } from '../src/api/client';
+import { getShopSettings } from '../src/api/shopSettings';
 import { useLearningCustomer, useSession, useShoppingSession } from '../src/auth/SessionContext';
 import {
   beginCheckoutAddressEdit,
@@ -271,6 +272,10 @@ export default function CheckoutScreen() {
   const [purchasing, setPurchasing] = useState(false);
   const [checkoutVisible, setCheckoutVisible] = useState(false);
   const [checkoutPayload, setCheckoutPayload] = useState<RazorpayCheckoutPayload | null>(null);
+  const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
+  useEffect(() => {
+    getShopSettings().then((s) => setDeliveryNotice(s.deliveryNotice ?? null)).catch(() => {});
+  }, []);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -1112,6 +1117,11 @@ export default function CheckoutScreen() {
 
       {!keyboardVisible ? (
         <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          {hasPhysicalItems && deliveryNotice ? (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeText}>⚠️ {deliveryNotice}</Text>
+            </View>
+          ) : null}
           <View style={styles.trustBanner}>
             <Text style={styles.trustIcon}>🛡</Text>
             <View style={styles.trustCopy}>
@@ -1763,6 +1773,13 @@ function createStyles(fonts: UiFonts) {
   trustCopy: {
     flex: 1,
   },
+  noticeBox: {
+    backgroundColor: '#FFF4D6',
+    borderRadius: 10,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  noticeText: { color: '#6B4A00', fontSize: 13, lineHeight: 18 },
   trustTitle: {
     fontFamily: fonts.extraBold,
     fontSize: 13,

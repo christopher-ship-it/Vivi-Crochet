@@ -14,4 +14,9 @@ public static class ShopSettingsSchemaSql
             );
         END
         """;
+
+    public const string AddDeliveryNotice = """
+        IF COL_LENGTH(N'ShopSettings', N'DeliveryNotice') IS NULL
+            ALTER TABLE [ShopSettings] ADD [DeliveryNotice] nvarchar(500) NULL;
+        """;
 }

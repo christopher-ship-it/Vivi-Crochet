@@ -7,9 +7,10 @@ using VIVI.Infrastructure.Data;
 
 namespace VIVI.Api.Controllers;
 
-public sealed record ShopSettingsResponse(bool HandmadeEnabled);
+public sealed record ShopSettingsResponse(bool HandmadeEnabled, string? DeliveryNotice);
 
-public sealed record ShopSettingsRequest(bool HandmadeEnabled);
+/// <summary>A null field is left unchanged; an empty DeliveryNotice clears it.</summary>
+public sealed record ShopSettingsRequest(bool? HandmadeEnabled, string? DeliveryNotice);
 
 /// <summary>Shop switches: the app reads them (no sign-in), the admin dashboard changes them.</summary>
 [ApiController]
@@ -25,7 +26,7 @@ public sealed class ShopSettingsController : ControllerBase
     public async Task<ActionResult<ShopSettingsResponse>> Get(CancellationToken cancellationToken)
     {
         var settings = await _db.ShopSettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
-        return Ok(new ShopSettingsResponse(settings?.HandmadeEnabled ?? true));
+        return Ok(new ShopSettingsResponse(settings?.HandmadeEnabled ?? true, settings?.DeliveryNotice));
     }
 
     [HttpPut("api/admin/shop-settings")]
@@ -40,9 +41,15 @@ public sealed class ShopSettingsController : ControllerBase
             settings = new ShopSettings { Id = Guid.NewGuid() };
             _db.ShopSettings.Add(settings);
         }
-        settings.HandmadeEnabled = request.HandmadeEnabled;
+        if (request.HandmadeEnabled is { } handmade) settings.HandmadeEnabled = handmade;
+        if (request.DeliveryNotice is { } notice)
+        {
+            notice = notice.Trim();
+            if (notice.Length > 500) return BadRequest(new { message = "Delivery notice must be 500 characters or fewer." });
+            settings.DeliveryNotice = notice.Length == 0 ? null : notice;
+        }
         settings.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(new ShopSettingsResponse(settings.HandmadeEnabled));
+        return Ok(new ShopSettingsResponse(settings.HandmadeEnabled, settings.DeliveryNotice));
     }
 }

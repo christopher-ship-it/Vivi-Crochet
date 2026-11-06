@@ -7,7 +7,7 @@ import {
   unpublishProduct,
 } from '../api/products';
 import { ApiClientError } from '../api/client';
-import { getShopSettings, setHandmadeEnabled as setHandmadeEnabled_ } from '../api/shopSettings';
+import { getShopSettings, setDeliveryNotice, setHandmadeEnabled as setHandmadeEnabled_ } from '../api/shopSettings';
 import { RowActionsMenu } from '../components/RowActionsMenu';
 import type { Product, ProductType } from '../types';
 import { formatDate, formatInr } from '../utils/format';
@@ -40,6 +40,7 @@ export function ProductsPage() {
   const [actionId, setActionId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [handmadeEnabled, setHandmadeEnabled] = useState<boolean | null>(null);
+  const [notice, setNotice] = useState('');
 
   const term = search.trim().toLowerCase();
   const visibleProducts = term
@@ -81,7 +82,7 @@ export function ProductsPage() {
   }
 
   useEffect(() => {
-    getShopSettings().then((s) => setHandmadeEnabled(s.handmadeEnabled)).catch(() => {});
+    getShopSettings().then((s) => { setHandmadeEnabled(s.handmadeEnabled); setNotice(s.deliveryNotice ?? ''); }).catch(() => {});
   }, []);
 
   async function handleHandmadeToggle() {
@@ -90,6 +91,16 @@ export function ProductsPage() {
       setHandmadeEnabled((await setHandmadeEnabled_(!handmadeEnabled)).handmadeEnabled);
     } catch (err) {
       void alertDialog(err instanceof ApiClientError ? err.message : 'Could not change the setting.', { title: 'Something went wrong' });
+    }
+  }
+
+  async function handleNoticeSave() {
+    try {
+      const saved = await setDeliveryNotice(notice);
+      setNotice(saved.deliveryNotice ?? '');
+      void alertDialog(saved.deliveryNotice ? 'Notice is now live in the app.' : 'Notice removed.', { title: 'Saved' });
+    } catch (err) {
+      void alertDialog(err instanceof ApiClientError ? err.message : 'Could not save the notice.', { title: 'Something went wrong' });
     }
   }
 
@@ -127,6 +138,20 @@ export function ProductsPage() {
           <input type="checkbox" checked={handmadeEnabled} onChange={() => void handleHandmadeToggle()} />
           Show Handmade Collection in the app (turn off to hide it from customers)
         </label>
+      )}
+
+      {handmadeEnabled !== null && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
+          <input
+            className="page-toolbar__search"
+            style={{ flex: 1 }}
+            maxLength={500}
+            value={notice}
+            onChange={(e) => setNotice(e.target.value)}
+            placeholder="Delivery notice shown at checkout before payment (e.g. Courier delays after Diwali). Leave empty for none."
+          />
+          <button type="button" className="btn btn--secondary" onClick={() => void handleNoticeSave()}>Save notice</button>
+        </div>
       )}
 
       <div className="page-toolbar">
