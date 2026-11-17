@@ -3,7 +3,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { AnimatedSplash, SPLASH_STAGE_COLOR } from '../src/components/AnimatedSplash';
+import { listProducts } from '../src/api/products';
+import { AnimatedSplash, SPLASH_STAGE_COLOR, T_EXIT_AT_RETURNING } from '../src/components/AnimatedSplash';
 import { loadStoredLanguage } from '../src/i18n/storage';
 import { routeAfterSplash } from '../src/preferences/onboardingFlow';
 import { loadStoredCountry } from '../src/preferences/storage';
@@ -20,6 +21,8 @@ async function hideNativeSplash() {
 export default function SplashRoute() {
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
+  // null until saved language + country are read; true means they go straight to Home.
+  const [returning, setReturning] = useState<boolean | null>(null);
   const finishedRef = useRef(false);
 
   const leaveSplash = useCallback(() => {
@@ -41,6 +44,22 @@ export default function SplashRoute() {
   }, [router]);
 
   useEffect(() => {
+    let cancelled = false;
+    void Promise.all([loadStoredLanguage(), loadStoredCountry()])
+      .then(([language, country]) => {
+        if (cancelled) return;
+        const goesHome = Boolean(language && country);
+        setReturning(goesHome);
+        // Start Home's biggest request now; Home reuses it from the shared cache (see listProducts).
+        if (goesHome) void listProducts(undefined, undefined, undefined, true).catch(() => undefined);
+      })
+      .catch(() => !cancelled && setReturning(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     wakeApi();
 
     // Hide native splash early; give yarn sequence time to finish before forcing exit.
@@ -56,8 +75,12 @@ export default function SplashRoute() {
   return (
     <View style={styles.root}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
-      {showSplash ? (
-        <AnimatedSplash onReady={() => void hideNativeSplash()} onFinish={leaveSplash} />
+      {showSplash && returning !== null ? (
+        <AnimatedSplash
+          onReady={() => void hideNativeSplash()}
+          onFinish={leaveSplash}
+          exitAtMs={returning ? T_EXIT_AT_RETURNING : undefined}
+        />
       ) : null}
     </View>
   );

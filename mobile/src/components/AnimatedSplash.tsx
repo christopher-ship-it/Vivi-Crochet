@@ -41,6 +41,8 @@ const T_LOGO = 900;
 const T_TAG_AT = 2100;
 const T_TAG = 600;
 const T_EXIT_AT = 3400;
+/** Returning users: leave as soon as the tagline has finished (T_TAG_AT + T_TAG). */
+export const T_EXIT_AT_RETURNING = 2700;
 const T_EXIT = 450;
 /** Never stay on the blush stage longer than this, whatever the animation does. */
 const FAILSAFE_MS = 5200;
@@ -49,6 +51,8 @@ interface AnimatedSplashProps {
   /** Fired once the branded frame is painted (safe to hide the native splash). */
   onReady?: () => void;
   onFinish: () => void;
+  /** When the exit starts (ms). Read once at mount. */
+  exitAtMs?: number;
 }
 
 /**
@@ -56,7 +60,7 @@ interface AnimatedSplashProps {
  * wavy wool thread behind it, then the logo fades in. Built from plain Views (no SVG) and
  * native-driver animations only, so it behaves the same in release builds as in development.
  */
-export function AnimatedSplash({ onReady, onFinish }: AnimatedSplashProps) {
+export function AnimatedSplash({ onReady, onFinish, exitAtMs = T_EXIT_AT }: AnimatedSplashProps) {
   const { width: W, height: H } = Dimensions.get('window');
 
   const geo = useMemo(() => {
@@ -152,7 +156,7 @@ export function AnimatedSplash({ onReady, onFinish }: AnimatedSplashProps) {
       ),
       // 5. Hold, then a gentle push-in and fade into the app.
       at(
-        T_EXIT_AT,
+        exitAtMs,
         Animated.timing(v.exit, {
           toValue: 1,
           duration: T_EXIT,
