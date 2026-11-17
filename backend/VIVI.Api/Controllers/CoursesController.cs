@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using VIVI.Api.Auth;
@@ -48,6 +49,7 @@ public sealed class CoursesController : ControllerBase
     /// <summary>Lists courses. Customers and anonymous callers only receive published courses.</summary>
     [HttpGet]
     [AllowAnonymous]
+    [OutputCache(PolicyName = "catalogue")]
     [ProducesResponseType(typeof(IReadOnlyList<CourseResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<CourseResponse>>> List([FromQuery] Guid? categoryId, CancellationToken cancellationToken)
     {

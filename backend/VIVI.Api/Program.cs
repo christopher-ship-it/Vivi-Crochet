@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.OutputCaching;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -214,6 +215,16 @@ builder.Services.AddScoped(sp =>
 builder.Services.AddScoped<DatabaseSeeder>();
 builder.Services.AddSingleton<VIVI.Api.Services.RequestMetrics>();
 
+// JSON lists compress ~5-10x; Kestrel on App Service does not do it for us.
+builder.Services.AddResponseCompression(o => o.EnableForHttps = true);
+
+// shortcut: in-process cache, so it is per instance; move to a shared cache before scaling out.
+// Anonymous GETs only (the default policy skips requests with an Authorization header, so admin
+// and signed-in views never share an entry). Any successful write evicts the tag, see below.
+builder.Services.AddOutputCache(o => o.AddPolicy(
+    "catalogue",
+    b => b.Expire(TimeSpan.FromSeconds(30)).SetVaryByQuery("*").SetVaryByHeader("Origin").Tag("catalogue")));
+
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -345,6 +356,7 @@ var isProduction = app.Environment.IsProduction();
 
 app.UseMiddleware<RequestMetricsMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseResponseCompression();
 
 if (!app.Environment.IsEnvironment("Testing"))
     app.UseForwardedHeaders();
@@ -373,6 +385,20 @@ if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseOutputCache();
+// Admin edits, orders (stock) and other writes show up at once: any successful write clears the cache.
+app.Use(async (context, next) =>
+{
+    await next();
+    if (!HttpMethods.IsGet(context.Request.Method)
+        && !HttpMethods.IsHead(context.Request.Method)
+        && !HttpMethods.IsOptions(context.Request.Method)
+        && context.Response.StatusCode < 400)
+    {
+        await context.RequestServices.GetRequiredService<IOutputCacheStore>()
+            .EvictByTagAsync("catalogue", context.RequestAborted);
+    }
+});
 app.MapControllers();
 
 using (var scope = app.Services.CreateScope())

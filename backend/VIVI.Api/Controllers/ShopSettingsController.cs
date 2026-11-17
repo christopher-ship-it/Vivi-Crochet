@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using VIVI.Api.Auth;
 using VIVI.Core.Entities;
@@ -23,6 +24,7 @@ public sealed class ShopSettingsController : ControllerBase
     /// <summary>No row yet means nothing was ever switched off.</summary>
     [HttpGet("api/shop-settings")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = "catalogue")]
     public async Task<ActionResult<ShopSettingsResponse>> Get(CancellationToken cancellationToken)
     {
         var settings = await _db.ShopSettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
