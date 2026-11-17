@@ -1,4 +1,3 @@
-import writeXlsxFile from 'write-excel-file/browser';
 
 export type ExcelColumn<T> = {
   header: string;
@@ -27,7 +26,7 @@ export async function downloadExcel<T>(
   );
 
   const stamp = new Date().toISOString().slice(0, 10);
-  await writeXlsxFile([header, ...body], {
+  await (await import('write-excel-file/browser')).default([header, ...body], {
     sheet: sheetName,
     columns: columns.map((c) => ({ width: c.width ?? 18 })),
     stickyRowsCount: 1,
