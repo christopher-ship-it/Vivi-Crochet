@@ -327,7 +327,7 @@ export default function LearnScreen() {
       try {
         const [everyCourse, shopProducts, offerData] = await Promise.all([
           listCourses(),
-          listProducts().catch(() => [] as Product[]),
+          listProducts(undefined, undefined, undefined, !isRefresh).catch(() => [] as Product[]),
           // The offer is a bonus section: if it cannot be loaded the page just leaves it out.
           getFoundingMembershipOffer().catch(() => null),
         ]);

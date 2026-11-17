@@ -1,5 +1,9 @@
 import { apiRequest } from './client';
 import type { Product, ProductType } from '../types';
+import { createShortCache } from '../utils/shortCache';
+
+/** Home and Learn open often and show the same list; share one fetch for a minute. */
+const cachedProductList = createShortCache<Product[]>(60_000);
 
 /** Preferred shop order: T-Shirt Yarn first (fills a full row), then Rose, then other yarn, then the rest. */
 function categoryRank(category: string): number {
@@ -38,13 +42,17 @@ export async function listProducts(
   category?: string,
   query?: string,
   productType?: ProductType,
+  /** Reuse a list fetched in the last minute. Leave off where stock must be current (Shop, Cart). */
+  allowCached = false,
 ): Promise<Product[]> {
   const params = new URLSearchParams();
   if (category && category !== 'All') params.set('category', category);
   if (query?.trim()) params.set('q', query.trim());
   if (productType) params.set('productType', productType);
   const qs = params.toString();
-  const products = await apiRequest<Product[]>(`/api/products${qs ? `?${qs}` : ''}`, {}, false);
+  const url = `/api/products${qs ? `?${qs}` : ''}`;
+  const fetchList = () => apiRequest<Product[]>(url, {}, false);
+  const products = await (allowCached ? cachedProductList(url, fetchList) : fetchList());
   const scoped = productType
     ? products.filter((p) => (p.productType ?? 'Handmade') === productType)
     : products;
