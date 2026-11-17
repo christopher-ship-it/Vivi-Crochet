@@ -1131,7 +1131,7 @@ export function ProductFormPage() {
                       <td>
                         <div className="cell-media">
                           {variant.imageUrl
-                            ? <img src={variant.imageUrl} alt="" className="thumb-sm" />
+                            ? <img src={variant.imageUrl} alt="" className="thumb-sm" loading="lazy" decoding="async" />
                             : variant.colourHex
                               ? <span className="thumb-sm" style={{ background: variant.colourHex, display: 'inline-block' }} />
                               : (

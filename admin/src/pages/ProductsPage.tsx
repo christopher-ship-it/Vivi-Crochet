@@ -227,6 +227,8 @@ export function ProductsPage() {
                           src={product.imageUrl}
                           alt=""
                           className="thumb-sm"
+                          loading="lazy"
+                          decoding="async"
                         />
                       ) : (
                         <div
