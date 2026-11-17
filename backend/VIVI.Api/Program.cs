@@ -223,7 +223,7 @@ builder.Services.AddResponseCompression(o => o.EnableForHttps = true);
 // and signed-in views never share an entry). Any successful write evicts the tag, see below.
 builder.Services.AddOutputCache(o => o.AddPolicy(
     "catalogue",
-    b => b.Expire(TimeSpan.FromSeconds(30)).SetVaryByQuery("*").SetVaryByHeader("Origin").Tag("catalogue")));
+    b => b.Expire(TimeSpan.FromSeconds(30)).SetVaryByQuery("*").SetVaryByHeader("Origin", VIVI.Api.Services.MarketResolver.HeaderName).Tag("catalogue")));
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>

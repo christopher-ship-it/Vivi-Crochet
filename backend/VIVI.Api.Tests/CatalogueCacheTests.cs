@@ -12,6 +12,34 @@ public sealed class CatalogueCacheTests : IClassFixture<ApiFactory>
     public CatalogueCacheTests(ApiFactory factory) => _factory = factory;
 
     [Fact]
+    public async Task Course_list_cache_keeps_guest_countries_apart()
+    {
+        var courseId = VIVI.Infrastructure.Data.DatabaseSeeder.Catalog.FoundationId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+            db.CoursePrices.Add(new()
+            {
+                Id = Guid.NewGuid(), CourseId = courseId, CountryCode = "US", Currency = "USD", Price = 19.99m,
+                UpdatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        async Task<string?> CurrencyForAsync(string country)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, "/api/courses");
+            request.Headers.Add("X-Vivi-Country", country);
+            var response = await _factory.CreateClient().SendAsync(request);
+            var courses = await response.Content.ReadFromJsonAsync<List<VIVI.Api.DTOs.Courses.CourseResponse>>(AuthTests.Json);
+            return courses!.Single(c => c.Id == courseId).Currency;
+        }
+
+        Assert.Equal("USD", await CurrencyForAsync("US"));
+        Assert.Equal("INR", await CurrencyForAsync("IN"));
+    }
+
+    [Fact]
     public async Task Public_reads_are_cached_until_a_write_and_responses_are_compressed()
     {
         var anon = _factory.CreateClient();
