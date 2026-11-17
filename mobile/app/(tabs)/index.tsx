@@ -56,32 +56,6 @@ type ResumeInfo = {
 
 const LEARN_CHIP_ICONS = ['heart-outline', 'flower-outline', 'ribbon-outline'] as const;
 
-/** Round-robin across categories so the Shop card shows variety, not one category. */
-function pickShopSlides(products: Product[]): SlideItem[] {
-  const byCategory = new Map<string, SlideItem[]>();
-  for (const product of products) {
-    if (product.status && product.status !== 'Published') continue;
-    const imageUrl = product.imageUrl?.trim();
-    if (!imageUrl) continue;
-    const list = byCategory.get(product.category) ?? [];
-    list.push({ id: product.id, imageUrl, label: product.name, price: product.price });
-    byCategory.set(product.category, list);
-  }
-  const lists = [...byCategory.values()];
-  const picked: SlideItem[] = [];
-  for (let round = 0; picked.length < MAX_SLIDES; round += 1) {
-    let added = false;
-    for (const list of lists) {
-      if (list[round] && picked.length < MAX_SLIDES) {
-        picked.push(list[round]);
-        added = true;
-      }
-    }
-    if (!added) break;
-  }
-  return picked;
-}
-
 /** Same pool as Learn → Discover → All (trending, viral, kit-linked). */
 function pickProjectSlides(courses: Course[], products: Product[]): SlideItem[] {
   const mainIds = new Set(selectMainCourses(courses).map((c) => c.id));
@@ -385,7 +359,6 @@ export default function HomeScreen() {
   }
 
 
-  const shopSlides = useMemo(() => pickShopSlides(products), [products]);
   const projectSlides = useMemo(() => pickProjectSlides(courses, products), [courses, products]);
 
   // One shared pulse drives the featured buttons and the live dot.
@@ -659,11 +632,8 @@ export default function HomeScreen() {
             room.id === 'projects' && styles.squareImageWrapProjects,
           ]}
         >
-          {room.id === 'shop' || room.id === 'projects' ? (
-            <RoomSlideshow
-              items={room.id === 'shop' ? shopSlides : projectSlides}
-              fallback={room.image}
-            />
+          {room.id === 'projects' ? (
+            <RoomSlideshow items={projectSlides} fallback={room.image} />
           ) : (
             <Image
               source={room.image}
