@@ -1875,6 +1875,10 @@ namespace VIVI.Infrastructure.Data.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
+                    b.Property<string>("ThumbBlobPath")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProductId");

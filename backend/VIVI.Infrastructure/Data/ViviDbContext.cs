@@ -222,6 +222,7 @@ public sealed class ViviDbContext : DbContext
             entity.ToTable("ProductImages");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.BlobPath).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.ThumbBlobPath).HasMaxLength(512);
             entity.HasIndex(x => x.ProductId);
             entity.HasIndex(x => new { x.ProductId, x.IsMain });
             entity.HasIndex(x => new { x.ProductId, x.SortOrder });

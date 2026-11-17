@@ -151,6 +151,8 @@ export interface Product {
   price: number;
   mrp?: number | null;
   imageUrl?: string | null;
+  /** Small (~400 px) main image for cards; missing on older photos, so fall back to imageUrl. */
+  thumbUrl?: string | null;
   images?: ProductImage[];
   spec1?: string | null;
   spec2?: string | null;

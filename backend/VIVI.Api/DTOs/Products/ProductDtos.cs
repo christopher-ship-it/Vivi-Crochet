@@ -62,6 +62,9 @@ public sealed class ProductImageUploadUrlResponse
     public DateTimeOffset ExpiresAt { get; set; }
     public string BlobPath { get; set; } = string.Empty;
     public long MaxFileSizeBytes { get; set; }
+    /// <summary>Optional: upload a small image/webp copy here, then pass ThumbBlobPath to image-upload-complete.</summary>
+    public string? ThumbUploadUrl { get; set; }
+    public string? ThumbBlobPath { get; set; }
 }
 
 public sealed class ProductImageUploadCompleteRequest
@@ -71,6 +74,9 @@ public sealed class ProductImageUploadCompleteRequest
     public string ContentType { get; set; } = string.Empty;
     /// <summary>When true, this image becomes the main shop image after upload.</summary>
     public bool SetAsMain { get; set; }
+    /// <summary>Set only when the thumbnail was uploaded to the ThumbUploadUrl; ignored if missing in storage.</summary>
+    public string? ThumbBlobPath { get; set; }
+    public long ThumbFileSizeBytes { get; set; }
 }
 
 public sealed class ProductImageResponse
@@ -78,6 +84,9 @@ public sealed class ProductImageResponse
     public Guid Id { get; set; }
     public string Url { get; set; } = string.Empty;
     public string BlobPath { get; set; } = string.Empty;
+    public string? ThumbBlobPath { get; set; }
+    /// <summary>Resolved small copy; null for older photos (clients fall back to Url).</summary>
+    public string? ThumbUrl { get; set; }
     public int SortOrder { get; set; }
     public bool IsMain { get; set; }
 }
@@ -112,6 +121,8 @@ public sealed class ProductResponse
     public int? Mrp { get; set; }
     /// <summary>Resolved URL of the main product image (backward compatible).</summary>
     public string? ImageUrl { get; set; }
+    /// <summary>Small (~400 px) main image for lists/cards. Null when none exists; fall back to <see cref="ImageUrl"/>.</summary>
+    public string? ThumbUrl { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public IReadOnlyList<ProductImageResponse> Images { get; set; } = Array.Empty<ProductImageResponse>();
     public string? Spec1 { get; set; }

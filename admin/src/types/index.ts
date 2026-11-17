@@ -225,6 +225,8 @@ export interface Product {
   price: number;
   mrp?: number | null;
   imageUrl?: string | null;
+  /** Small (~400 px) main image for lists; absent on photos uploaded before thumbnails existed. */
+  thumbUrl?: string | null;
   images?: ProductImage[];
   spec1?: string | null;
   spec2?: string | null;
@@ -288,6 +290,8 @@ export interface ProductImageUploadUrlResponse {
   expiresAt: string;
   blobPath: string;
   maxFileSizeBytes: number;
+  thumbUploadUrl?: string | null;
+  thumbBlobPath?: string | null;
 }
 
 export interface ProductImageUploadCompleteRequest {
@@ -295,6 +299,8 @@ export interface ProductImageUploadCompleteRequest {
   fileSizeBytes: number;
   contentType: string;
   setAsMain?: boolean;
+  thumbBlobPath?: string | null;
+  thumbFileSizeBytes?: number;
 }
 
 export type OrderStatus =

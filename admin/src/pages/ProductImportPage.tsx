@@ -17,6 +17,7 @@ import {
   listProductCategories,
   listProducts,
   requestProductImageUploadUrl,
+  uploadThumb,
 } from '../api/products';
 import { downloadSampleSheet, readProductSheet } from '../utils/productImportSheet';
 import { matchPhotoToCode } from '../utils/productPhotoMatch';
@@ -291,11 +292,13 @@ export function ProductImportPage() {
     });
     const upload = await uploadToBlob(ticket.uploadUrl, prepared, check.contentType!);
     if (!upload.success) throw new Error(upload.error ?? 'Upload failed');
+    const thumb = await uploadThumb(prepared, ticket);
     await completeProductImageUpload(entry.id, {
       blobPath: ticket.blobPath,
       fileSizeBytes: prepared.size,
       contentType: check.contentType!,
       setAsMain: true,
+      ...thumb,
     });
   }
 

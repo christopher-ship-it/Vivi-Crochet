@@ -10,6 +10,7 @@ import {
   listProducts,
   publishProduct,
   requestProductImageUploadUrl,
+  uploadThumb,
   setProductMainImage,
   unpublishProduct,
   updateProduct,
@@ -532,11 +533,14 @@ export function ProductFormPage() {
       throw new Error(uploadResult.error ?? 'Upload failed');
     }
 
+    const thumb = await uploadThumb(prepared, ticket);
+
     const product = await completeProductImageUpload(id!, {
       blobPath: ticket.blobPath,
       fileSizeBytes: prepared.size,
       contentType: preparedValidation.contentType!,
       setAsMain,
+      ...thumb,
     });
 
     return imagesFromProduct(product);
