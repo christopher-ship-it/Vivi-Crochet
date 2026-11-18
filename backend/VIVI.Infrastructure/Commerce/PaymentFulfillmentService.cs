@@ -1,4 +1,5 @@
 using System.Data;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using VIVI.Core;
 using VIVI.Core.Entities;
@@ -69,45 +70,17 @@ public sealed class PaymentFulfillmentService
         PaymentVerificationInput input,
         CancellationToken cancellationToken)
     {
-        await using var transaction = _db.Database.IsRelational()
-            ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
-            : null;
-
-        var order = await _db.Orders
-            .Include(o => o.Items)
-            .Include(o => o.Payments)
-            .SingleOrDefaultAsync(o => o.Id == input.InternalOrderId, cancellationToken)
-            ?? throw ViviException.NotFound("ORDER_NOT_FOUND", "Order was not found.");
-
-        if (order.CustomerId != customerId)
-            throw ViviException.Forbidden("ORDER_FORBIDDEN", "You do not have access to this order.");
-
-        if (!string.Equals(order.RazorpayOrderId, input.RazorpayOrderId, StringComparison.Ordinal))
-            throw ViviException.Conflict("ORDER_MISMATCH", "Razorpay order does not match this order.");
-
-        var payment = order.Payments.SingleOrDefault(p => p.ProviderOrderId == input.RazorpayOrderId)
-            ?? throw ViviException.NotFound("PAYMENT_NOT_FOUND", "Payment record was not found.");
-
-        if (payment.Provider != PaymentProvider.Razorpay)
-            throw ViviException.Conflict("WRONG_PROVIDER", "This order must be paid with Razorpay.");
-
-        if (payment.Status == PaymentStatus.Captured && payment.SignatureVerified)
-        {
-            if (transaction is not null)
-                await transaction.CommitAsync(cancellationToken);
-            return new PaymentFulfillmentResult(order, payment, AlreadyProcessed: true);
-        }
+        // Razorpay is called before the transaction opens, so no database locks are held while we wait for it.
+        var early = await LoadOrderAsync(o => o.Id == input.InternalOrderId, tracked: false, cancellationToken);
+        var earlyPayment = CheckVerifyTarget(early, customerId, input);
+        if (earlyPayment.Status == PaymentStatus.Captured && earlyPayment.SignatureVerified)
+            return new PaymentFulfillmentResult(early, earlyPayment, AlreadyProcessed: true);
 
         if (!_signatureVerifier.VerifyPaymentSignature(
                 input.RazorpayOrderId,
                 input.RazorpayPaymentId,
                 input.RazorpaySignature))
             throw ViviException.Conflict("INVALID_SIGNATURE", "Payment signature verification failed.");
-
-        var existingPayment = await _db.Payments
-            .SingleOrDefaultAsync(p => p.ProviderPaymentId == input.RazorpayPaymentId, cancellationToken);
-        if (existingPayment is not null && existingPayment.Id != payment.Id)
-            throw ViviException.Conflict("DUPLICATE_PAYMENT", "This payment has already been processed.");
 
         // Fail closed: without Razorpay's record we cannot confirm the paid amount, so the client retries.
         var remote = await _razorpay.FetchPaymentAsync(input.RazorpayPaymentId, cancellationToken)
@@ -118,6 +91,25 @@ public sealed class PaymentFulfillmentService
 
         if (!string.Equals(remote.RazorpayOrderId, input.RazorpayOrderId, StringComparison.Ordinal))
             throw ViviException.Conflict("PAYMENT_ORDER_MISMATCH", "Payment does not belong to this order.");
+
+        await using var transaction = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+            : null;
+
+        // Read again inside the transaction: the webhook may have finished while Razorpay was answering.
+        var order = await LoadOrderAsync(o => o.Id == input.InternalOrderId, tracked: true, cancellationToken);
+        var payment = CheckVerifyTarget(order, customerId, input);
+        if (payment.Status == PaymentStatus.Captured && payment.SignatureVerified)
+        {
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+            return new PaymentFulfillmentResult(order, payment, AlreadyProcessed: true);
+        }
+
+        var existingPayment = await _db.Payments
+            .SingleOrDefaultAsync(p => p.ProviderPaymentId == input.RazorpayPaymentId, cancellationToken);
+        if (existingPayment is not null && existingPayment.Id != payment.Id)
+            throw ViviException.Conflict("DUPLICATE_PAYMENT", "This payment has already been processed.");
 
         var expectedPaise = (int)Math.Round(order.TotalAmount * 100m, MidpointRounding.AwayFromZero);
         if (remote.AmountPaise != expectedPaise)
@@ -143,27 +135,31 @@ public sealed class PaymentFulfillmentService
         string razorpayPaymentId,
         CancellationToken cancellationToken)
     {
-        var order = await _db.Orders
-            .Include(o => o.Items)
-            .Include(o => o.Payments)
-            .SingleOrDefaultAsync(o => o.RazorpayOrderId == razorpayOrderId, cancellationToken)
-            ?? throw ViviException.NotFound("ORDER_NOT_FOUND", "Order was not found.");
+        var early = await LoadOrderAsync(o => o.RazorpayOrderId == razorpayOrderId, tracked: false, cancellationToken);
+        var earlyPayment = FindRazorpayPayment(early, razorpayOrderId);
+        if (earlyPayment.Status == PaymentStatus.Captured && earlyPayment.SignatureVerified)
+            return new PaymentFulfillmentResult(early, earlyPayment, AlreadyProcessed: true);
 
-        var payment = order.Payments.SingleOrDefault(p => p.ProviderOrderId == razorpayOrderId)
-            ?? throw ViviException.NotFound("PAYMENT_NOT_FOUND", "Payment record was not found.");
-
-        if (payment.Status == PaymentStatus.Captured && payment.SignatureVerified)
-            return new PaymentFulfillmentResult(order, payment, AlreadyProcessed: true);
-
-        await using var transaction = _db.Database.IsRelational()
-            ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
-            : null;
-
+        // Razorpay is called before the transaction opens, so no database locks are held while we wait for it.
         var remote = await _razorpay.FetchPaymentAsync(razorpayPaymentId, cancellationToken)
             ?? throw ViviException.Conflict("PAYMENT_NOT_FOUND", "Unable to verify payment with Razorpay.");
 
         if (!string.Equals(remote.Status, "captured", StringComparison.OrdinalIgnoreCase))
             throw ViviException.Conflict("PAYMENT_NOT_CAPTURED", "Payment is not captured.");
+
+        await using var transaction = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+            : null;
+
+        // Read again inside the transaction: the app's verify call may have finished while Razorpay was answering.
+        var order = await LoadOrderAsync(o => o.RazorpayOrderId == razorpayOrderId, tracked: true, cancellationToken);
+        var payment = FindRazorpayPayment(order, razorpayOrderId);
+        if (payment.Status == PaymentStatus.Captured && payment.SignatureVerified)
+        {
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+            return new PaymentFulfillmentResult(order, payment, AlreadyProcessed: true);
+        }
 
         var existingPayment = await _db.Payments
             .SingleOrDefaultAsync(p => p.ProviderPaymentId == razorpayPaymentId, cancellationToken);
@@ -174,6 +170,37 @@ public sealed class PaymentFulfillmentService
         payment.SignatureVerified = true;
 
         return await CompleteFulfillmentAsync(order, payment, transaction, cancellationToken);
+    }
+
+    /// <summary>Untracked for the read before the Razorpay call, tracked inside the transaction.</summary>
+    private async Task<Order> LoadOrderAsync(
+        Expression<Func<Order, bool>> match,
+        bool tracked,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Orders.Include(o => o.Items).Include(o => o.Payments).AsQueryable();
+        if (!tracked)
+            query = query.AsNoTracking();
+        return await query.SingleOrDefaultAsync(match, cancellationToken)
+            ?? throw ViviException.NotFound("ORDER_NOT_FOUND", "Order was not found.");
+    }
+
+    private static Payment FindRazorpayPayment(Order order, string razorpayOrderId)
+        => order.Payments.SingleOrDefault(p => p.ProviderOrderId == razorpayOrderId)
+            ?? throw ViviException.NotFound("PAYMENT_NOT_FOUND", "Payment record was not found.");
+
+    private static Payment CheckVerifyTarget(Order order, Guid customerId, PaymentVerificationInput input)
+    {
+        if (order.CustomerId != customerId)
+            throw ViviException.Forbidden("ORDER_FORBIDDEN", "You do not have access to this order.");
+
+        if (!string.Equals(order.RazorpayOrderId, input.RazorpayOrderId, StringComparison.Ordinal))
+            throw ViviException.Conflict("ORDER_MISMATCH", "Razorpay order does not match this order.");
+
+        var payment = FindRazorpayPayment(order, input.RazorpayOrderId);
+        if (payment.Provider != PaymentProvider.Razorpay)
+            throw ViviException.Conflict("WRONG_PROVIDER", "This order must be paid with Razorpay.");
+        return payment;
     }
 
     private async Task<PaymentFulfillmentResult> CompleteFulfillmentAsync(
