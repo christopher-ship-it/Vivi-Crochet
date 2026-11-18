@@ -1,5 +1,6 @@
 import { apiRequest } from './client';
 import type { Category, Course } from '../types';
+import { createShortCache } from '../utils/shortCache';
 
 export async function listCategories(): Promise<Category[]> {
   return apiRequest<Category[]>('/api/categories', {}, false);
@@ -10,6 +11,9 @@ export async function listCourses(categoryId?: string): Promise<Course[]> {
   return apiRequest<Course[]>(`/api/courses${query}`, {}, false);
 }
 
+// Learn and Home ask for the same course within moments of each other; share that one request.
+const sharedCourse = createShortCache<Course>(5_000);
+
 export async function getCourse(id: string): Promise<Course> {
-  return apiRequest<Course>(`/api/courses/${id}`, {}, false);
+  return sharedCourse(id, () => apiRequest<Course>(`/api/courses/${id}`, {}, false));
 }
