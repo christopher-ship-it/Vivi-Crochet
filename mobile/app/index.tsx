@@ -3,7 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { listProducts } from '../src/api/products';
+import { getHomeSummary } from '../src/api/products';
 import { AnimatedSplash, SPLASH_STAGE_COLOR, T_EXIT_AT_RETURNING } from '../src/components/AnimatedSplash';
 import { loadStoredLanguage } from '../src/i18n/storage';
 import { routeAfterSplash } from '../src/preferences/onboardingFlow';
@@ -50,8 +50,8 @@ export default function SplashRoute() {
         if (cancelled) return;
         const goesHome = Boolean(language && country);
         setReturning(goesHome);
-        // Start Home's biggest request now; Home reuses it from the shared cache (see listProducts).
-        if (goesHome) void listProducts(undefined, undefined, undefined, true).catch(() => undefined);
+        // Start Home's catalogue request now; Home reuses it from the shared cache (see getHomeSummary).
+        if (goesHome) void getHomeSummary().catch(() => undefined);
       })
       .catch(() => !cancelled && setReturning(false));
     return () => {

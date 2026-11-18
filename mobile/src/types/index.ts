@@ -121,6 +121,12 @@ export interface RecommendedEssentialSummary {
   availableStock: number;
 }
 
+/** What Home needs from the catalogue (GET /api/products/home-summary). */
+export interface HomeSummary {
+  shopSlides: { id: string; imageUrl: string; name: string; price: number }[];
+  linkedCourseIds: string[];
+}
+
 export interface ProductImage {
   id: string;
   url: string;

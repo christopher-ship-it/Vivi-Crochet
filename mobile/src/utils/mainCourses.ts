@@ -1,5 +1,8 @@
 import type { Course, Product } from '../types';
 
+/** The only parts of a product these pickers read, so Home can pass just course ids. */
+export type ProductCourseLink = Pick<Product, 'courseId' | 'linkedCourse'> & Partial<Pick<Product, 'status'>>;
+
 /**
  * Stable catalog ids from backend DatabaseSeeder.Catalog.
  * Used to pin the three structured Learn courses in the client-requested order.
@@ -219,7 +222,7 @@ export function selectViralProjects(
  */
 export function selectProductLinkedCourses(
   courses: Course[],
-  products: Product[],
+  products: ProductCourseLink[],
   excludeIds: Set<string>,
 ): Course[] {
   const byId = new Map(courses.map((c) => [c.id, c]));
@@ -242,7 +245,7 @@ export function selectProductLinkedCourses(
 /** Merge discovery pools for filter=all without duplicates (trending → viral → product). */
 export function selectDiscoverCourses(
   courses: Course[],
-  products: Product[],
+  products: ProductCourseLink[],
   excludeIds: Set<string>,
   filter: DiscoverFilter,
 ): Course[] {

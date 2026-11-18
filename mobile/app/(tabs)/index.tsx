@@ -22,7 +22,7 @@ import {
   type LiveWeekSummary,
 } from '../../src/api/live';
 import { getIntroVideo } from '../../src/api/introVideo';
-import { listProducts } from '../../src/api/products';
+import { getHomeSummary } from '../../src/api/products';
 import { useShoppingSession } from '../../src/auth/SessionContext';
 import { useCart } from '../../src/cart/CartContext';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
@@ -33,11 +33,11 @@ import { hasSeenIntroPreview, markIntroPreviewSeen, markIntroWatched } from '../
 import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
 import { RoomSlideshow, type SlideItem } from '../../src/components/RoomSlideshow';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
-import type { Course, Product } from '../../src/types';
+import type { Course, HomeSummary } from '../../src/types';
 import { useI18n, type TranslationKey } from '../../src/i18n';
 import { uiFonts, type UiFonts } from '../../src/i18n/uiFonts';
 import { colors, spacing } from '../../src/theme';
-import { selectDiscoverCourses, selectMainCourses } from '../../src/utils/mainCourses';
+import { selectDiscoverCourses, selectMainCourses, type ProductCourseLink } from '../../src/utils/mainCourses';
 import { getCoursePathCursor } from '../../src/utils/coursePathProgress';
 import { formatCoursePrice } from '../../src/utils/format';
 import { applyStatusBar } from '../../src/utils/statusBar';
@@ -56,34 +56,8 @@ type ResumeInfo = {
 
 const LEARN_CHIP_ICONS = ['heart-outline', 'flower-outline', 'ribbon-outline'] as const;
 
-/** Round-robin across categories so the Shop card shows variety, not one category. */
-function pickShopSlides(products: Product[]): SlideItem[] {
-  const byCategory = new Map<string, SlideItem[]>();
-  for (const product of products) {
-    if (product.status && product.status !== 'Published') continue;
-    const imageUrl = product.imageUrl?.trim();
-    if (!imageUrl) continue;
-    const list = byCategory.get(product.category) ?? [];
-    list.push({ id: product.id, imageUrl, label: product.name, price: product.price });
-    byCategory.set(product.category, list);
-  }
-  const lists = [...byCategory.values()];
-  const picked: SlideItem[] = [];
-  for (let round = 0; picked.length < MAX_SLIDES; round += 1) {
-    let added = false;
-    for (const list of lists) {
-      if (list[round] && picked.length < MAX_SLIDES) {
-        picked.push(list[round]);
-        added = true;
-      }
-    }
-    if (!added) break;
-  }
-  return picked;
-}
-
 /** Same pool as Learn → Discover → All (trending, viral, kit-linked). */
-function pickProjectSlides(courses: Course[], products: Product[]): SlideItem[] {
+function pickProjectSlides(courses: Course[], products: ProductCourseLink[]): SlideItem[] {
   const mainIds = new Set(selectMainCourses(courses).map((c) => c.id));
   return selectDiscoverCourses(courses, products, mainIds, 'all')
     .filter((course) => course.thumbnailUrl?.trim())
@@ -201,7 +175,7 @@ export default function HomeScreen() {
   const dockClearance = useTabDockClearance();
   const { width } = useWindowDimensions();
 
-  const [products, setProducts] = useState<Product[]>([]);
+  const [summary, setSummary] = useState<HomeSummary | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [liveWeek, setLiveWeek] = useState<LiveWeekSummary | null>(null);
   const [resume, setResume] = useState<ResumeInfo | null>(null);
@@ -216,8 +190,8 @@ export default function HomeScreen() {
     useCallback(() => {
       applyStatusBar('dark');
       let cancelled = false;
-      void listProducts(undefined, undefined, undefined, true)
-        .then((data) => !cancelled && setProducts(data))
+      void getHomeSummary()
+        .then((data) => !cancelled && setSummary(data))
         .catch(() => undefined);
       void listCourses()
         .then((data) => !cancelled && setCourses(data))
@@ -385,8 +359,14 @@ export default function HomeScreen() {
   }
 
 
-  const shopSlides = useMemo(() => pickShopSlides(products), [products]);
-  const projectSlides = useMemo(() => pickProjectSlides(courses, products), [courses, products]);
+  const shopSlides = useMemo<SlideItem[]>(
+    () => (summary?.shopSlides ?? []).map((s) => ({ id: s.id, imageUrl: s.imageUrl, label: s.name, price: s.price })),
+    [summary],
+  );
+  const projectSlides = useMemo(
+    () => pickProjectSlides(courses, (summary?.linkedCourseIds ?? []).map((courseId) => ({ courseId }))),
+    [courses, summary],
+  );
 
   // One shared pulse drives the featured buttons and the live dot.
   const pulse = useRef(new Animated.Value(0)).current;

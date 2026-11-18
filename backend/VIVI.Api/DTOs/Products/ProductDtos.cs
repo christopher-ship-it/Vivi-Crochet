@@ -49,6 +49,23 @@ public sealed class ProductVariantSummary
     public int SortOrder { get; set; }
 }
 
+public sealed class HomeShopSlide
+{
+    public Guid Id { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public int Price { get; set; }
+}
+
+/// <summary>Everything the app's Home screen needs from the catalogue, without the full product list.</summary>
+public sealed class HomeSummaryResponse
+{
+    /// <summary>Up to 8 photos, one product per category in turn. Small copy when one exists.</summary>
+    public IReadOnlyList<HomeShopSlide> ShopSlides { get; set; } = Array.Empty<HomeShopSlide>();
+    /// <summary>Courses that published shop products link to, in shop order.</summary>
+    public IReadOnlyList<Guid> LinkedCourseIds { get; set; } = Array.Empty<Guid>();
+}
+
 public sealed class ProductImageUploadUrlRequest
 {
     public string FileName { get; set; } = string.Empty;
