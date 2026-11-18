@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Categories;
@@ -22,6 +23,7 @@ public sealed class CategoriesController : ControllerBase
     /// <summary>Lists categories. Anonymous callers only see active categories.</summary>
     [HttpGet]
     [AllowAnonymous]
+    [OutputCache(PolicyName = "catalogue")]
     [ProducesResponseType(typeof(IReadOnlyList<CategoryResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<CategoryResponse>>> List(CancellationToken cancellationToken)
     {

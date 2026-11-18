@@ -1,0 +1,70 @@
+using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
+using VIVI.Infrastructure.Data;
+using Xunit;
+
+namespace VIVI.Api.Tests;
+
+public sealed class CatalogueCacheTests : IClassFixture<ApiFactory>
+{
+    private readonly ApiFactory _factory;
+
+    public CatalogueCacheTests(ApiFactory factory) => _factory = factory;
+
+    [Fact]
+    public async Task Course_list_cache_keeps_guest_countries_apart()
+    {
+        var courseId = VIVI.Infrastructure.Data.DatabaseSeeder.Catalog.FoundationId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+            db.CoursePrices.Add(new()
+            {
+                Id = Guid.NewGuid(), CourseId = courseId, CountryCode = "US", Currency = "USD", Price = 19.99m,
+                UpdatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        async Task<string?> CurrencyForAsync(string country)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, "/api/courses");
+            request.Headers.Add("X-Vivi-Country", country);
+            var response = await _factory.CreateClient().SendAsync(request);
+            var courses = await response.Content.ReadFromJsonAsync<List<VIVI.Api.DTOs.Courses.CourseResponse>>(AuthTests.Json);
+            return courses!.Single(c => c.Id == courseId).Currency;
+        }
+
+        Assert.Equal("USD", await CurrencyForAsync("US"));
+        Assert.Equal("INR", await CurrencyForAsync("IN"));
+    }
+
+    [Fact]
+    public async Task Public_reads_are_cached_until_a_write_and_responses_are_compressed()
+    {
+        var anon = _factory.CreateClient();
+        var url = "/api/shop-settings";
+
+        var first = await anon.GetStringAsync(url);
+
+        // A change that bypasses the API (no write request) stays hidden while the entry is fresh.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ViviDbContext>();
+            db.ShopSettings.Add(new() { Id = Guid.NewGuid(), HandmadeEnabled = false, UpdatedAt = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(first, await anon.GetStringAsync(url));
+
+        // Any successful admin write clears it.
+        var admin = _factory.CreateClient();
+        AuthTests.WithToken(admin, await AuthTests.LoginAsync(admin));
+        (await admin.PutAsJsonAsync("/api/admin/shop-settings", new { deliveryNotice = "x" })).EnsureSuccessStatusCode();
+        Assert.Contains("\"handmadeEnabled\":false", await anon.GetStringAsync(url));
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/products");
+        request.Headers.AcceptEncoding.ParseAdd("gzip");
+        var response = await anon.SendAsync(request);
+        Assert.Contains("gzip", response.Content.Headers.ContentEncoding);
+    }
+}

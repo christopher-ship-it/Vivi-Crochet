@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using VIVI.Api.Auth;
 using VIVI.Api.DTOs.Products;
@@ -43,6 +44,7 @@ public sealed class ProductsController : ControllerBase
     /// <summary>Lists shop products. Anonymous callers only receive published products.</summary>
     [HttpGet]
     [AllowAnonymous]
+    [OutputCache(PolicyName = "catalogue")]
     [ProducesResponseType(typeof(IReadOnlyList<ProductResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<ProductResponse>>> List(
         [FromQuery] string? category,
