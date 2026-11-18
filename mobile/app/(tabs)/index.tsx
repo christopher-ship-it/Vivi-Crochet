@@ -216,7 +216,7 @@ export default function HomeScreen() {
     useCallback(() => {
       applyStatusBar('dark');
       let cancelled = false;
-      void listProducts()
+      void listProducts(undefined, undefined, undefined, true)
         .then((data) => !cancelled && setProducts(data))
         .catch(() => undefined);
       void listCourses()
