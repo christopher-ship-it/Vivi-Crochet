@@ -1,5 +1,3 @@
-import writeXlsxFile from 'write-excel-file/browser';
-import { readSheet } from 'read-excel-file/browser';
 import type { ProductImportColumn, ProductImportRowInput } from '../api/productImport';
 
 /** Cell value from a spreadsheet as the text a person would see. */
@@ -19,7 +17,7 @@ export async function readProductSheet(file: File): Promise<{
   headers: string[];
   rows: ProductImportRowInput[];
 }> {
-  const data = (await readSheet(file)) as unknown[][];
+  const data = (await (await import('read-excel-file/browser')).readSheet(file)) as unknown[][];
   if (data.length === 0) return { headers: [], rows: [] };
 
   const headers = data[0].map(cellText);
@@ -108,7 +106,7 @@ export async function downloadSampleSheet(columns: ProductImportColumn[]): Promi
     ['Delete the three example rows before you upload.', null, null],
   ];
 
-  await writeXlsxFile([
+  await (await import('write-excel-file/browser')).default([
     { data: dataSheet, sheet: 'Products', columns: widths, stickyRowsCount: 1 },
     { data: helpSheet, sheet: 'How to fill', columns: [{ width: 34 }, { width: 11 }, { width: 90 }] },
   ]).toFile('vivi-product-upload-sample.xlsx');

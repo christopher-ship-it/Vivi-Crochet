@@ -213,6 +213,22 @@ export default function CartScreen() {
     const fetched: Record<string, Product> = {};
     const snapshotKey = items.map((i) => cartLineKey(i)).join(',');
 
+    // One request per product, all at once. Settled (not rejected) so a failure is handled per line below.
+    const lookups = new Map(
+      await Promise.all(
+        [...new Set(items.filter((i) => !isCourseLine(i) && i.productId).map((i) => i.productId!))].map(
+          async (id) =>
+            [
+              id,
+              await getProduct(id).then(
+                (value) => ({ value }) as const,
+                (error: unknown) => ({ error }) as const,
+              ),
+            ] as const,
+        ),
+      ),
+    );
+
     for (const item of items) {
       if (isCourseLine(item)) {
         next.push({ ...item, itemType: item.itemType ?? 'Course', quantity: 1 });
@@ -226,7 +242,9 @@ export default function CartScreen() {
       }
 
       try {
-        const product = await getProduct(productId);
+        const lookup = lookups.get(productId)!;
+        if ('error' in lookup) throw lookup.error;
+        const product = lookup.value;
         fetched[product.id] = product;
         const stock = product.availableStock ?? 0;
         if (stock <= 0) {

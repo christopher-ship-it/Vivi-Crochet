@@ -1,48 +1,52 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { AppDialogHost } from './components/AppDialog';
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute';
 import { AdminLayout } from './layouts/AdminLayout';
-import { CategoriesPage } from './pages/CategoriesPage';
-import { CourseDetailPage } from './pages/CourseDetailPage';
-import { CourseFormPage } from './pages/CourseFormPage';
-import { CourseOrdersPage } from './pages/CourseOrdersPage';
-import { CoursesPage } from './pages/CoursesPage';
-import { CustomersPage } from './pages/CustomersPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { LiveBookingDetailPage } from './pages/LiveBookingDetailPage';
-import { LiveBookingsPage } from './pages/LiveBookingsPage';
-import { LiveCoursesPage } from './pages/LiveCoursesPage';
-import { LiveEnquiriesPage } from './pages/LiveEnquiriesPage';
-import { LiveSettingsPage } from './pages/LiveSettingsPage';
-import { LiveClassBookingsPage } from './pages/LiveClassBookingsPage';
 import { LoginPage } from './pages/LoginPage';
-import { OrderDetailPage } from './pages/OrderDetailPage';
-import { OrdersPage } from './pages/OrdersPage';
-import { PaymentsPage } from './pages/PaymentsPage';
-import { ProductFormPage } from './pages/ProductFormPage';
-import { ProductImportPage } from './pages/ProductImportPage';
-import { ProductsPage } from './pages/ProductsPage';
-import { SpecialOffersPage } from './pages/SpecialOffersPage';
-import { StudentOffersPage } from './pages/StudentOffersPage';
-import { ViralProjectsPage } from './pages/ViralProjectsPage';
-import { NotificationsPage } from './pages/NotificationsPage';
-import { SupportPage } from './pages/SupportPage';
-import { AppHealthPage } from './pages/AppHealthPage';
-import { FeedbackPage } from './pages/FeedbackPage';
-import { BackendCheckPage } from './pages/BackendCheckPage';
-import { PhoneOtpsPage } from './pages/PhoneOtpsPage';
-import { UserMetricsPage } from './pages/UserMetricsPage';
-import { IntroVideoPage } from './pages/IntroVideoPage';
-import { AccountPage } from './pages/AccountPage';
-import { DeleteAccountPage } from './pages/DeleteAccountPage';
-import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
-import { TeamUsersPage } from './pages/TeamUsersPage';
+
+// Each page is its own file, downloaded when first opened.
+const CategoriesPage = lazy(() => import('./pages/CategoriesPage').then((m) => ({ default: m.CategoriesPage })));
+const CourseDetailPage = lazy(() => import('./pages/CourseDetailPage').then((m) => ({ default: m.CourseDetailPage })));
+const CourseFormPage = lazy(() => import('./pages/CourseFormPage').then((m) => ({ default: m.CourseFormPage })));
+const CourseOrdersPage = lazy(() => import('./pages/CourseOrdersPage').then((m) => ({ default: m.CourseOrdersPage })));
+const CoursesPage = lazy(() => import('./pages/CoursesPage').then((m) => ({ default: m.CoursesPage })));
+const CustomersPage = lazy(() => import('./pages/CustomersPage').then((m) => ({ default: m.CustomersPage })));
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const LiveBookingDetailPage = lazy(() => import('./pages/LiveBookingDetailPage').then((m) => ({ default: m.LiveBookingDetailPage })));
+const LiveBookingsPage = lazy(() => import('./pages/LiveBookingsPage').then((m) => ({ default: m.LiveBookingsPage })));
+const LiveCoursesPage = lazy(() => import('./pages/LiveCoursesPage').then((m) => ({ default: m.LiveCoursesPage })));
+const LiveEnquiriesPage = lazy(() => import('./pages/LiveEnquiriesPage').then((m) => ({ default: m.LiveEnquiriesPage })));
+const LiveSettingsPage = lazy(() => import('./pages/LiveSettingsPage').then((m) => ({ default: m.LiveSettingsPage })));
+const LiveClassBookingsPage = lazy(() => import('./pages/LiveClassBookingsPage').then((m) => ({ default: m.LiveClassBookingsPage })));
+const OrderDetailPage = lazy(() => import('./pages/OrderDetailPage').then((m) => ({ default: m.OrderDetailPage })));
+const OrdersPage = lazy(() => import('./pages/OrdersPage').then((m) => ({ default: m.OrdersPage })));
+const PaymentsPage = lazy(() => import('./pages/PaymentsPage').then((m) => ({ default: m.PaymentsPage })));
+const ProductFormPage = lazy(() => import('./pages/ProductFormPage').then((m) => ({ default: m.ProductFormPage })));
+const ProductImportPage = lazy(() => import('./pages/ProductImportPage').then((m) => ({ default: m.ProductImportPage })));
+const ProductsPage = lazy(() => import('./pages/ProductsPage').then((m) => ({ default: m.ProductsPage })));
+const SpecialOffersPage = lazy(() => import('./pages/SpecialOffersPage').then((m) => ({ default: m.SpecialOffersPage })));
+const StudentOffersPage = lazy(() => import('./pages/StudentOffersPage').then((m) => ({ default: m.StudentOffersPage })));
+const ViralProjectsPage = lazy(() => import('./pages/ViralProjectsPage').then((m) => ({ default: m.ViralProjectsPage })));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
+const SupportPage = lazy(() => import('./pages/SupportPage').then((m) => ({ default: m.SupportPage })));
+const AppHealthPage = lazy(() => import('./pages/AppHealthPage').then((m) => ({ default: m.AppHealthPage })));
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })));
+const BackendCheckPage = lazy(() => import('./pages/BackendCheckPage').then((m) => ({ default: m.BackendCheckPage })));
+const PhoneOtpsPage = lazy(() => import('./pages/PhoneOtpsPage').then((m) => ({ default: m.PhoneOtpsPage })));
+const UserMetricsPage = lazy(() => import('./pages/UserMetricsPage').then((m) => ({ default: m.UserMetricsPage })));
+const IntroVideoPage = lazy(() => import('./pages/IntroVideoPage').then((m) => ({ default: m.IntroVideoPage })));
+const AccountPage = lazy(() => import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })));
+const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage').then((m) => ({ default: m.DeleteAccountPage })));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })));
+const TeamUsersPage = lazy(() => import('./pages/TeamUsersPage').then((m) => ({ default: m.TeamUsersPage })));
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Suspense fallback={<div className="page-loading" role="status">Loading…</div>}>
         <Routes>
           <Route element={<PublicOnlyRoute />}>
             <Route path="/login" element={<LoginPage />} />
@@ -92,6 +96,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
         <AppDialogHost />
       </AuthProvider>
     </BrowserRouter>
