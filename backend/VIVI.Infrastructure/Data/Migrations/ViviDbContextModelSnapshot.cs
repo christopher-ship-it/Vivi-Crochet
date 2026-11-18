@@ -544,6 +544,8 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("CustomerCode")
                         .IsUnique()
                         .HasFilter("[CustomerCode] IS NOT NULL");
@@ -1450,6 +1452,8 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("DeliveryDateOverriddenBy");
@@ -1600,6 +1604,8 @@ namespace VIVI.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("ExpiresAt");
 
                     b.HasIndex("Phone");
@@ -1690,6 +1696,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
 
                     b.HasIndex("OrderId");
 
@@ -2153,6 +2161,8 @@ namespace VIVI.Infrastructure.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("UpdatedAt");
 
                     b.HasIndex("VideoId");
 

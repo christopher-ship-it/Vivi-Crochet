@@ -254,6 +254,7 @@ public sealed class ViviDbContext : DbContext
         modelBuilder.Entity<OtpChallenge>(entity =>
         {
             entity.ToTable("OtpChallenges");
+            entity.HasIndex(x => x.CreatedAt);
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Phone).HasMaxLength(10).IsRequired();
             entity.Property(x => x.ProviderSessionId).HasMaxLength(120).IsRequired();
@@ -289,6 +290,7 @@ public sealed class ViviDbContext : DbContext
         modelBuilder.Entity<Customer>(entity =>
         {
             entity.ToTable("Customers");
+            entity.HasIndex(x => x.CreatedAt);
             entity.HasKey(x => x.Id);
             entity.Property(x => x.CustomerCode).HasMaxLength(16);
             entity.HasIndex(x => x.CustomerCode).IsUnique();
@@ -340,6 +342,7 @@ public sealed class ViviDbContext : DbContext
         modelBuilder.Entity<Order>(entity =>
         {
             entity.ToTable("Orders");
+            entity.HasIndex(x => x.CreatedAt);
             entity.HasKey(x => x.Id);
             entity.Property(x => x.OrderNumber).HasMaxLength(32).IsRequired();
             entity.Property(x => x.Currency).HasMaxLength(3).IsRequired();
@@ -546,6 +549,7 @@ public sealed class ViviDbContext : DbContext
         modelBuilder.Entity<Payment>(entity =>
         {
             entity.ToTable("Payments");
+            entity.HasIndex(x => x.CreatedAt);
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Provider).HasConversion<int>().IsRequired();
             entity.Property(x => x.ProviderOrderId).HasMaxLength(64).IsRequired();
@@ -783,6 +787,7 @@ public sealed class ViviDbContext : DbContext
         modelBuilder.Entity<VideoProgress>(entity =>
         {
             entity.ToTable("VideoProgress");
+            entity.HasIndex(x => x.UpdatedAt);
             entity.HasKey(x => x.Id);
             entity.HasIndex(x => new { x.CustomerId, x.VideoId }).IsUnique();
             entity.HasIndex(x => new { x.CustomerId, x.CourseId });
