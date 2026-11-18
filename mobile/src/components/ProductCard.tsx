@@ -126,7 +126,7 @@ export function ProductCard({
 
   const imageBlock = (
     <ProductImageFrame
-      uri={previewVariant?.imageUrl ?? product.imageUrl}
+      uri={previewVariant?.imageUrl ?? product.thumbUrl ?? product.imageUrl}
       style={[
         styles.imageWell,
         isRail

@@ -218,6 +218,7 @@ public static class DtoMapper
                 Id = i.Id,
                 Url = i.BlobPath,
                 BlobPath = i.BlobPath,
+                ThumbBlobPath = i.ThumbBlobPath,
                 SortOrder = i.SortOrder,
                 IsMain = i.IsMain
             })

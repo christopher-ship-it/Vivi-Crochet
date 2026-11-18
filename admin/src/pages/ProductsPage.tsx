@@ -224,7 +224,7 @@ export function ProductsPage() {
                     <div className="cell-media">
                       {product.imageUrl ? (
                         <img
-                          src={product.imageUrl}
+                          src={product.thumbUrl ?? product.imageUrl}
                           alt=""
                           className="thumb-sm"
                           loading="lazy"

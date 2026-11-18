@@ -1,4 +1,6 @@
 import { apiRequest } from './client';
+import { uploadToBlob } from '../utils/videoUpload';
+import { renderProductThumb } from '../utils/productImagePrepare';
 import type { Product, ProductImageUploadCompleteRequest, ProductImageUploadUrlRequest, ProductImageUploadUrlResponse, ProductRequest, ProductType } from '../types';
 
 export async function listProducts(productType?: ProductType): Promise<Product[]> {
@@ -53,6 +55,26 @@ export async function requestProductImageUploadUrl(
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+/**
+ * Best effort: makes and uploads the small list thumbnail for a photo that was just uploaded.
+ * Returns the fields to merge into image-upload-complete; empty when anything fails (photo still saves).
+ */
+export async function uploadThumb(
+  photo: File,
+  ticket: ProductImageUploadUrlResponse,
+): Promise<Pick<ProductImageUploadCompleteRequest, 'thumbBlobPath' | 'thumbFileSizeBytes'>> {
+  try {
+    if (!ticket.thumbUploadUrl || !ticket.thumbBlobPath) return {};
+    const thumb = await renderProductThumb(photo);
+    if (!thumb) return {};
+    const result = await uploadToBlob(ticket.thumbUploadUrl, thumb, 'image/webp');
+    if (!result.success) return {};
+    return { thumbBlobPath: ticket.thumbBlobPath, thumbFileSizeBytes: thumb.size };
+  } catch {
+    return {};
+  }
 }
 
 export async function completeProductImageUpload(

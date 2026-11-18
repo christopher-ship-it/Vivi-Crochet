@@ -55,12 +55,15 @@ public static class ProductImageResolver
                     // Keep the gallery entry even if SAS resolution fails so admin count stays correct.
                     Url = string.IsNullOrWhiteSpace(url) ? image.BlobPath : url,
                     BlobPath = image.BlobPath,
+                    ThumbBlobPath = image.ThumbBlobPath,
+                    ThumbUrl = await ResolveAsync(image.ThumbBlobPath, blob, cancellationToken),
                     SortOrder = image.SortOrder,
                     IsMain = image.IsMain
                 };
             }));
 
             dto.Images = resolved;
+            dto.ThumbUrl = (resolved.FirstOrDefault(i => i.IsMain) ?? resolved.FirstOrDefault())?.ThumbUrl;
             if (string.IsNullOrWhiteSpace(dto.ImageUrl))
                 dto.ImageUrl = resolved.FirstOrDefault(i => i.IsMain)?.Url ?? resolved.FirstOrDefault()?.Url;
         }

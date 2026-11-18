@@ -67,6 +67,10 @@ public static class ImageFileRules
     public static bool IsOwnedBlobPath(Guid productId, string blobPath)
         => blobPath.StartsWith($"products/{productId:D}/image/", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Thumbnail lives beside the photo, named after it: image/abc-x.png → image/thumb/abc-x.webp.</summary>
+    public static string BuildThumbBlobPath(string blobPath)
+        => $"{blobPath[..(blobPath.LastIndexOf('/') + 1)]}thumb/{Path.GetFileNameWithoutExtension(blobPath)}.webp";
+
     public static string BuildCourseThumbnailBlobPath(Guid courseId, string sanitizedFileName)
         => $"courses/{courseId:D}/thumbnail/{sanitizedFileName}";
 

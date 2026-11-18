@@ -317,6 +317,7 @@ public sealed class ProductsController : ControllerBase
 
         var blobPaths = product.Images
             .Select(i => i.BlobPath)
+            .Concat(product.Images.Select(i => i.ThumbBlobPath).OfType<string>())
             .Concat(string.IsNullOrWhiteSpace(product.ImageUrl) ? [] : [product.ImageUrl!])
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(ProductImageResolver.IsBlobPath)
@@ -413,9 +414,14 @@ public sealed class ProductsController : ControllerBase
 
         var ticket = await _blob.CreateUploadSasAsync(blobPath, request.ContentType.Trim(), cancellationToken);
 
+        var thumbPath = ImageFileRules.BuildThumbBlobPath(blobPath);
+        var thumbTicket = await _blob.CreateUploadSasAsync(thumbPath, "image/webp", cancellationToken);
+
         return Ok(new ProductImageUploadUrlResponse
         {
             UploadUrl = ticket.UploadUrl,
+            ThumbUploadUrl = thumbTicket.UploadUrl,
+            ThumbBlobPath = thumbPath,
             ExpiresAt = ticket.ExpiresAt,
             BlobPath = blobPath,
             MaxFileSizeBytes = ImageFileRules.DefaultMaxBytes
@@ -449,10 +455,22 @@ public sealed class ProductsController : ControllerBase
         if (!completed)
             throw ViviException.Conflict("BLOB_MISSING", "The image file was not found in storage. Upload it to the SAS URL, then retry.");
 
+        // Best effort: a missing or wrong thumbnail never blocks the photo itself.
+        string? thumbPath = null;
+        if (request.ThumbBlobPath == ImageFileRules.BuildThumbBlobPath(request.BlobPath)
+            && request.ThumbFileSizeBytes > 0
+            && await _blob.TryCompleteUploadAsync(
+                request.ThumbBlobPath, request.ThumbFileSizeBytes, "image/webp", cancellationToken))
+        {
+            thumbPath = request.ThumbBlobPath;
+        }
+
         var product = await Load(id, cancellationToken);
         if (product.Images.Count >= ImageFileRules.MaxImagesPerProduct)
         {
             await _blob.DeleteAsync(request.BlobPath, cancellationToken);
+            if (thumbPath is not null)
+                await _blob.DeleteAsync(thumbPath, cancellationToken);
             throw ViviException.Conflict(
                 "IMAGE_LIMIT",
                 $"A product can have at most {ImageFileRules.MaxImagesPerProduct} photos.");
@@ -471,6 +489,7 @@ public sealed class ProductsController : ControllerBase
             Id = Guid.NewGuid(),
             ProductId = product.Id,
             BlobPath = request.BlobPath,
+            ThumbBlobPath = thumbPath,
             SortOrder = nextSort,
             IsMain = makeMain,
             CreatedAt = DateTime.UtcNow
@@ -530,6 +549,7 @@ public sealed class ProductsController : ControllerBase
             ?? throw ViviException.NotFound("PRODUCT_IMAGE_NOT_FOUND", "Product image was not found.");
 
         var blobPath = image.BlobPath;
+        var thumbPath = image.ThumbBlobPath;
         var wasMain = image.IsMain;
         product.Images.Remove(image);
         _db.ProductImages.Remove(image);
@@ -550,6 +570,8 @@ public sealed class ProductsController : ControllerBase
 
         if (ProductImageResolver.IsBlobPath(blobPath))
             await _blob.DeleteAsync(blobPath, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(thumbPath))
+            await _blob.DeleteAsync(thumbPath, cancellationToken);
 
         var dto = product.ToDto(adminView: true);
         await ProductImageResolver.ResolveProductAsync(dto, _blob, cancellationToken);

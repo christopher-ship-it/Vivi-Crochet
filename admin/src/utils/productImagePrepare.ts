@@ -3,6 +3,9 @@ import { MAX_IMAGE_BYTES } from './format';
 /** Fixed square size for all shop product photos (Handmade + Essentials). */
 export const PRODUCT_IMAGE_EDGE_PX = 1200;
 
+/** Width of the list/card thumbnail. */
+export const PRODUCT_THUMB_EDGE_PX = 400;
+
 export const PRODUCT_IMAGE_MIME = 'image/jpeg';
 export const PRODUCT_IMAGE_EXT = '.jpg';
 
@@ -91,6 +94,27 @@ export async function renderProductImage(
       type: mime,
       lastModified: Date.now(),
     });
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** Small WebP copy (kept see-through) for lists. Null when the browser can't make WebP; the photo still uploads. */
+export async function renderProductThumb(photo: File): Promise<File | null> {
+  const bitmap = await loadImageBitmap(photo);
+  try {
+    const width = Math.min(PRODUCT_THUMB_EDGE_PX, bitmap.width);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = Math.round((bitmap.height * width) / bitmap.width);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.8));
+    // Browsers without WebP encoding silently return PNG.
+    if (!blob || blob.type !== 'image/webp') return null;
+    return new File([blob], 'thumb.webp', { type: 'image/webp', lastModified: Date.now() });
   } finally {
     bitmap.close();
   }

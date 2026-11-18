@@ -474,6 +474,15 @@ using (var scope = app.Services.CreateScope())
 
             try
             {
+                await db.Database.ExecuteSqlRawAsync(ProductImageSchemaSql.AddThumbBlobPath, CancellationToken.None);
+            }
+            catch (Exception thumbEx)
+            {
+                logger.LogError(thumbEx, "Product image thumbnail column check failed. Product lists will error until ProductImages.ThumbBlobPath exists.");
+            }
+
+            try
+            {
                 await ShopSettingsSchemaBootstrapper.EnsureAsync(db, CancellationToken.None);
                 logger.LogInformation("Shop settings schema verified.");
             }
