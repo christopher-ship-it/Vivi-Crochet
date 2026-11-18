@@ -1,9 +1,10 @@
 import { apiRequest } from './client';
-import type { Product, ProductType } from '../types';
+import type { HomeSummary, Product, ProductType } from '../types';
 import { createShortCache } from '../utils/shortCache';
 
 /** Home and Learn open often and show the same list; share one fetch for a minute. */
 const cachedProductList = createShortCache<Product[]>(60_000);
+const cachedHomeSummary = createShortCache<HomeSummary>(60_000);
 
 /** Preferred shop order: T-Shirt Yarn first (fills a full row), then Rose, then other yarn, then the rest. */
 function categoryRank(category: string): number {
@@ -57,6 +58,11 @@ export async function listProducts(
     ? products.filter((p) => (p.productType ?? 'Handmade') === productType)
     : products;
   return sortProductsForShop(scoped);
+}
+
+/** What Home needs from the catalogue, without downloading every product. */
+export function getHomeSummary(): Promise<HomeSummary> {
+  return cachedHomeSummary('home', () => apiRequest<HomeSummary>('/api/products/home-summary', {}, false));
 }
 
 export async function listProductCategories(productType?: ProductType): Promise<string[]> {

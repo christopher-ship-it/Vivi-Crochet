@@ -167,6 +167,77 @@ public sealed class ProductsController : ControllerBase
         return Ok(dtos);
     }
 
+    private const int MaxHomeSlides = 8;
+
+    /// <summary>What the app's Home screen uses from the catalogue: a few slides and the linked course ids.</summary>
+    [HttpGet("home-summary")]
+    [AllowAnonymous]
+    [OutputCache(PolicyName = "catalogue")]
+    [ProducesResponseType(typeof(HomeSummaryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<HomeSummaryResponse>> HomeSummary(CancellationToken cancellationToken)
+    {
+        var query = await PublicOnlyAsync(
+            _db.Products.AsNoTracking().Where(p => p.ParentProductId == null),
+            cancellationToken);
+
+        // Thin columns only, ranked like the shop list.
+        var rows = (await query
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Name,
+                    p.Category,
+                    p.Price,
+                    p.SortOrder,
+                    p.CourseId,
+                    Image = p.ImageUrl,
+                    Thumb = p.Images
+                        .OrderByDescending(i => i.IsMain).ThenBy(i => i.SortOrder)
+                        .Select(i => i.ThumbBlobPath).FirstOrDefault(),
+                    VariantImage = p.Variants
+                        .OrderBy(v => v.SortOrder).Select(v => v.ImageUrl).FirstOrDefault()
+                })
+                .ToListAsync(cancellationToken))
+            .OrderBy(r => CategoryShopRank(r.Category))
+            .ThenBy(r => r.Category, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.SortOrder)
+            .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        static string? FirstText(params string?[] values) => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+        // One product per category in turn, so the slides show variety.
+        var byCategory = rows
+            .Select(r => (Row: r, Path: FirstText(r.Thumb, r.Image, r.VariantImage)))
+            .Where(x => x.Path is not null)
+            .GroupBy(x => x.Row.Category)
+            .Select(g => g.ToList())
+            .ToList();
+        var picked = new List<(Guid Id, string Name, int Price, string Path)>();
+        for (var round = 0; picked.Count < MaxHomeSlides && byCategory.Any(l => l.Count > round); round++)
+        {
+            foreach (var list in byCategory)
+            {
+                if (round < list.Count && picked.Count < MaxHomeSlides)
+                    picked.Add((list[round].Row.Id, list[round].Row.Name, list[round].Row.Price, list[round].Path!));
+            }
+        }
+
+        var slides = (await Task.WhenAll(picked.Select(async x => new HomeShopSlide
+        {
+            Id = x.Id,
+            Name = x.Name,
+            Price = x.Price,
+            ImageUrl = await ProductImageResolver.ResolveAsync(x.Path, _blob, cancellationToken) ?? string.Empty
+        }))).Where(s => s.ImageUrl.Length > 0).ToList();
+
+        return Ok(new HomeSummaryResponse
+        {
+            ShopSlides = slides,
+            LinkedCourseIds = rows.Where(r => r.CourseId.HasValue).Select(r => r.CourseId!.Value).Distinct().ToList()
+        });
+    }
+
     /// <summary>Returns shop categories that have at least one visible product.</summary>
     [HttpGet("categories")]
     [AllowAnonymous]
