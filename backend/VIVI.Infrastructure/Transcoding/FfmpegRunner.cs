@@ -88,7 +88,7 @@ public sealed class FfmpegRunner
             $"-y -hide_banner -loglevel error " +
             $"-i \"{inputPath}\" " +
             $"-vf \"fps={maxFps},scale='if(gt(iw,ih),-2,min({maxWidth},iw))':'if(gt(iw,ih),min({maxWidth},ih),-2)':flags=fast_bilinear\" " +
-            $"-c:v libx264 -preset {preset} -crf {crf} -threads 0 " +
+            $"-c:v libx264 -preset {preset} -crf {crf} -threads {Math.Max(0, _options.Threads)} " +
             $"-x264-params \"ref=1:bframes=0:rc-lookahead=0:sync-lookahead=0:mbtree=0\" " +
             $"-pix_fmt yuv420p " +
             $"-c:a aac -b:a {audioBitrate} -ac 2 " +
@@ -124,6 +124,10 @@ public sealed class FfmpegRunner
 
         if (!process.Start())
             throw new InvalidOperationException("Failed to start ffmpeg process.");
+
+        // Encoding shares the CPU with customer requests; let the API win.
+        try { process.PriorityClass = ProcessPriorityClass.BelowNormal; }
+        catch (Exception ex) { _logger.LogDebug(ex, "Could not lower ffmpeg priority."); }
 
         process.BeginErrorReadLine();
         process.BeginOutputReadLine();

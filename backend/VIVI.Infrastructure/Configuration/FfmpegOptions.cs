@@ -21,6 +21,9 @@ public sealed class FfmpegOptions
 
     public string AudioBitrate { get; set; } = "96k";
 
+    /// <summary>x264 threads. 0 = all cores; set 1 to leave CPU for API requests on the same instance.</summary>
+    public int Threads { get; set; } = 0;
+
     /// <summary>libx264 preset. ultrafast is the right default on App Service B1/B2 for lesson compress.</summary>
     public string Preset { get; set; } = "ultrafast";
 }
