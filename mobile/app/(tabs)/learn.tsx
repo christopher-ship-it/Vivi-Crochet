@@ -270,6 +270,10 @@ export default function LearnScreen() {
           setProgressByCourseId({});
           return;
         }
+        // Unlock the tiles now; real progress replaces the placeholder as each course loads.
+        setProgressByCourseId((prev) =>
+          Object.fromEntries(enrolledMain.map((c) => [c.id, prev[c.id] ?? { progressPct: 8 }])),
+        );
         const entries = await Promise.all(
           enrolledMain.map(async (course) => {
             try {
@@ -334,7 +338,6 @@ export default function LearnScreen() {
         setOffer(offerData);
         const main = selectMainCourses(everyCourse);
         const exclude = new Set(main.map((c) => c.id));
-        await loadProgress(main);
         setAllCourses(everyCourse);
         setProducts(shopProducts);
         prefetchImages([
