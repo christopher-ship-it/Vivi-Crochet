@@ -102,9 +102,6 @@ function parseUtc(value: string): number {
   return new Date(hasZone ? value : `${value}Z`).getTime();
 }
 
-/** Designed Crochet Essentials category collage (1536×1024). */
-/** Compressed app copies of assets/crochet-essentials.png and assets/shophandmade.png. */
-const ESSENTIALS_HERO = require('../../assets/shop-essentials-app.jpg');
 /** Designed Handmade Collection collage (1536×1024). */
 const HANDMADE_HERO = require('../../assets/shop-handmade-app.png');
 
@@ -188,13 +185,6 @@ export default function ShopScreen() {
   const { market } = usePreferences();
   const fonts = uiFonts(language);
   const styles = useMemo(() => createStyles(fonts, language !== 'en'), [language]);
-  // Two of the category names from the materials text, e.g. "Hooks · Bag rings".
-  const materialsHighlights = t('shop.roomEssentialsExamples')
-    .split('·')
-    .map((label) => label.trim())
-    .filter(Boolean)
-    .slice(1, 3)
-    .join(' · ');
   const {
     shopTab: shopTabParam,
     shopRoom: shopRoomParam,
@@ -766,9 +756,9 @@ export default function ShopScreen() {
                   <Text style={styles.sectionLink}>{t('common.viewAll')}</Text>
                 </Pressable>
               </View>
-              {/* Four across: the first three yarns, then the materials card. */}
+              {/* Four across: the four yarns. */}
               <View style={styles.yarnRow}>
-                {yarnCards.slice(0, 3).map((card) => {
+                {yarnCards.slice(0, 4).map((card) => {
                   const off =
                     card.mrp != null && card.mrp > card.price
                       ? Math.round(((card.mrp - card.price) / card.mrp) * 100)
@@ -819,21 +809,6 @@ export default function ShopScreen() {
                     </Pressable>
                   );
                 })}
-                <Pressable
-                  style={({ pressed }) => [styles.yarnFrame, styles.yarnFour, pressed && styles.roomCardPressed]}
-                  onPress={() => enterRoom('essentials')}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}`}
-                >
-                  <LinearGradient colors={GOLD_FRAME} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
-                  <LinearGradient colors={['#ffffff', '#fff1e6']} style={styles.yarnTile}>
-                    <View style={styles.yarnThumb}>
-                      <Image source={ESSENTIALS_HERO} style={[styles.kitThumbImage, styles.yarnImage]} resizeMode="cover" accessibilityIgnoresInvertColors />
-                    </View>
-                    <Text style={styles.yarnText} numberOfLines={2}>{t('shop.roomEssentialsTitle')}</Text>
-                    <Text style={styles.yarnHint} numberOfLines={2}>{materialsHighlights}</Text>
-                  </LinearGradient>
-                </Pressable>
               </View>
             </LinearGradient>
           ) : null}
