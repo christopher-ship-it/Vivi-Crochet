@@ -215,6 +215,7 @@ export const hi: EnTranslations = {
     roomHandmadeExamples: 'क्रोशे बैग · फूल · उपहार · एक्सेसरीज़',
     roomHandmadeCta: 'हस्तनिर्मित देखें',
     roomEssentialsTitle: 'क्रोशे सामग्री',
+    fromPrice: '{{price}} से',
     roomEssentialsSubtitle: 'बनाने के लिए ज़रूरी सब कुछ।',
     roomEssentialsExamples: 'यार्न · हुक · बैग रिंग · हैंडल · एक्सेसरीज़',
     roomEssentialsDelivery: 'आमतौर पर 3–4 दिनों में डिलीवरी',

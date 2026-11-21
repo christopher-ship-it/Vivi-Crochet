@@ -31,6 +31,7 @@ import { IntroPreviewCard } from '../../src/components/IntroPreviewCard';
 import { IntroVideoModal } from '../../src/components/IntroVideoModal';
 import { hasSeenIntroPreview, markIntroPreviewSeen, markIntroWatched } from '../../src/introVideo/storage';
 import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
+import { SnowFall } from '../../src/components/SnowFall';
 import { RoomSlideshow, type SlideItem } from '../../src/components/RoomSlideshow';
 import { useTabDockClearance } from '../../src/components/PremiumTabBar';
 import type { Course, HomeSummary } from '../../src/types';
@@ -76,19 +77,6 @@ const LEARN_IMAGE = require('../../assets/learn-hero-banner.png');
 const LIVE_IMAGE = require('../../assets/live-hero-home.webp');
 const SHOP_IMAGE = require('../../assets/shop-handmade-app.png');
 // Transparent yarn-pile cut-out over a pink gradient on the Shop card (the product slideshow looked blurry).
-/** Pearl-like beads in white and soft pink along the top of the Vivi Shop card: a premium, quiet garland. */
-const SHOP_DECOR: { icon: 'ellipse' | 'diamond'; size: number; color: string }[] = [
-  { icon: 'diamond', size: 10, color: '#ffffff' },
-  { icon: 'ellipse', size: 7, color: '#ffd9e6' },
-  { icon: 'ellipse', size: 7, color: '#ffffff' },
-  { icon: 'ellipse', size: 7, color: '#f4c0d1' },
-  { icon: 'ellipse', size: 7, color: '#ffffff' },
-  { icon: 'ellipse', size: 7, color: '#ffd9e6' },
-  { icon: 'ellipse', size: 7, color: '#ffffff' },
-  { icon: 'ellipse', size: 7, color: '#f4c0d1' },
-  { icon: 'ellipse', size: 7, color: '#ffffff' },
-  { icon: 'diamond', size: 10, color: '#ffffff' },
-];
 const SHOP_PHOTO = require('../../assets/shop-yarn-pile.png');
 const PROJECTS_IMAGE =require('../../assets/live-hero-yarn.png');
 
@@ -544,18 +532,7 @@ export default function HomeScreen() {
                 style={StyleSheet.absoluteFill}
               />
               <View style={styles.shopGlow} pointerEvents="none" />
-              <View style={styles.shopWire} pointerEvents="none" />
-              <View style={styles.shopBulbs} pointerEvents="none">
-                {SHOP_DECOR.map((d, i) => (
-                  <Ionicons
-                    key={i}
-                    name={d.icon}
-                    size={d.size}
-                    color={d.color}
-                    style={{ marginTop: i % 2 ? 4 : 0 }}
-                  />
-                ))}
-              </View>
+              <SnowFall />
               <View style={styles.shopYarn}>
                 <Image source={SHOP_PHOTO} style={styles.fill} resizeMode="contain" accessibilityIgnoresInvertColors />
               </View>
@@ -1189,31 +1166,6 @@ function createStyles(fonts: UiFonts, compact = false) {
       right: -60,
       bottom: 40,
       backgroundColor: 'rgba(255, 210, 120, 0.2)',
-    },
-    shopWire: {
-      position: 'absolute',
-      top: 14,
-      left: 10,
-      right: 10,
-      height: 1,
-      backgroundColor: 'rgba(255, 226, 150, 0.6)',
-    },
-    shopBulbs: {
-      position: 'absolute',
-      top: 10,
-      left: 12,
-      right: 12,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    shopBulb: {
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      shadowColor: '#ffd23c',
-      shadowOpacity: 0.9,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 0 },
     },
     projectsArrow: {
       width: 30,

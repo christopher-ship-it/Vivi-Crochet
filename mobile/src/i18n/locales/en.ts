@@ -212,6 +212,7 @@ export const en = {
     roomHandmadeExamples: 'Crochet bags · Flowers · Gifts · Accessories',
     roomHandmadeCta: 'Explore Handmade',
     roomEssentialsTitle: 'Crochet Materials',
+    fromPrice: 'From {{price}}',
     roomEssentialsSubtitle: 'Yarn, tools & materials for your next make.',
     roomEssentialsExamples: 'Yarn · Hooks · Bag rings · Handles · Accessories',
     roomEssentialsDelivery: 'Usually delivered in 3–4 days',

@@ -215,6 +215,7 @@ export const ta: EnTranslations = {
     roomHandmadeExamples: 'குரோசே பைகள் · பூக்கள் · பரிசுகள் · அணுகல் பொருட்கள்',
     roomHandmadeCta: 'கைவினையை ஆராயுங்கள்',
     roomEssentialsTitle: 'குரோசே பொருட்கள்',
+    fromPrice: '{{price}} முதல்',
     roomEssentialsSubtitle: 'உருவாக்கத் தேவையான அனைத்தும்.',
     roomEssentialsExamples: 'நூல் · ஹூக்குகள் · பை வளையங்கள் · கைப்பிடிகள் · அணுகல் பொருட்கள்',
     roomEssentialsDelivery: 'பொதுவாக 3–4 நாட்களில் டெலிவரி',

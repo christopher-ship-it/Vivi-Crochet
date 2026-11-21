@@ -30,6 +30,7 @@ import { useCart } from '../../src/cart/CartContext';
 import { isOutOfStock } from '../../src/cart/stock';
 import { MyOrderCard } from '../../src/components/MyOrderCard';
 import { BrandWordmark } from '../../src/components/BrandWordmark';
+import { SnowFall } from '../../src/components/SnowFall';
 import { MyViviPageGradient } from '../../src/components/MyViviPageGradient';
 import { ProductCard } from '../../src/components/ProductCard';
 import { EmptyView, ErrorView, LoadingView } from '../../src/components/StateViews';
@@ -55,21 +56,8 @@ const YARN_FILTER = '__yarn__';
 /** Gold frame and label gradients for the arch cards. */
 const GOLD_FRAME = ['#fbe6a2', '#f0b543', '#c98a1c'] as const;
 const ARCH_PHOTO_BG = '#fff6f2';
-/** String-light bulbs for the "Start here" band: a bright core with a soft halo around it. */
-const BULBS = [
-  { core: '#fff3c4', halo: 'rgba(255, 224, 130, 0.32)' },
-  { core: '#ffd1e0', halo: 'rgba(255, 170, 200, 0.32)' },
-  { core: '#ffe08a', halo: 'rgba(255, 200, 90, 0.32)' },
-  { core: '#ffffff', halo: 'rgba(255, 255, 255, 0.28)' },
-  { core: '#ffc2d6', halo: 'rgba(255, 150, 185, 0.32)' },
-  { core: '#fff3c4', halo: 'rgba(255, 224, 130, 0.32)' },
-  { core: '#ffd1e0', halo: 'rgba(255, 170, 200, 0.32)' },
-  { core: '#ffe08a', halo: 'rgba(255, 200, 90, 0.32)' },
-  { core: '#ffffff', halo: 'rgba(255, 255, 255, 0.28)' },
-  { core: '#ffc2d6', halo: 'rgba(255, 150, 185, 0.32)' },
-  { core: '#fff3c4', halo: 'rgba(255, 224, 130, 0.32)' },
-  { core: '#ffd1e0', halo: 'rgba(255, 170, 200, 0.32)' },
-];
+/** Compressed app copy of assets/crochet-essentials.png. */
+const ESSENTIALS_HERO = require('../../assets/shop-essentials-app.jpg');
 
 /** Behind the yarn photos on the yarn cards: white, because the product photos have white backgrounds. */
 const YARN_PHOTO_BG = '#ffffff';
@@ -154,22 +142,6 @@ function ProductGridSkeleton({ fonts }: { fonts: UiFonts }) {
         </View>
       ))}
     </View>
-  );
-}
-
-/** Gold wire with a string of glowing bulbs, laid along the top edge of a festive band. */
-function FestiveLights({ styles }: { styles: ReturnType<typeof createStyles> }) {
-  return (
-    <>
-      <View pointerEvents="none" style={styles.lightsWire} />
-      <View pointerEvents="none" style={styles.lightsRow}>
-        {BULBS.map((bulb, i) => (
-          <View key={i} style={[styles.bulbHalo, { backgroundColor: bulb.halo, marginTop: i % 2 ? 5 : 0 }]}>
-            <View style={[styles.bulb, { backgroundColor: bulb.core }]} />
-          </View>
-        ))}
-      </View>
-    </>
   );
 }
 
@@ -544,6 +516,15 @@ export default function ShopScreen() {
         })),
     [essentials],
   );
+  // Cheapest published non-yarn product (not the kit), for the "From ₹" ribbon on the materials card.
+  const materialsFrom = useMemo(() => {
+    // A product's variants can be cheaper than the product itself, so they count too.
+    const prices = essentials
+      .filter((p) => p.status !== 'Draft' && !/yarn/i.test(p.category ?? '') && p.id !== kit?.id)
+      .flatMap((p) => [p.price, ...(p.variants ?? []).filter((v) => v.status !== 'Draft').map((v) => v.price)])
+      .filter((price) => price > 0);
+    return prices.length ? Math.min(...prices) : null;
+  }, [essentials, kit]);
   // Inside a room the title/subtitle scroll away with the list, so products get the screen.
   const introInList = tab === 'products' && room !== null;
   const emptyIsWishlist = wishlistOnly && activeCategory === 'All';
@@ -730,13 +711,9 @@ export default function ShopScreen() {
               end={{ x: 0, y: 1 }}
               style={styles.yarnBand}
             >
-              {/* Same festive lights as the "Start here" band, in warmer colours. */}
               <View pointerEvents="none" style={styles.yarnGlowLarge} />
               <View pointerEvents="none" style={styles.yarnGlowSmall} />
-              <FestiveLights styles={styles} />
-              <Ionicons pointerEvents="none" name="sparkles" size={15} color="#fff4cc" style={styles.yarnSparkleA} />
-              <Ionicons pointerEvents="none" name="sparkles" size={11} color="#ffffff" style={styles.yarnSparkleB} />
-              <Ionicons pointerEvents="none" name="sparkles" size={13} color="#fff4cc" style={styles.yarnSparkleC} />
+              <SnowFall />
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionHeading}>
                   <Text style={styles.sectionTitle}>{t('shop.shopYarn')}</Text>
@@ -855,13 +832,10 @@ export default function ShopScreen() {
             end={{ x: 0.85, y: 1 }}
             style={styles.archBand}
           >
-            {/* Festive lights: soft glows behind the cards, a string of bulbs on top, a few sparkles. */}
+            {/* Soft glows behind the cards, snow falling on top. */}
             <View pointerEvents="none" style={styles.glowLarge} />
             <View pointerEvents="none" style={styles.glowSmall} />
-            <FestiveLights styles={styles} />
-            <Ionicons pointerEvents="none" name="sparkles" size={16} color="#ffe9a8" style={styles.sparkleA} />
-            <Ionicons pointerEvents="none" name="sparkles" size={11} color="#fff4cc" style={styles.sparkleB} />
-            <Ionicons pointerEvents="none" name="sparkles" size={13} color="#ffe9a8" style={styles.sparkleC} />
+            <SnowFall />
             <Text style={styles.archBandTitle}>{t('shop.kitStep')}</Text>
             <View style={styles.archRow}>
               {market.canOrderProducts && kit ? (
@@ -909,6 +883,30 @@ export default function ShopScreen() {
                     </View>
                   ) : null}
                 </View>
+              ) : null}
+              {market.canOrderProducts ? (
+                <Pressable
+                  style={({ pressed }) => [{ width: archSize }, pressed && styles.roomCardPressed]}
+                  onPress={() => enterRoom('essentials')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}`}
+                >
+                  <LinearGradient colors={GOLD_FRAME} style={[styles.archFrame, { borderTopLeftRadius: archSize / 2, borderTopRightRadius: archSize / 2 }]}>
+                    <View style={[styles.archInner, { height: Math.round(archSize * 0.78), borderTopLeftRadius: archSize / 2 - 3, borderTopRightRadius: archSize / 2 - 3 }]}>
+                      <Image source={ESSENTIALS_HERO} style={styles.kitThumbImage} resizeMode="cover" accessibilityIgnoresInvertColors />
+                      {materialsFrom != null ? (
+                        <View style={styles.archRibbon}>
+                          <Text style={styles.archRibbonText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                            {t('shop.fromPrice', { price: formatInr(materialsFrom) })}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </LinearGradient>
+                  <Text style={styles.archCaption} numberOfLines={1}>
+                    {t('shop.roomEssentialsTitle')}
+                  </Text>
+                </Pressable>
               ) : null}
             </View>
           </LinearGradient>
@@ -1557,24 +1555,6 @@ function createStyles(fonts: UiFonts, compact = false) {
       top: 20,
       backgroundColor: 'rgba(255, 120, 150, 0.25)',
     },
-    yarnSparkleA: {
-      position: 'absolute',
-      top: 64,
-      right: 18,
-      opacity: 0.9,
-    },
-    yarnSparkleB: {
-      position: 'absolute',
-      bottom: 60,
-      right: 28,
-      opacity: 0.85,
-    },
-    yarnSparkleC: {
-      position: 'absolute',
-      bottom: 22,
-      right: 52,
-      opacity: 0.8,
-    },
     // Enlarges the yarn picture inside its fixed thumb; the thumb clips any overflow, so the card size stays the same.
     yarnImage: {
       transform: [{ scale: 1.2 }],
@@ -1676,52 +1656,6 @@ function createStyles(fonts: UiFonts, compact = false) {
       bottom: -30,
       backgroundColor: 'rgba(255, 140, 180, 0.22)',
     },
-    lightsWire: {
-      position: 'absolute',
-      top: 5,
-      left: 10,
-      right: 10,
-      height: 1,
-      backgroundColor: 'rgba(255, 226, 150, 0.55)',
-    },
-    lightsRow: {
-      position: 'absolute',
-      top: 2,
-      left: 10,
-      right: 10,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    bulbHalo: {
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    bulb: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-    },
-    sparkleA: {
-      position: 'absolute',
-      top: 34,
-      right: 30,
-      opacity: 0.9,
-    },
-    sparkleB: {
-      position: 'absolute',
-      top: 56,
-      right: 62,
-      opacity: 0.8,
-    },
-    sparkleC: {
-      position: 'absolute',
-      top: 78,
-      left: 22,
-      opacity: 0.7,
-    },
     archBandTitle: {
       paddingHorizontal: 4,
       fontFamily: fonts.extraBold,
@@ -1784,6 +1718,22 @@ function createStyles(fonts: UiFonts, compact = false) {
     archOffText: {
       fontFamily: fonts.extraBold,
       fontSize: 11,
+      color: colors.white,
+    },
+    // Price strip laid over the bottom of the materials photo, so the card keeps its size.
+    archRibbon: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingVertical: 3,
+      paddingHorizontal: 4,
+      backgroundColor: 'rgba(61, 7, 36, 0.85)',
+      alignItems: 'center',
+    },
+    archRibbonText: {
+      fontFamily: fonts.extraBold,
+      fontSize: 12,
       color: colors.white,
     },
     archCaption: {
