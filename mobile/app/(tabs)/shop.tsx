@@ -862,7 +862,7 @@ export default function ShopScreen() {
                       </View>
                     </View>
                   </LinearGradient>
-                  <Text style={styles.archCaption} numberOfLines={1}>
+                  <Text style={styles.archCaption} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                     {kit.name}
                   </Text>
                 </Pressable>
@@ -903,7 +903,7 @@ export default function ShopScreen() {
                       ) : null}
                     </View>
                   </LinearGradient>
-                  <Text style={styles.archCaption} numberOfLines={1}>
+                  <Text style={styles.archCaption} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                     {t('shop.roomEssentialsTitle')}
                   </Text>
                 </Pressable>
@@ -1738,6 +1738,8 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     archCaption: {
       marginTop: 3,
+      // A little wider than the card (the gap between cards is 16) so a longer name keeps its words whole.
+      marginHorizontal: -8,
       textAlign: 'center',
       fontFamily: fonts.semiBold,
       fontSize: 12,
