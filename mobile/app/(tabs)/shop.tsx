@@ -1494,11 +1494,12 @@ function createStyles(fonts: UiFonts, compact = false) {
     yarnRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      rowGap: 8,
+      rowGap: 14,
     },
     yarnFour: {
       width: '50%',
-      paddingHorizontal: 4,
+      // 14px between neighbouring cards (7 each side), so the frames never touch.
+      paddingHorizontal: 7,
     },
     yarnHint: {
       paddingHorizontal: 4,
@@ -1519,8 +1520,8 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     yarnTile: {
       flex: 1,
-      padding: 6,
-      gap: 4,
+      padding: 5,
+      gap: 2,
       borderRadius: 17.5,
       overflow: 'hidden',
     },
@@ -1547,12 +1548,13 @@ function createStyles(fonts: UiFonts, compact = false) {
     yarnImage: {
       transform: [{ scale: 1.2 }],
     },
+    // Product photos have white margins, so a small zoom fills the thumb with the product.
     yarnProductImage: {
-      transform: [{ scale: 1 }],
+      transform: [{ scale: 1.15 }],
     },
     yarnThumb: {
       width: '100%',
-      height: 66,
+      height: 58,
       borderRadius: 12,
       overflow: 'hidden',
       backgroundColor: YARN_PHOTO_BG,
@@ -1585,7 +1587,7 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     yarnPriceLine: {
       // Room for the discount pill, so cards without one line up with cards that have it.
-      minHeight: 26,
+      minHeight: 22,
       paddingHorizontal: 4,
       flexDirection: 'row',
       flexWrap: 'wrap',
