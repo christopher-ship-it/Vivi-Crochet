@@ -520,50 +520,60 @@ export default function ShopScreen() {
       .filter((price) => price > 0);
     return prices.length ? Math.min(...prices) : null;
   }, [essentials, kit]);
-  /** MRP and sale-percent shown next to a price; only when the MRP is above the price. */
+  /** Price with the MRP crossed out beside it, on one line. */
   function renderPrice(price: number, mrp?: number | null) {
-    const off = mrp != null && mrp > price ? Math.round(((mrp - price) / mrp) * 100) : null;
+    const hasOff = mrp != null && mrp > price;
     return (
       <View style={styles.yarnPriceLine}>
         <Text style={styles.yarnPrice}>{formatInr(price)}</Text>
-        {off != null ? <Text style={styles.yarnMrp}>{formatInr(mrp!)}</Text> : null}
-        {off != null ? (
-          <View style={styles.yarnOff}>
-            <Text style={styles.yarnOffText}>{t('productCard.percentOff', { percent: off })}</Text>
-          </View>
-        ) : null}
+        {hasOff ? <Text style={styles.yarnMrp}>{formatInr(mrp!)}</Text> : null}
       </View>
     );
   }
 
-  /** One gold-framed card, used for the yarns, the kit and the materials so all six match. */
+  /** Sale percent pill for the photo's top-right corner; only when the MRP is above the price. */
+  function renderOff(price: number, mrp?: number | null) {
+    if (mrp == null || mrp <= price) return null;
+    const percent = Math.round(((mrp - price) / mrp) * 100);
+    return (
+      <View style={styles.yarnOff}>
+        <Text style={styles.yarnOffText}>{t('productCard.percentOff', { percent })}</Text>
+      </View>
+    );
+  }
+
+  /** One silver-framed card, used for the yarns, the kit and the materials so all six match. */
   function renderTile(o: {
     key: string;
     label: string;
     onPress: () => void;
     photo: ReactNode;
     tag?: ReactNode;
+    badge?: ReactNode;
     name: string;
     priceLine: ReactNode;
   }) {
     return (
-      <Pressable
-        key={o.key}
-        style={({ pressed }) => [styles.yarnFrame, styles.yarnFour, pressed && styles.roomCardPressed]}
-        onPress={o.onPress}
-        accessibilityRole="button"
-        accessibilityLabel={o.label}
-      >
-        <LinearGradient colors={SILVER_FRAME} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
-        <LinearGradient colors={['#ffffff', '#fff4f8']} style={styles.yarnTile}>
-          <View style={styles.yarnThumb}>{o.photo}</View>
-          {o.tag}
-          <Text style={styles.yarnText} numberOfLines={2}>
-            {o.name}
-          </Text>
-          {o.priceLine}
-        </LinearGradient>
-      </Pressable>
+      // The outer view makes the gap: the frame gradient fills the Pressable, so padding on the Pressable would not space the frames.
+      <View key={o.key} style={styles.yarnFour}>
+        <Pressable
+          style={({ pressed }) => [styles.yarnFrame, pressed && styles.roomCardPressed]}
+          onPress={o.onPress}
+          accessibilityRole="button"
+          accessibilityLabel={o.label}
+        >
+          <LinearGradient colors={SILVER_FRAME} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
+          <LinearGradient colors={['#ffffff', '#fff4f8']} style={styles.yarnTile}>
+            <View style={styles.yarnThumb}>{o.photo}</View>
+            {o.tag}
+            {o.badge}
+            <Text style={styles.yarnText} numberOfLines={2}>
+              {o.name}
+            </Text>
+            {o.priceLine}
+          </LinearGradient>
+        </Pressable>
+      </View>
     );
   }
 
@@ -801,6 +811,7 @@ export default function ShopScreen() {
                             </Text>
                           </View>
                         ) : null,
+                      badge: renderOff(card.price, card.mrp),
                       name: card.name,
                       priceLine: renderPrice(card.price, card.mrp),
                     })
@@ -809,6 +820,62 @@ export default function ShopScreen() {
             </LinearGradient>
           ) : null}
 
+          {/* Beginner kit and materials: two cards, same style as the yarns, on a deep band. */}
+          <LinearGradient
+            colors={['#2e051b', '#4a0a2c', '#6b1040', '#8f1a58']}
+            start={{ x: 0.15, y: 0 }}
+            end={{ x: 0.85, y: 1 }}
+            style={styles.archBand}
+          >
+            {/* Soft glows behind the cards, snow falling on top. */}
+            <View pointerEvents="none" style={styles.glowLarge} />
+            <View pointerEvents="none" style={styles.glowSmall} />
+            <SnowFall />
+            <Text style={styles.archBandTitle}>{t('shop.kitStep')}</Text>
+            {market.canOrderProducts ? (
+              <View style={styles.yarnRow}>
+                {kit
+                  ? renderTile({
+                      key: kit.id,
+                      label: `${kit.name}, ${formatInr(kit.price)}. ${t('shop.kitSubtitle')}`,
+                      onPress: () => router.push(`/product/${kit.id}`),
+                      photo: kit.imageUrl ? (
+                        <AppImage
+                          uri={kit.imageUrl}
+                          // No zoom: the kit photo is full of product up to its edges.
+                          style={styles.kitThumbImage}
+                          contentFit="contain"
+                          backgroundColor={YARN_PHOTO_BG}
+                          accessibilityLabel={kit.name}
+                        />
+                      ) : (
+                        <Ionicons name="cube-outline" size={30} color={colors.pinkDark} />
+                      ),
+                      badge: renderOff(kit.price, kit.mrp),
+                      name: kit.name,
+                      priceLine: renderPrice(kit.price, kit.mrp),
+                    })
+                  : null}
+                {renderTile({
+                  key: 'materials',
+                  label: `${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}`,
+                  onPress: () => enterRoom('essentials'),
+                  photo: (
+                    <Image source={ESSENTIALS_HERO} style={[styles.kitThumbImage, styles.yarnImage]} resizeMode="cover" accessibilityIgnoresInvertColors />
+                  ),
+                  name: t('shop.roomEssentialsTitle'),
+                  priceLine:
+                    materialsFrom != null ? (
+                      <View style={styles.yarnPriceLine}>
+                        <Text style={styles.yarnPrice} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                          {t('shop.fromPrice', { price: formatInr(materialsFrom) })}
+                        </Text>
+                      </View>
+                    ) : null,
+                })}
+              </View>
+            ) : null}
+          </LinearGradient>
           {handmadeEnabled ? (
             <Pressable
               style={({ pressed }) => [styles.handmadeCard, pressed && styles.roomCardPressed]}
@@ -844,60 +911,6 @@ export default function ShopScreen() {
               </LinearGradient>
             </Pressable>
           ) : null}
-          {/* Beginner kit and materials: two cards, same style as the yarns, on a deep band. */}
-          <LinearGradient
-            colors={['#2e051b', '#4a0a2c', '#6b1040', '#8f1a58']}
-            start={{ x: 0.15, y: 0 }}
-            end={{ x: 0.85, y: 1 }}
-            style={styles.archBand}
-          >
-            {/* Soft glows behind the cards, snow falling on top. */}
-            <View pointerEvents="none" style={styles.glowLarge} />
-            <View pointerEvents="none" style={styles.glowSmall} />
-            <SnowFall />
-            <Text style={styles.archBandTitle}>{t('shop.kitStep')}</Text>
-            {market.canOrderProducts ? (
-              <View style={styles.yarnRow}>
-                {kit
-                  ? renderTile({
-                      key: kit.id,
-                      label: `${kit.name}, ${formatInr(kit.price)}. ${t('shop.kitSubtitle')}`,
-                      onPress: () => router.push(`/product/${kit.id}`),
-                      photo: kit.imageUrl ? (
-                        <AppImage
-                          uri={kit.imageUrl}
-                          style={[styles.kitThumbImage, styles.yarnProductImage]}
-                          contentFit="contain"
-                          backgroundColor={YARN_PHOTO_BG}
-                          accessibilityLabel={kit.name}
-                        />
-                      ) : (
-                        <Ionicons name="cube-outline" size={30} color={colors.pinkDark} />
-                      ),
-                      name: kit.name,
-                      priceLine: renderPrice(kit.price, kit.mrp),
-                    })
-                  : null}
-                {renderTile({
-                  key: 'materials',
-                  label: `${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}`,
-                  onPress: () => enterRoom('essentials'),
-                  photo: (
-                    <Image source={ESSENTIALS_HERO} style={[styles.kitThumbImage, styles.yarnImage]} resizeMode="cover" accessibilityIgnoresInvertColors />
-                  ),
-                  name: t('shop.roomEssentialsTitle'),
-                  priceLine:
-                    materialsFrom != null ? (
-                      <View style={styles.yarnPriceLine}>
-                        <Text style={styles.yarnPrice} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                          {t('shop.fromPrice', { price: formatInr(materialsFrom) })}
-                        </Text>
-                      </View>
-                    ) : null,
-                })}
-              </View>
-            ) : null}
-          </LinearGradient>
 
         </ScrollView>
       ) : tab === 'products' ? (
@@ -1362,8 +1375,8 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     chooser: {
       paddingHorizontal: spacing.md,
-      paddingTop: spacing.md,
-      gap: 24,
+      paddingTop: spacing.sm,
+      gap: 14,
     },
     chooserEyebrow: {
       fontFamily: fonts.semiBold,
@@ -1444,10 +1457,10 @@ function createStyles(fonts: UiFonts, compact = false) {
     yarnBand: {
       borderRadius: 24,
       overflow: 'hidden',
-      paddingTop: 16,
-      paddingBottom: 12,
-      paddingHorizontal: 12,
-      gap: 8,
+      paddingTop: 10,
+      paddingBottom: 10,
+      paddingHorizontal: 10,
+      gap: 4,
     },
     sectionHeader: {
       flexDirection: 'row',
@@ -1510,6 +1523,8 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     // Gold frame around each yarn card, with a warm glow.
     yarnFrame: {
+      // Fills the wrapper, so neighbours in a row end up the same height.
+      flex: 1,
       padding: 2.5,
       borderRadius: 20,
       shadowColor: '#ffffff',
@@ -1550,11 +1565,11 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     // Product photos have white margins, so a small zoom fills the thumb with the product.
     yarnProductImage: {
-      transform: [{ scale: 1.15 }],
+      transform: [{ scale: 1.1 }],
     },
     yarnThumb: {
       width: '100%',
-      height: 58,
+      height: 68,
       borderRadius: 12,
       overflow: 'hidden',
       backgroundColor: YARN_PHOTO_BG,
@@ -1587,7 +1602,7 @@ function createStyles(fonts: UiFonts, compact = false) {
     },
     yarnPriceLine: {
       // Room for the discount pill, so cards without one line up with cards that have it.
-      minHeight: 22,
+      minHeight: 20,
       paddingHorizontal: 4,
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -1605,7 +1620,11 @@ function createStyles(fonts: UiFonts, compact = false) {
       color: colors.muted,
       textDecorationLine: 'line-through',
     },
+    // Sits in the photo's top-right corner, opposite the colours tab.
     yarnOff: {
+      position: 'absolute',
+      top: 7,
+      right: 7,
       borderRadius: 10,
       backgroundColor: colors.pinkDark,
       paddingVertical: 1,
@@ -1620,9 +1639,9 @@ function createStyles(fonts: UiFonts, compact = false) {
     archBand: {
       borderRadius: 24,
       overflow: 'hidden',
-      paddingTop: 16,
+      paddingTop: 10,
       paddingBottom: 10,
-      paddingHorizontal: 12,
+      paddingHorizontal: 10,
       gap: 4,
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.3)',
