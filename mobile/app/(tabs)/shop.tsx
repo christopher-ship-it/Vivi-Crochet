@@ -520,24 +520,18 @@ export default function ShopScreen() {
       .filter((price) => price > 0);
     return prices.length ? Math.min(...prices) : null;
   }, [essentials, kit]);
-  /** Price with the MRP crossed out beside it, on one line. */
+  /** Price, the MRP crossed out and the sale percent, together on the price line (wraps on a narrow card). */
   function renderPrice(price: number, mrp?: number | null) {
-    const hasOff = mrp != null && mrp > price;
+    const off = mrp != null && mrp > price ? Math.round(((mrp - price) / mrp) * 100) : null;
     return (
       <View style={styles.yarnPriceLine}>
         <Text style={styles.yarnPrice}>{formatInr(price)}</Text>
-        {hasOff ? <Text style={styles.yarnMrp}>{formatInr(mrp!)}</Text> : null}
-      </View>
-    );
-  }
-
-  /** Sale percent pill for the photo's top-right corner; only when the MRP is above the price. */
-  function renderOff(price: number, mrp?: number | null) {
-    if (mrp == null || mrp <= price) return null;
-    const percent = Math.round(((mrp - price) / mrp) * 100);
-    return (
-      <View style={styles.yarnOff}>
-        <Text style={styles.yarnOffText}>{t('productCard.percentOff', { percent })}</Text>
+        {off != null ? <Text style={styles.yarnMrp}>{formatInr(mrp!)}</Text> : null}
+        {off != null ? (
+          <View style={styles.yarnOff}>
+            <Text style={styles.yarnOffText}>{t('productCard.percentOff', { percent: off })}</Text>
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -549,7 +543,6 @@ export default function ShopScreen() {
     onPress: () => void;
     photo: ReactNode;
     tag?: ReactNode;
-    badge?: ReactNode;
     name: string;
     priceLine: ReactNode;
   }) {
@@ -566,7 +559,6 @@ export default function ShopScreen() {
           <LinearGradient colors={['#ffffff', '#fff4f8']} style={styles.yarnTile}>
             <View style={styles.yarnThumb}>{o.photo}</View>
             {o.tag}
-            {o.badge}
             <Text style={styles.yarnText} numberOfLines={2}>
               {o.name}
             </Text>
@@ -811,7 +803,6 @@ export default function ShopScreen() {
                             </Text>
                           </View>
                         ) : null,
-                      badge: renderOff(card.price, card.mrp),
                       name: card.name,
                       priceLine: renderPrice(card.price, card.mrp),
                     })
@@ -851,7 +842,6 @@ export default function ShopScreen() {
                       ) : (
                         <Ionicons name="cube-outline" size={30} color={colors.pinkDark} />
                       ),
-                      badge: renderOff(kit.price, kit.mrp),
                       name: kit.name,
                       priceLine: renderPrice(kit.price, kit.mrp),
                     })
@@ -1620,19 +1610,15 @@ function createStyles(fonts: UiFonts, compact = false) {
       color: colors.muted,
       textDecorationLine: 'line-through',
     },
-    // Sits in the photo's top-right corner, opposite the colours tab.
     yarnOff: {
-      position: 'absolute',
-      top: 7,
-      right: 7,
       borderRadius: 10,
       backgroundColor: colors.pinkDark,
       paddingVertical: 1,
-      paddingHorizontal: 6,
+      paddingHorizontal: 5,
     },
     yarnOffText: {
       fontFamily: fonts.extraBold,
-      fontSize: 11,
+      fontSize: 10,
       color: colors.white,
     },
     // Deep band behind the kit and materials cards, so the gold frames stand out.
