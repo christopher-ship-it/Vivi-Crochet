@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   BackHandler,
   FlatList,
@@ -53,9 +53,8 @@ type ShopRoom = 'handmade' | 'essentials';
 const WISHLIST_FILTER = 'Wishlist';
 /** Chip that shows every yarn category together (T-Shirt Yarn, Rose Yarn, ...). */
 const YARN_FILTER = '__yarn__';
-/** Gold frame and label gradients for the arch cards. */
-const GOLD_FRAME = ['#fbe6a2', '#f0b543', '#c98a1c'] as const;
-const ARCH_PHOTO_BG = '#fff6f2';
+/** Silver-white frame gradient around the shop cards. */
+const SILVER_FRAME = ['#ffffff', '#e7e0e4', '#bdb3b9'] as const;
 /** Compressed app copy of assets/crochet-essentials.png. */
 const ESSENTIALS_HERO = require('../../assets/shop-essentials-app.jpg');
 
@@ -149,10 +148,6 @@ export default function ShopScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  // The kit card is sized from the band width: page padding and band padding come off it.
-  const yarnSize = Math.floor((windowWidth - spacing.md * 2 - 24 - 12) / 2);
-  // The two arch cards (kit and materials) are smaller than the yarn cards and sit centred in their band.
-  const archSize = Math.round(yarnSize * 0.6);
   const { t, language } = useI18n();
   const { market } = usePreferences();
   const fonts = uiFonts(language);
@@ -525,6 +520,53 @@ export default function ShopScreen() {
       .filter((price) => price > 0);
     return prices.length ? Math.min(...prices) : null;
   }, [essentials, kit]);
+  /** MRP and sale-percent shown next to a price; only when the MRP is above the price. */
+  function renderPrice(price: number, mrp?: number | null) {
+    const off = mrp != null && mrp > price ? Math.round(((mrp - price) / mrp) * 100) : null;
+    return (
+      <View style={styles.yarnPriceLine}>
+        <Text style={styles.yarnPrice}>{formatInr(price)}</Text>
+        {off != null ? <Text style={styles.yarnMrp}>{formatInr(mrp!)}</Text> : null}
+        {off != null ? (
+          <View style={styles.yarnOff}>
+            <Text style={styles.yarnOffText}>{t('productCard.percentOff', { percent: off })}</Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
+  /** One gold-framed card, used for the yarns, the kit and the materials so all six match. */
+  function renderTile(o: {
+    key: string;
+    label: string;
+    onPress: () => void;
+    photo: ReactNode;
+    tag?: ReactNode;
+    name: string;
+    priceLine: ReactNode;
+  }) {
+    return (
+      <Pressable
+        key={o.key}
+        style={({ pressed }) => [styles.yarnFrame, styles.yarnFour, pressed && styles.roomCardPressed]}
+        onPress={o.onPress}
+        accessibilityRole="button"
+        accessibilityLabel={o.label}
+      >
+        <LinearGradient colors={SILVER_FRAME} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
+        <LinearGradient colors={['#ffffff', '#fff4f8']} style={styles.yarnTile}>
+          <View style={styles.yarnThumb}>{o.photo}</View>
+          {o.tag}
+          <Text style={styles.yarnText} numberOfLines={2}>
+            {o.name}
+          </Text>
+          {o.priceLine}
+        </LinearGradient>
+      </Pressable>
+    );
+  }
+
   // Inside a room the title/subtitle scroll away with the list, so products get the screen.
   const introInList = tab === 'products' && room !== null;
   const emptyIsWishlist = wishlistOnly && activeCategory === 'All';
@@ -706,7 +748,7 @@ export default function ShopScreen() {
         >
           {market.canOrderProducts && yarnCards.length > 0 ? (
             <LinearGradient
-              colors={['#e8215b', '#ff6b6b', '#ffc27a']}
+              colors={['#e8215b', '#d81b60', '#c2185b']}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={styles.yarnBand}
@@ -735,57 +777,34 @@ export default function ShopScreen() {
               </View>
               {/* Four across: the four yarns. */}
               <View style={styles.yarnRow}>
-                {yarnCards.slice(0, 4).map((card) => {
-                  const off =
-                    card.mrp != null && card.mrp > card.price
-                      ? Math.round(((card.mrp - card.price) / card.mrp) * 100)
-                      : null;
-                  return (
-                    <Pressable
-                      key={card.id}
-                      style={({ pressed }) => [styles.yarnFrame, styles.yarnFour, pressed && styles.roomCardPressed]}
-                      onPress={() => router.push(`/product/${card.id}`)}
-                      accessibilityRole="button"
-                      accessibilityLabel={card.name}
-                    >
-                      <LinearGradient colors={GOLD_FRAME} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
-                      <LinearGradient colors={['#ffffff', '#fff1e6']} style={styles.yarnTile}>
-                      <View style={styles.yarnThumb}>
-                        {card.imageUrl ? (
-                          <AppImage
-                            uri={card.imageUrl}
-                            style={[styles.kitThumbImage, styles.yarnProductImage]}
-                            contentFit="contain"
-                            backgroundColor={YARN_PHOTO_BG}
-                            accessibilityLabel={card.name}
-                          />
-                        ) : (
-                          <Ionicons name="color-palette-outline" size={26} color={colors.pinkDark} />
-                        )}
-                      </View>
-                      {card.colours > 0 ? (
-                        <View style={styles.yarnColoursTag}>
-                          <Text style={styles.yarnColoursTagText} numberOfLines={1}>
-                            {t('shop.yarnColours', { count: card.colours })}
-                          </Text>
-                        </View>
-                      ) : null}
-                      <Text style={styles.yarnText} numberOfLines={2}>
-                        {card.name}
-                      </Text>
-                      <View style={styles.yarnPriceLine}>
-                        <Text style={styles.yarnPrice}>{formatInr(card.price)}</Text>
-                        {off != null ? <Text style={styles.yarnMrp}>{formatInr(card.mrp!)}</Text> : null}
-                        {off != null ? (
-                          <View style={styles.yarnOff}>
-                            <Text style={styles.yarnOffText}>{t('productCard.percentOff', { percent: off })}</Text>
+                {yarnCards.slice(0, 4).map((card) => (
+                    renderTile({
+                      key: card.id,
+                      label: card.name,
+                      onPress: () => router.push(`/product/${card.id}`),
+                      photo: card.imageUrl ? (
+                        <AppImage
+                          uri={card.imageUrl}
+                          style={[styles.kitThumbImage, styles.yarnProductImage]}
+                          contentFit="contain"
+                          backgroundColor={YARN_PHOTO_BG}
+                          accessibilityLabel={card.name}
+                        />
+                      ) : (
+                        <Ionicons name="color-palette-outline" size={26} color={colors.pinkDark} />
+                      ),
+                      tag:
+                        card.colours > 0 ? (
+                          <View style={styles.yarnColoursTag}>
+                            <Text style={styles.yarnColoursTagText} numberOfLines={1}>
+                              {t('shop.yarnColours', { count: card.colours })}
+                            </Text>
                           </View>
-                        ) : null}
-                      </View>
-                      </LinearGradient>
-                    </Pressable>
-                  );
-                })}
+                        ) : null,
+                      name: card.name,
+                      priceLine: renderPrice(card.price, card.mrp),
+                    })
+                ))}
               </View>
             </LinearGradient>
           ) : null}
@@ -825,9 +844,9 @@ export default function ShopScreen() {
               </LinearGradient>
             </Pressable>
           ) : null}
-          {/* Beginner kit and materials: two arch cards with gold frames on a deep band. */}
+          {/* Beginner kit and materials: two cards, same style as the yarns, on a deep band. */}
           <LinearGradient
-            colors={['#3d0724', '#7a1146', '#c2185b', '#f0507f']}
+            colors={['#2e051b', '#4a0a2c', '#6b1040', '#8f1a58']}
             start={{ x: 0.15, y: 0 }}
             end={{ x: 0.85, y: 1 }}
             style={styles.archBand}
@@ -837,78 +856,47 @@ export default function ShopScreen() {
             <View pointerEvents="none" style={styles.glowSmall} />
             <SnowFall />
             <Text style={styles.archBandTitle}>{t('shop.kitStep')}</Text>
-            <View style={styles.archRow}>
-              {market.canOrderProducts && kit ? (
-                <Pressable
-                  style={({ pressed }) => [{ width: archSize }, pressed && styles.roomCardPressed]}
-                  onPress={() => router.push(`/product/${kit.id}`)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${kit.name}, ${formatInr(kit.price)}. ${t('shop.kitSubtitle')}`}
-                >
-                  <LinearGradient colors={GOLD_FRAME} style={[styles.archFrame, { borderTopLeftRadius: archSize / 2, borderTopRightRadius: archSize / 2 }]}>
-                    <View style={[styles.archInner, { height: Math.round(archSize * 0.78), borderTopLeftRadius: archSize / 2 - 3, borderTopRightRadius: archSize / 2 - 3 }]}>
-                      <View style={styles.archPhoto}>
-                        {kit.imageUrl ? (
-                          <AppImage
-                            uri={kit.imageUrl}
-                            style={styles.kitThumbImage}
-                            contentFit="contain"
-                            backgroundColor={ARCH_PHOTO_BG}
-                            accessibilityLabel={kit.name}
-                          />
-                        ) : (
-                          <Ionicons name="cube-outline" size={30} color={colors.pinkDark} />
-                        )}
+            {market.canOrderProducts ? (
+              <View style={styles.yarnRow}>
+                {kit
+                  ? renderTile({
+                      key: kit.id,
+                      label: `${kit.name}, ${formatInr(kit.price)}. ${t('shop.kitSubtitle')}`,
+                      onPress: () => router.push(`/product/${kit.id}`),
+                      photo: kit.imageUrl ? (
+                        <AppImage
+                          uri={kit.imageUrl}
+                          style={[styles.kitThumbImage, styles.yarnProductImage]}
+                          contentFit="contain"
+                          backgroundColor={YARN_PHOTO_BG}
+                          accessibilityLabel={kit.name}
+                        />
+                      ) : (
+                        <Ionicons name="cube-outline" size={30} color={colors.pinkDark} />
+                      ),
+                      name: kit.name,
+                      priceLine: renderPrice(kit.price, kit.mrp),
+                    })
+                  : null}
+                {renderTile({
+                  key: 'materials',
+                  label: `${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}`,
+                  onPress: () => enterRoom('essentials'),
+                  photo: (
+                    <Image source={ESSENTIALS_HERO} style={[styles.kitThumbImage, styles.yarnImage]} resizeMode="cover" accessibilityIgnoresInvertColors />
+                  ),
+                  name: t('shop.roomEssentialsTitle'),
+                  priceLine:
+                    materialsFrom != null ? (
+                      <View style={styles.yarnPriceLine}>
+                        <Text style={styles.yarnPrice} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                          {t('shop.fromPrice', { price: formatInr(materialsFrom) })}
+                        </Text>
                       </View>
-                    </View>
-                  </LinearGradient>
-                  <Text style={styles.archCaption} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                    {kit.name}
-                  </Text>
-                </Pressable>
-              ) : null}
-              {market.canOrderProducts && kit ? (
-                <View style={styles.archPriceCol}>
-                  {kit.mrp != null && kit.mrp > kit.price ? (
-                    <Text style={styles.archMrp}>{formatInr(kit.mrp)}</Text>
-                  ) : null}
-                  <Text style={styles.archPrice}>{formatInr(kit.price)}</Text>
-                  {kit.mrp != null && kit.mrp > kit.price ? (
-                    <View style={styles.archOffPill}>
-                      <Text style={styles.archOffText} numberOfLines={1}>
-                        {t('productCard.percentOff', {
-                          percent: Math.round(((kit.mrp - kit.price) / kit.mrp) * 100),
-                        })}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-              {market.canOrderProducts ? (
-                <Pressable
-                  style={({ pressed }) => [{ width: archSize }, pressed && styles.roomCardPressed]}
-                  onPress={() => enterRoom('essentials')}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${t('shop.roomEssentialsTitle')}. ${t('shop.roomEssentialsSubtitle')}`}
-                >
-                  <LinearGradient colors={GOLD_FRAME} style={[styles.archFrame, { borderTopLeftRadius: archSize / 2, borderTopRightRadius: archSize / 2 }]}>
-                    <View style={[styles.archInner, { height: Math.round(archSize * 0.78), borderTopLeftRadius: archSize / 2 - 3, borderTopRightRadius: archSize / 2 - 3 }]}>
-                      <Image source={ESSENTIALS_HERO} style={styles.kitThumbImage} resizeMode="cover" accessibilityIgnoresInvertColors />
-                      {materialsFrom != null ? (
-                        <View style={styles.archRibbon}>
-                          <Text style={styles.archRibbonText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                            {t('shop.fromPrice', { price: formatInr(materialsFrom) })}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </LinearGradient>
-                  <Text style={styles.archCaption} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                    {t('shop.roomEssentialsTitle')}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
+                    ) : null,
+                })}
+              </View>
+            ) : null}
           </LinearGradient>
 
         </ScrollView>
@@ -1519,11 +1507,11 @@ function createStyles(fonts: UiFonts, compact = false) {
       lineHeight: 15,
       color: colors.muted,
     },
-    // Gold frame around each yarn card, with a warm glow, like the arch cards below.
+    // Gold frame around each yarn card, with a warm glow.
     yarnFrame: {
       padding: 2.5,
       borderRadius: 20,
-      shadowColor: '#ffd36b',
+      shadowColor: '#ffffff',
       shadowOpacity: 0.6,
       shadowRadius: 10,
       shadowOffset: { width: 0, height: 4 },
@@ -1544,7 +1532,7 @@ function createStyles(fonts: UiFonts, compact = false) {
       borderRadius: 120,
       right: -70,
       bottom: -90,
-      backgroundColor: 'rgba(255, 244, 200, 0.28)',
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
     },
     yarnGlowSmall: {
       position: 'absolute',
@@ -1626,7 +1614,7 @@ function createStyles(fonts: UiFonts, compact = false) {
       fontSize: 11,
       color: colors.white,
     },
-    // Deep band behind the two arch cards, so the gold frames stand out.
+    // Deep band behind the kit and materials cards, so the gold frames stand out.
     archBand: {
       borderRadius: 24,
       overflow: 'hidden',
@@ -1635,7 +1623,7 @@ function createStyles(fonts: UiFonts, compact = false) {
       paddingHorizontal: 12,
       gap: 4,
       borderWidth: 1,
-      borderColor: 'rgba(255, 214, 120, 0.45)',
+      borderColor: 'rgba(255, 255, 255, 0.3)',
     },
     // Soft pools of warm light behind the cards.
     glowLarge: {
@@ -1645,7 +1633,7 @@ function createStyles(fonts: UiFonts, compact = false) {
       borderRadius: 130,
       right: -60,
       top: 30,
-      backgroundColor: 'rgba(255, 200, 110, 0.16)',
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
     },
     glowSmall: {
       position: 'absolute',
@@ -1661,89 +1649,6 @@ function createStyles(fonts: UiFonts, compact = false) {
       fontFamily: fonts.extraBold,
       fontSize: compact ? 17 : 18,
       lineHeight: compact ? 25 : 22,
-      color: colors.white,
-    },
-    archRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 16,
-    },
-    // Gold frame with a rounded-arch top; the radii are set in the card from its width.
-    archFrame: {
-      padding: 3,
-      shadowColor: '#ffd36b',
-      shadowOpacity: 0.6,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 6,
-      borderBottomLeftRadius: 16,
-      borderBottomRightRadius: 16,
-    },
-    archInner: {
-      height: 114,
-      overflow: 'hidden',
-      borderBottomLeftRadius: 13,
-      borderBottomRightRadius: 13,
-      backgroundColor: ARCH_PHOTO_BG,
-    },
-    archPhoto: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      // Nudges the kit picture left inside the card without scaling it, so the whole product stays in view.
-      transform: [{ translateX: -6 }],
-    },
-    archPriceCol: {
-      justifyContent: 'center',
-      alignItems: 'flex-start',
-    },
-    archMrp: {
-      fontFamily: fonts.semiBold,
-      fontSize: 13,
-      color: '#f5c6d8',
-      textDecorationLine: 'line-through',
-    },
-    archPrice: {
-      fontFamily: fonts.extraBold,
-      fontSize: 20,
-      color: '#ffe9a8',
-    },
-    archOffPill: {
-      marginTop: 4,
-      paddingVertical: 2,
-      paddingHorizontal: 7,
-      borderRadius: 10,
-      backgroundColor: colors.pink,
-    },
-    archOffText: {
-      fontFamily: fonts.extraBold,
-      fontSize: 11,
-      color: colors.white,
-    },
-    // Price strip laid over the bottom of the materials photo, so the card keeps its size.
-    archRibbon: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      paddingVertical: 3,
-      paddingHorizontal: 4,
-      backgroundColor: 'rgba(61, 7, 36, 0.85)',
-      alignItems: 'center',
-    },
-    archRibbonText: {
-      fontFamily: fonts.extraBold,
-      fontSize: 12,
-      color: colors.white,
-    },
-    archCaption: {
-      marginTop: 3,
-      // A little wider than the card (the gap between cards is 16) so a longer name keeps its words whole.
-      marginHorizontal: -8,
-      textAlign: 'center',
-      fontFamily: fonts.semiBold,
-      fontSize: 12,
-      lineHeight: compact ? 18 : 16,
       color: colors.white,
     },
     tileArrow: {

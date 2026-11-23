@@ -526,7 +526,7 @@ export default function HomeScreen() {
           {isShop ? (
             <>
               <LinearGradient
-                colors={['#3d0724', '#7a1146', '#c2185b', '#f0507f']}
+                colors={['#2e051b', '#4a0a2c', '#6b1040', '#8f1a58']}
                 start={{ x: 0.15, y: 0 }}
                 end={{ x: 0.85, y: 1 }}
                 style={StyleSheet.absoluteFill}
@@ -1165,7 +1165,7 @@ function createStyles(fonts: UiFonts, compact = false) {
       borderRadius: 90,
       right: -60,
       bottom: 40,
-      backgroundColor: 'rgba(255, 210, 120, 0.2)',
+      backgroundColor: 'rgba(255, 255, 255, 0.12)',
     },
     projectsArrow: {
       width: 30,
