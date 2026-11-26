@@ -13,7 +13,7 @@ export function buildLiveShareUrl(): string {
 
 export async function shareLink(message: string, url: string): Promise<void> {
   try {
-    await Share.share({ message: `${message}\n${url}`, url });
+    await Share.share({ message: `${message}\n${url}` });
   } catch {
     // User cancelled or share unavailable.
   }
